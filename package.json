@@ -1,0 +1,16 @@
+{
+  "name": "deployment-maintainer",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server",
+    "start": "npm run start --workspace=server",
+    "seed": "npm run seed --workspace=server",
+    "clear-db": "npm run clear-db --workspace=server",
+    "test": "npm run test --workspace=server",
+    "build": "echo \"web not yet built\""
+  }
+}
