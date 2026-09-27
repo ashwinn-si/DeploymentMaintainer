@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { Suspense, lazy, useCallback, useEffect } from 'react';
 import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { onSessionExpired } from './api.js';
@@ -6,16 +6,29 @@ import { useAuth } from './context/AuthContext.jsx';
 import { useActiveDeployments } from './hooks/useActiveDeployments.js';
 import { RequireAuth } from './components/RequireAuth.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
+import { Loader } from './components/ui/Loader.jsx';
 import { Login } from './pages/Login.jsx';
 import { Apps } from './pages/Apps.jsx';
-import { NewApp } from './pages/NewApp.jsx';
-import { AppDetail } from './pages/AppDetail.jsx';
-import { Deployments } from './pages/Deployments.jsx';
-import { DeploymentDetail } from './pages/DeploymentDetail.jsx';
-import { Ports } from './pages/Ports.jsx';
-import { Server } from './pages/Server.jsx';
-import { Settings } from './pages/Settings.jsx';
 import { NotFound } from './pages/NotFound.jsx';
+
+// Route-split everything past the home page: keeps the initial bundle under
+// Vite's 500KB chunk warning and means a first paint doesn't pay for the
+// steps editor, log viewer, rings/sparklines, etc. until they're visited.
+const NewApp = lazy(() => import('./pages/NewApp.jsx').then((m) => ({ default: m.NewApp })));
+const AppDetail = lazy(() => import('./pages/AppDetail.jsx').then((m) => ({ default: m.AppDetail })));
+const Deployments = lazy(() => import('./pages/Deployments.jsx').then((m) => ({ default: m.Deployments })));
+const DeploymentDetail = lazy(() => import('./pages/DeploymentDetail.jsx').then((m) => ({ default: m.DeploymentDetail })));
+const Ports = lazy(() => import('./pages/Ports.jsx').then((m) => ({ default: m.Ports })));
+const Server = lazy(() => import('./pages/Server.jsx').then((m) => ({ default: m.Server })));
+const Settings = lazy(() => import('./pages/Settings.jsx').then((m) => ({ default: m.Settings })));
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center">
+      <Loader />
+    </div>
+  );
+}
 
 function DeployToastBody({ label, deployment }) {
   return (
@@ -66,13 +79,62 @@ export default function App() {
         }
       >
         <Route path="/" element={<Apps activeDeployments={activeDeployments} />} />
-        <Route path="/new" element={<NewApp />} />
-        <Route path="/apps/:id" element={<AppDetail />} />
-        <Route path="/deployments" element={<Deployments />} />
-        <Route path="/deployments/:id" element={<DeploymentDetail />} />
-        <Route path="/ports" element={<Ports />} />
-        <Route path="/server" element={<Server />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route
+          path="/new"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <NewApp />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/apps/:id"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <AppDetail />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/deployments"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <Deployments />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/deployments/:id"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <DeploymentDetail />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/ports"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <Ports />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/server"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <Server />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <Suspense fallback={<PageFallback />}>
+              <Settings />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

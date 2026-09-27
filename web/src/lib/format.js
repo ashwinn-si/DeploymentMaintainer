@@ -32,6 +32,21 @@ export function formatBytes(bytes) {
   return `${exp === 0 ? value : value.toFixed(1)} ${units[exp]}`;
 }
 
+export function formatUptime(seconds) {
+  if (seconds === null || seconds === undefined) return '—';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+export function formatUptimeMs(ms) {
+  if (ms === null || ms === undefined) return '—';
+  return formatUptime(Math.floor(ms / 1000));
+}
+
 export function shortSha(sha) {
   return sha ? sha.slice(0, 7) : '—';
 }

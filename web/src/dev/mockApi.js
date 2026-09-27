@@ -1,7 +1,7 @@
 // DEV-only fixture backend. Only ever loaded via a dynamic `import()` gated by
 // `import.meta.env.DEV`, so bundlers drop it entirely from production builds.
-// Intercepts every `/api/*` call except `/api/auth/*` (real auth already works)
-// and `/api/settings/password` + `/api/config/*` (unimplemented in this stage).
+// Intercepts every `/api/*` call except `/api/auth/*` and `/api/settings/password`
+// (real auth already works, so those stay pointed at the real backend).
 
 const RESERVED_NAMES = ['api', 'assets', 'login', 'ports', 'apps', 'new', 'deployments', 'server', 'settings'];
 
@@ -23,6 +23,69 @@ class MockHttpError extends Error {
     this.status = status;
     this.issues = issues;
   }
+}
+
+// Not real crypto — just enough of a reversible cipher that "wrong passphrase"
+// is rejectable in the mock the same way it would be against the real backend.
+function fakeEncrypt(text, passphrase) {
+  const bytes = new TextEncoder().encode(text);
+  const key = new TextEncoder().encode(passphrase);
+  const out = bytes.map((b, i) => b ^ key[i % key.length]);
+  return btoa(String.fromCharCode(...out));
+}
+
+function fakeDecrypt(b64, passphrase) {
+  try {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const key = new TextEncoder().encode(passphrase);
+    const out = bytes.map((b, i) => b ^ key[i % key.length]);
+    return new TextDecoder().decode(out);
+  } catch {
+    return null;
+  }
+}
+
+// ------------------------------------------------------------------ system stats
+
+const CPU_COUNT = 2;
+const MEM_TOTAL = 8 * 1024 ** 3;
+const SWAP_TOTAL = 1 * 1024 ** 3;
+const DISK_TOTAL = 40 * 1024 ** 3;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+// A slow sine wave plus a little noise, so history reads as a real trend
+// (not point-to-point noise) and keeps drifting the same way on every poll —
+// it's a pure function of wall-clock time, not stored state.
+function wave(tMs, periodMs, base, amplitude, noiseAmp = 0) {
+  const phase = (tMs / periodMs) * Math.PI * 2;
+  return base + Math.sin(phase) * amplitude + (Math.random() - 0.5) * noiseAmp;
+}
+
+function systemSampleAt(tMs) {
+  const cpuPct = clamp(wave(tMs, 6 * 60_000, 32, 16, 6), 2, 97);
+  const memUsedFrac = clamp(wave(tMs, 11 * 60_000, 0.42, 0.08, 0.02), 0.15, 0.92);
+  const diskUsedPct = clamp(wave(tMs, 90 * 60_000, 47, 4, 1), 5, 99);
+  return {
+    t: new Date(tMs).toISOString(),
+    cpuPct,
+    memUsed: memUsedFrac * MEM_TOTAL,
+    memTotal: MEM_TOTAL,
+    swapUsed: clamp(wave(tMs, 20 * 60_000, 0.08, 0.06, 0.02), 0, 1) * SWAP_TOTAL,
+    swapTotal: SWAP_TOTAL,
+    load1: (cpuPct / 100) * CPU_COUNT * 0.9,
+    load5: (cpuPct / 100) * CPU_COUNT * 0.8,
+    load15: (cpuPct / 100) * CPU_COUNT * 0.7,
+    diskUsedPct,
+  };
+}
+
+function diskListAt(tMs) {
+  const pct = systemSampleAt(tMs).diskUsedPct / 100;
+  const used = pct * DISK_TOTAL;
+  return [{ mount: '/', total: DISK_TOTAL, used, free: DISK_TOTAL - used }];
 }
 
 // ------------------------------------------------------------------ fixtures
@@ -526,6 +589,99 @@ function validateAppInput(body, { isCreate }) {
   if (issues.length) throw new MockHttpError(400, 'Validation failed', issues);
 }
 
+// ------------------------------------------------------------------ config export/import
+
+function buildExportFile(body) {
+  const { appIds, passphrase } = body ?? {};
+  if (!passphrase || passphrase.length < 8) {
+    throw new MockHttpError(400, 'Passphrase must be at least 8 characters');
+  }
+  const selected = appIds?.length ? apps.filter((a) => appIds.includes(a.id)) : apps;
+  return {
+    exportedAt: new Date().toISOString(),
+    apps: selected.map((app) => ({
+      name: app.name,
+      repoFullName: app.repoFullName,
+      branch: app.branch,
+      port: app.port,
+      nodeVersion: app.nodeVersion,
+      steps: app.steps,
+      envEncrypted: fakeEncrypt(JSON.stringify(app.env), passphrase),
+    })),
+  };
+}
+
+function previewImportRows(body) {
+  const { file, passphrase } = body ?? {};
+  const fileApps = file?.apps;
+  if (!Array.isArray(fileApps)) throw new MockHttpError(400, 'That file has no apps to import');
+  if (fileApps[0] && fakeDecrypt(fileApps[0].envEncrypted, passphrase) === null) {
+    throw new MockHttpError(400, 'Incorrect passphrase for this export file');
+  }
+  return fileApps.map((entry) => {
+    const nameTaken = apps.some((a) => a.name === entry.name);
+    const portTaken = apps.some((a) => a.port === entry.port);
+    const conflict = nameTaken ? 'name' : portTaken ? 'port' : null;
+    return {
+      name: entry.name,
+      repoFullName: entry.repoFullName,
+      branch: entry.branch,
+      port: entry.port,
+      conflict,
+      suggestedName: nameTaken ? `${entry.name}-import` : entry.name,
+    };
+  });
+}
+
+function applyImport(body) {
+  const { file, passphrase, rows = [], deploy } = body ?? {};
+  const fileApps = file?.apps ?? [];
+  const created = [];
+  const deployments = [];
+
+  for (const row of rows) {
+    if (row.action !== 'create') continue;
+    const entry = fileApps.find((a) => a.name === row.name);
+    if (!entry) continue;
+
+    const decrypted = fakeDecrypt(entry.envEncrypted, passphrase);
+    const env = decrypted ? JSON.parse(decrypted) : [];
+    const finalName = row.newName || entry.name;
+    if (apps.some((a) => a.name === finalName)) continue;
+
+    const usedPorts = new Set(apps.map((a) => a.port));
+    let port = entry.port;
+    while (usedPorts.has(port)) port++;
+
+    const app = makeApp({
+      id: uid('app'),
+      name: finalName,
+      repoFullName: entry.repoFullName,
+      branch: entry.branch,
+      port,
+      nodeVersion: entry.nodeVersion,
+      nginxPath: `/${finalName}`,
+      status: 'not_deployed',
+      healthy: false,
+    });
+    app.env = env;
+    app.steps = entry.steps ?? app.steps;
+    apps.push(app);
+    created.push(toAppSummary(app));
+
+    if (deploy) {
+      const dep = makeDeployment({ app, status: 'queued', mode: 'update', ageMinutes: 0 });
+      app.status = 'deploying';
+      app.activeDeploymentId = dep.id;
+      entriesByDeployment.set(dep.id, []);
+      ensureRunnerStarted(dep.id);
+      deployments.push(dep);
+    }
+  }
+
+  return { created, deployments };
+}
+
 async function route(pathname, method, body, query) {
   await sleep(120 + Math.random() * 180);
 
@@ -757,7 +913,8 @@ async function route(pathname, method, body, query) {
           health: app.health,
           nginx: Boolean(app.path),
           lastDeployedAt: app.lastDeployedAt,
-          conflict: null,
+          // One demo conflict so the UI's conflict pill is exercisable in dev.
+          conflict: app.name === 'worker' ? 'Also bound by an unmanaged process (pid 8821)' : null,
         }))
         .sort((a, b) => a.port - b.port),
     };
@@ -769,23 +926,12 @@ async function route(pathname, method, body, query) {
 
   if (pathname === '/api/system' && method === 'GET') {
     const now = Date.now();
-    const sample = () => ({
-      t: new Date(now).toISOString(),
-      cpuPct: 20 + Math.random() * 30,
-      memUsed: 3.2 * 1024 ** 3,
-      memTotal: 8 * 1024 ** 3,
-      swapUsed: 0.1 * 1024 ** 3,
-      swapTotal: 1 * 1024 ** 3,
-      load1: 0.8,
-      load5: 0.6,
-      load15: 0.5,
-      diskUsedPct: 46,
-    });
+    const history = Array.from({ length: 40 }, (_, idx) => systemSampleAt(now - (40 - idx) * 30_000));
     return {
-      current: sample(),
-      history: Array.from({ length: 40 }, (_, idx) => ({ ...sample(), t: new Date(now - (40 - idx) * 30_000).toISOString() })),
-      info: { hostname: 'mock-ec2', platform: 'linux', uptimeSec: 86400 * 3, nodeVersion: '20.11.1', pm2Version: '5.4.2', nginxVersion: '1.24.0', cpuCount: 2 },
-      disks: [{ mount: '/', total: 40 * 1024 ** 3, used: 18 * 1024 ** 3, free: 22 * 1024 ** 3 }],
+      current: systemSampleAt(now),
+      history,
+      info: { hostname: 'mock-ec2', platform: 'linux', uptimeSec: 86400 * 3, nodeVersion: '20.11.1', pm2Version: '5.4.2', nginxVersion: '1.24.0', cpuCount: CPU_COUNT },
+      disks: diskListAt(now),
       apps: apps.map((app) => ({
         appId: app.id,
         appName: app.name,
@@ -801,7 +947,16 @@ async function route(pathname, method, body, query) {
   }
 
   if (pathname === '/api/settings/info' && method === 'GET') {
-    return { github: { login: 'acme-bot', scopes: ['repo'], rateLimitRemaining: 4931 }, appsDir: '/home/ubuntu/apps', nginxEnabled: false, domainHint: null };
+    // Empty scopes mirrors a real fine-grained PAT, which reports none via the API.
+    return { github: { login: 'acme-bot', scopes: [], rateLimitRemaining: 4931 }, appsDir: '/home/ubuntu/apps', nginxEnabled: false, domainHint: null };
+  }
+
+  if (pathname === '/api/config/import/preview' && method === 'POST') {
+    return { rows: previewImportRows(body) };
+  }
+
+  if (pathname === '/api/config/import' && method === 'POST') {
+    return applyImport(body);
   }
 
   throw new MockHttpError(404, 'Not found (mock)');
@@ -819,7 +974,6 @@ function shouldMock(pathname) {
   if (!pathname.startsWith('/api/')) return false;
   if (pathname.startsWith('/api/auth/')) return false;
   if (pathname === '/api/settings/password') return false;
-  if (pathname.startsWith('/api/config/')) return false;
   return true;
 }
 
@@ -844,6 +998,21 @@ export function installMockFetch() {
     }
 
     try {
+      // Export returns a file attachment, not a JSON API envelope — handled
+      // separately so it can set Content-Disposition and a blob body.
+      if (url.pathname === '/api/config/export' && method === 'POST') {
+        await sleep(200);
+        const file = buildExportFile(body);
+        const filename = `deployer-config-${new Date().toISOString().slice(0, 10)}.json`;
+        return new Response(JSON.stringify(file, null, 2), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Disposition': `attachment; filename="${filename}"`,
+          },
+        });
+      }
+
       const result = await route(url.pathname, method, body, url.searchParams);
       return jsonResponse(200, result);
     } catch (err) {
@@ -855,5 +1024,5 @@ export function installMockFetch() {
   };
 
   // eslint-disable-next-line no-console
-  console.info('[mockApi] enabled — intercepting /api/* except auth/config. Set localStorage.mockApi to "0" and reload to disable.');
+  console.info('[mockApi] enabled — intercepting /api/* except auth and settings/password. Set localStorage.mockApi to "0" and reload to disable.');
 }

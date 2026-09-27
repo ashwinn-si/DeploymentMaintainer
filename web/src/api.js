@@ -119,7 +119,8 @@ export const settingsApi = {
 };
 
 export const configApi = {
-  exportConfig: (body) => api.post('/config/export', body),
+  // No exportConfig helper here on purpose: POST /config/export returns a file
+  // attachment, not JSON, so callers use fetch() + blob() directly (see Settings.jsx).
   importPreview: (body) => api.post('/config/import/preview', body),
   importApply: (body) => api.post('/config/import', body),
 };
