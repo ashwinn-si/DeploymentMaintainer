@@ -1,0 +1,15 @@
+# Lets the dashboard (running as `ubuntu`, via services/nginx.js) validate and
+# reload Nginx after writing a per-app location file, without a password
+# prompt and without full root access.
+#
+# Install:
+#   sudo visudo -cf deploy/sudoers-deployer   # validate the syntax BEFORE installing
+#   sudo cp deploy/sudoers-deployer /etc/sudoers.d/deployer
+#   sudo chown root:root /etc/sudoers.d/deployer
+#   sudo chmod 0440 /etc/sudoers.d/deployer
+#   sudo visudo -cf /etc/sudoers.d/deployer   # validate again from its final location
+#
+# A syntax error in a live /etc/sudoers.d file can break `sudo` for everyone,
+# so always validate with -cf before AND after copying it into place.
+
+ubuntu ALL=(root) NOPASSWD: /usr/sbin/nginx -t, /usr/bin/systemctl reload nginx
