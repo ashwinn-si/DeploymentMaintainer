@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "server"
+    "server",
+    "web"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=server",
+    "dev:web": "npm run dev --workspace=web",
     "start": "npm run start --workspace=server",
     "seed": "npm run seed --workspace=server",
     "clear-db": "npm run clear-db --workspace=server",
     "test": "npm run test --workspace=server",
-    "build": "echo \"web not yet built\""
+    "build": "npm run build --workspace=web"
   }
 }
