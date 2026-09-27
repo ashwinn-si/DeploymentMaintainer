@@ -1,0 +1,859 @@
+// DEV-only fixture backend. Only ever loaded via a dynamic `import()` gated by
+// `import.meta.env.DEV`, so bundlers drop it entirely from production builds.
+// Intercepts every `/api/*` call except `/api/auth/*` (real auth already works)
+// and `/api/settings/password` + `/api/config/*` (unimplemented in this stage).
+
+const RESERVED_NAMES = ['api', 'assets', 'login', 'ports', 'apps', 'new', 'deployments', 'server', 'settings'];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function uid(prefix) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sha() {
+  return Array.from({ length: 40 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('');
+}
+
+class MockHttpError extends Error {
+  constructor(status, message, issues) {
+    super(message);
+    this.status = status;
+    this.issues = issues;
+  }
+}
+
+// ------------------------------------------------------------------ fixtures
+
+function defaultSteps(nginxPath) {
+  return [
+    { type: 'gitSync', enabled: true, config: {} },
+    { type: 'nodeSetup', enabled: true, config: {} },
+    { type: 'writeEnv', enabled: true, config: { filename: '.env' } },
+    { type: 'install', enabled: true, config: { command: 'npm ci' } },
+    { type: 'build', enabled: false, config: { command: 'npm run build' } },
+    { type: 'pm2', enabled: true, config: { command: 'npm start' } },
+    {
+      type: 'healthCheck',
+      enabled: true,
+      config: { path: '/health', timeoutMs: 60000, intervalMs: 2000, autoRollback: true },
+    },
+    { type: 'nginx', enabled: Boolean(nginxPath), config: { path: nginxPath ?? '/app', stripPrefix: true } },
+  ];
+}
+
+const REPOS = [
+  {
+    fullName: 'acme/api',
+    name: 'api',
+    owner: 'acme',
+    private: true,
+    defaultBranch: 'main',
+    pushedAt: '2026-09-25T10:00:00.000Z',
+    description: 'Core API service',
+    htmlUrl: 'https://github.com/acme/api',
+  },
+  {
+    fullName: 'acme/worker',
+    name: 'worker',
+    owner: 'acme',
+    private: true,
+    defaultBranch: 'main',
+    pushedAt: '2026-09-20T10:00:00.000Z',
+    description: 'Background job worker',
+    htmlUrl: 'https://github.com/acme/worker',
+  },
+  {
+    fullName: 'acme/broken-svc',
+    name: 'broken-svc',
+    owner: 'acme',
+    private: false,
+    defaultBranch: 'main',
+    pushedAt: '2026-09-18T10:00:00.000Z',
+    description: 'Known to crash on boot (for testing)',
+    htmlUrl: 'https://github.com/acme/broken-svc',
+  },
+  {
+    fullName: 'acme/marketing-site',
+    name: 'marketing-site',
+    owner: 'acme',
+    private: false,
+    defaultBranch: 'main',
+    pushedAt: '2026-09-10T10:00:00.000Z',
+    description: 'Public marketing site',
+    htmlUrl: 'https://github.com/acme/marketing-site',
+  },
+];
+
+const BRANCHES = {
+  'acme/api': ['main', 'dev', 'feature/rate-limiting'],
+  'acme/worker': ['main', 'staging'],
+  'acme/broken-svc': ['main'],
+  'acme/marketing-site': ['main', 'redesign'],
+};
+
+const NODE_VERSION_HINTS = {
+  'acme/api': { version: '20.11.1', source: '.nvmrc' },
+  'acme/worker': { version: '22', source: 'package.json engines.node' },
+};
+
+let apps = [];
+let deployments = [];
+const entriesByDeployment = new Map();
+const runners = new Map();
+const deploySeqByApp = new Map();
+
+function nextDeployNumber(appId) {
+  const n = (deploySeqByApp.get(appId) ?? 0) + 1;
+  deploySeqByApp.set(appId, n);
+  return n;
+}
+
+function makeApp({ id, name, repoFullName, branch, port, nodeVersion, nginxPath, status, healthy, envExtra = [] }) {
+  return {
+    id,
+    name,
+    repoFullName,
+    branch,
+    port,
+    nodeVersion,
+    path: nginxPath ?? null,
+    status,
+    pm2:
+      status === 'not_deployed'
+        ? { status: null, cpu: null, memory: null, restarts: null, uptimeMs: null }
+        : {
+            status: status === 'online' ? 'online' : status === 'deploying' ? 'online' : 'stopped',
+            cpu: status === 'stopped' ? 0 : Math.round(Math.random() * 12 * 10) / 10,
+            memory: status === 'stopped' ? 0 : Math.round((60 + Math.random() * 120) * 1024 * 1024),
+            restarts: status === 'failed' ? 4 : 0,
+            uptimeMs: status === 'stopped' || status === 'not_deployed' ? null : 3 * 3600 * 1000 + 12 * 60 * 1000,
+          },
+    health:
+      status === 'not_deployed'
+        ? { ok: false, statusCode: null, latencyMs: null, checkedAt: null }
+        : {
+            ok: healthy,
+            statusCode: healthy ? 200 : 502,
+            latencyMs: healthy ? 30 + Math.round(Math.random() * 60) : null,
+            checkedAt: new Date(Date.now() - 20_000).toISOString(),
+          },
+    currentCommitSha: status === 'not_deployed' ? null : sha(),
+    lastDeployedAt: status === 'not_deployed' ? null : new Date(Date.now() - 1000 * 60 * 42).toISOString(),
+    activeDeploymentId: null,
+    env: [{ key: 'NODE_ENV', value: 'production' }, ...envExtra],
+    steps: defaultSteps(nginxPath),
+    diskBytes: status === 'not_deployed' ? null : Math.round((80 + Math.random() * 400) * 1024 * 1024),
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+  };
+}
+
+function makeDeployment({ app, mode = 'update', status, branch, ageMinutes, rollbackOf = null, autoRollbackOf = null, error = null }) {
+  const id = uid('dep');
+  const startedAt = new Date(Date.now() - ageMinutes * 60_000);
+  const durationMs = status === 'queued' || status === 'running' ? null : 8000 + Math.round(Math.random() * 40000);
+  const finishedAt =
+    status === 'queued' || status === 'running' ? null : new Date(startedAt.getTime() + (durationMs ?? 0)).toISOString();
+  const steps = defaultSteps(app.path).map((s, idx) => ({
+    id: `${idx}-${s.type}`,
+    type: s.type,
+    label: s.type,
+    status: !s.enabled ? 'skipped' : status === 'failed' && idx > 4 ? 'failed' : 'success',
+    startedAt: s.enabled ? startedAt.toISOString() : null,
+    endedAt: s.enabled ? finishedAt : null,
+  }));
+  const dep = {
+    id,
+    number: nextDeployNumber(app.id),
+    appId: app.id,
+    appName: app.name,
+    repoFullName: app.repoFullName,
+    branch: branch ?? app.branch,
+    commitSha: sha(),
+    previousSha: sha(),
+    mode,
+    rollbackOf,
+    autoRollbackOf,
+    status,
+    nodeVersion: app.nodeVersion,
+    error: status === 'failed' ? error ?? 'Health check failed: GET /health timed out after 60s' : null,
+    createdAt: startedAt.toISOString(),
+    finishedAt,
+    durationMs,
+    steps,
+  };
+  deployments.push(dep);
+  return dep;
+}
+
+function seedEntriesFor(dep) {
+  if (entriesByDeployment.has(dep.id)) return entriesByDeployment.get(dep.id);
+  const lines = [];
+  let i = 0;
+  const push = (step, stream, text) => lines.push({ i: i++, t: new Date().toISOString(), step, stream, text });
+  push(null, 'info', `Deploying ${dep.appName} · ${dep.branch}@${dep.commitSha.slice(0, 7)} · mode ${dep.mode}`);
+  for (const step of dep.steps) {
+    if (step.status === 'skipped') {
+      push(step.id, 'info', `– ${step.type} · disabled`);
+      continue;
+    }
+    push(step.id, 'info', `▶ ${step.label}`);
+    if (step.type === 'gitSync') push(step.id, 'cmd', '$ git fetch origin ' + dep.branch);
+    if (step.type === 'install') push(step.id, 'cmd', '$ npm ci');
+    if (step.type === 'pm2') push(step.id, 'cmd', '$ pm2 startOrReload ecosystem.config.cjs');
+    if (step.type === 'healthCheck') push(step.id, 'stdout', `GET /health → 200 (attempt 1)`);
+    push(step.id, step.status === 'failed' ? 'stderr' : 'stdout', step.status === 'failed' ? 'Error: connect ECONNREFUSED' : 'ok');
+    push(
+      step.id,
+      'info',
+      step.status === 'failed' ? `✖ ${step.label} · exit code 1` : `✔ ${step.label} · ${(1 + Math.random() * 4).toFixed(1)}s`
+    );
+    if (step.status === 'failed') break;
+  }
+  push(null, dep.status === 'success' ? 'info' : 'error', `Deployment ${dep.status}`);
+  entriesByDeployment.set(dep.id, lines);
+  return lines;
+}
+
+function seedFixtures() {
+  const apiMain = makeApp({
+    id: 'app_api_main',
+    name: 'api-main',
+    repoFullName: 'acme/api',
+    branch: 'main',
+    port: 4001,
+    nodeVersion: '20.11.1',
+    nginxPath: '/api-main',
+    status: 'online',
+    healthy: true,
+  });
+  const apiDev = makeApp({
+    id: 'app_api_dev',
+    name: 'api-dev',
+    repoFullName: 'acme/api',
+    branch: 'dev',
+    port: 4002,
+    nodeVersion: '22.11.0',
+    nginxPath: '/api-dev',
+    status: 'deploying',
+    healthy: true,
+    envExtra: [{ key: 'FEATURE_FLAG_RATE_LIMIT', value: 'true' }],
+  });
+  const worker = makeApp({
+    id: 'app_worker',
+    name: 'worker',
+    repoFullName: 'acme/worker',
+    branch: 'main',
+    port: 4003,
+    nodeVersion: '22',
+    nginxPath: null,
+    status: 'stopped',
+    healthy: false,
+  });
+  const broken = makeApp({
+    id: 'app_broken_svc',
+    name: 'broken-svc',
+    repoFullName: 'acme/broken-svc',
+    branch: 'main',
+    port: 4004,
+    nodeVersion: '20',
+    nginxPath: '/broken-svc',
+    status: 'failed',
+    healthy: false,
+  });
+  const fresh = makeApp({
+    id: 'app_marketing_site',
+    name: 'marketing-site',
+    repoFullName: 'acme/marketing-site',
+    branch: 'main',
+    port: 4005,
+    nodeVersion: '20',
+    nginxPath: '/marketing-site',
+    status: 'not_deployed',
+    healthy: false,
+  });
+  apps = [apiMain, apiDev, worker, broken, fresh];
+
+  makeDeployment({ app: apiMain, status: 'success', mode: 'update', ageMinutes: 300 });
+  makeDeployment({ app: apiMain, status: 'success', mode: 'update', ageMinutes: 42 });
+  const failedOne = makeDeployment({ app: broken, status: 'failed', mode: 'update', ageMinutes: 15 });
+  makeDeployment({
+    app: broken,
+    status: 'failed',
+    mode: 'rollback',
+    branch: broken.branch,
+    ageMinutes: 14,
+    autoRollbackOf: failedOne.id,
+    error: 'Auto-rollback also failed health check',
+  });
+  makeDeployment({ app: worker, status: 'cancelled', mode: 'fresh', ageMinutes: 120 });
+  const workerSuccess = makeDeployment({ app: worker, status: 'success', mode: 'update', ageMinutes: 200 });
+  makeDeployment({ app: worker, status: 'rollback' === 'rollback' ? 'success' : 'success', mode: 'rollback', rollbackOf: workerSuccess.id, ageMinutes: 90 });
+
+  for (const dep of deployments) seedEntriesFor(dep);
+
+  // The one live, in-progress deployment (drives the sidebar dot + activity panel).
+  const running = makeDeployment({ app: apiDev, status: 'running', mode: 'update', ageMinutes: 0 });
+  running.steps = running.steps.map((s, idx) => ({ ...s, status: idx === 0 ? 'running' : 'pending', startedAt: idx === 0 ? new Date().toISOString() : null, endedAt: null }));
+  running.durationMs = null;
+  running.finishedAt = null;
+  entriesByDeployment.set(running.id, []);
+  apiDev.activeDeploymentId = running.id;
+  ensureRunnerStarted(running.id);
+}
+
+seedFixtures();
+
+// ------------------------------------------------------------------ live-deploy simulation
+
+function pushEntry(depId, step, stream, text) {
+  const list = entriesByDeployment.get(depId) ?? [];
+  const entry = { i: list.length, t: new Date().toISOString(), step, stream, text };
+  list.push(entry);
+  entriesByDeployment.set(depId, list);
+  return entry;
+}
+
+function notify(id, type, payload) {
+  const state = runners.get(id);
+  if (!state) return;
+  for (const sub of state.subscribers) sub[type]?.(payload);
+}
+
+function ensureRunnerStarted(id) {
+  if (runners.has(id)) return;
+  const dep = deployments.find((d) => d.id === id);
+  if (!dep) return;
+  const state = { subscribers: new Set(), cancelled: false };
+  runners.set(id, state);
+  runSimulation(dep, state);
+}
+
+function subscribeRunner(id, handlers) {
+  ensureRunnerStarted(id);
+  const state = runners.get(id);
+  if (!state) return () => {};
+  state.subscribers.add(handlers);
+  return () => state.subscribers.delete(handlers);
+}
+
+async function runSimulation(dep, state) {
+  const app = apps.find((a) => a.id === dep.appId);
+  const shouldFail = app?.name === 'broken-svc';
+  dep.status = 'running';
+
+  for (let idx = 0; idx < dep.steps.length; idx++) {
+    if (state.cancelled) break;
+    const step = dep.steps[idx];
+    if (step.status === 'skipped') continue;
+
+    step.status = 'running';
+    step.startedAt = new Date().toISOString();
+    notify(dep.id, 'onStep', { id: step.id, status: step.status, startedAt: step.startedAt, endedAt: null });
+    notify(dep.id, 'onLine', pushEntry(dep.id, step.id, 'info', `▶ ${step.label}`));
+    await sleep(350);
+    if (state.cancelled) break;
+    notify(dep.id, 'onLine', pushEntry(dep.id, step.id, 'cmd', `$ run ${step.type}`));
+    await sleep(450 + Math.random() * 500);
+    if (state.cancelled) break;
+
+    const failThisStep = shouldFail && step.type === 'healthCheck';
+    notify(
+      dep.id,
+      'onLine',
+      pushEntry(dep.id, step.id, failThisStep ? 'stderr' : 'stdout', failThisStep ? 'GET /health → 502 (attempt 5)' : 'ok')
+    );
+
+    step.status = failThisStep ? 'failed' : 'success';
+    step.endedAt = new Date().toISOString();
+    notify(dep.id, 'onStep', { id: step.id, status: step.status, startedAt: step.startedAt, endedAt: step.endedAt });
+    notify(
+      dep.id,
+      'onLine',
+      pushEntry(
+        dep.id,
+        step.id,
+        'info',
+        failThisStep ? `✖ ${step.label} · exit code 1` : `✔ ${step.label} · ${(1 + Math.random() * 3).toFixed(1)}s`
+      )
+    );
+
+    if (failThisStep) {
+      dep.status = 'failed';
+      dep.error = 'Health check failed: GET /health → 502 (attempt 5)';
+      break;
+    }
+  }
+
+  if (state.cancelled) {
+    dep.status = 'cancelled';
+    for (const step of dep.steps) if (step.status === 'running' || step.status === 'pending') step.status = 'skipped';
+  } else if (dep.status !== 'failed') {
+    dep.status = 'success';
+  }
+
+  dep.finishedAt = new Date().toISOString();
+  dep.durationMs = new Date(dep.finishedAt).getTime() - new Date(dep.createdAt).getTime();
+
+  if (app) {
+    app.activeDeploymentId = null;
+    app.status = dep.status === 'success' ? 'online' : dep.status === 'cancelled' ? 'stopped' : 'failed';
+    app.health = dep.status === 'success' ? { ok: true, statusCode: 200, latencyMs: 42, checkedAt: dep.finishedAt } : app.health;
+    if (dep.status === 'success') {
+      app.currentCommitSha = dep.commitSha;
+      app.lastDeployedAt = dep.finishedAt;
+    }
+  }
+
+  notify(dep.id, 'onLine', pushEntry(dep.id, null, dep.status === 'success' ? 'info' : 'error', `Deployment ${dep.status}`));
+  notify(dep.id, 'onStatus', { status: dep.status, commitSha: dep.commitSha, error: dep.error, finishedAt: dep.finishedAt });
+  notify(dep.id, 'onDone', { status: dep.status });
+  await sleep(50);
+  runners.delete(dep.id);
+}
+
+export function createMockStream(depId, after = -1) {
+  const listeners = { line: new Set(), step: new Set(), status: new Set(), done: new Set() };
+  let closed = false;
+  let unsubscribe = () => {};
+
+  function emit(type, data) {
+    if (closed) return;
+    for (const fn of listeners[type]) fn({ data: JSON.stringify(data) });
+  }
+
+  const handle = {
+    addEventListener(type, fn) {
+      listeners[type]?.add(fn);
+    },
+    removeEventListener(type, fn) {
+      listeners[type]?.delete(fn);
+    },
+    close() {
+      closed = true;
+      unsubscribe();
+    },
+  };
+
+  (async () => {
+    const backlog = (entriesByDeployment.get(depId) ?? []).filter((e) => e.i > after);
+    for (const entry of backlog) {
+      if (closed) return;
+      emit('line', entry);
+      await sleep(10);
+    }
+    if (closed) return;
+
+    const dep = deployments.find((d) => d.id === depId);
+    if (!dep) {
+      emit('done', { status: 'failed' });
+      closed = true;
+      return;
+    }
+    if (dep.status === 'running' || dep.status === 'queued') {
+      unsubscribe = subscribeRunner(depId, {
+        onLine: (e) => emit('line', e),
+        onStep: (s) => emit('step', s),
+        onStatus: (s) => emit('status', s),
+        onDone: (s) => {
+          emit('done', s);
+          closed = true;
+        },
+      });
+    } else {
+      emit('done', { status: dep.status });
+      closed = true;
+    }
+  })();
+
+  return handle;
+}
+
+// ------------------------------------------------------------------ HTTP-ish route handling
+
+function matchRepoBranches(pathname) {
+  const m = pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/branches$/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2] };
+}
+
+function matchRepoNodeVersion(pathname) {
+  const m = pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/node-version$/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2] };
+}
+
+function toAppSummary(app) {
+  const { env, steps, diskBytes, ...summary } = app;
+  void env;
+  void steps;
+  void diskBytes;
+  return summary;
+}
+
+function findApp(id) {
+  const app = apps.find((a) => a.id === id);
+  if (!app) throw new MockHttpError(404, 'App not found');
+  return app;
+}
+
+function findDeployment(id) {
+  const dep = deployments.find((d) => d.id === id);
+  if (!dep) throw new MockHttpError(404, 'Deployment not found');
+  return dep;
+}
+
+function validateAppInput(body, { isCreate }) {
+  const issues = [];
+  if (isCreate) {
+    if (!body.name || !/^[a-z0-9-]{1,40}$/.test(body.name)) {
+      issues.push({ path: ['name'], message: 'Lowercase letters, numbers and hyphens only, max 40 chars' });
+    } else if (RESERVED_NAMES.includes(body.name)) {
+      issues.push({ path: ['name'], message: 'That name is reserved' });
+    } else if (apps.some((a) => a.name === body.name)) {
+      issues.push({ path: ['name'], message: 'An app with this name already exists' });
+    }
+    if (!body.repoFullName) issues.push({ path: ['repoFullName'], message: 'Repo is required' });
+    if (!body.branch) issues.push({ path: ['branch'], message: 'Branch is required' });
+  }
+  if (body.port !== undefined && body.port !== null) {
+    const conflict = apps.find((a) => a.port === body.port && a.id !== body.id);
+    if (conflict) issues.push({ path: ['port'], message: `Port already used by ${conflict.name}` });
+  }
+  if (issues.length) throw new MockHttpError(400, 'Validation failed', issues);
+}
+
+async function route(pathname, method, body, query) {
+  await sleep(120 + Math.random() * 180);
+
+  if (pathname === '/api/repos' && method === 'GET') {
+    const q = (query.get('q') || '').toLowerCase();
+    const repos = q ? REPOS.filter((r) => r.fullName.toLowerCase().includes(q)) : REPOS;
+    return { repos };
+  }
+
+  const branchMatch = matchRepoBranches(pathname);
+  if (branchMatch && method === 'GET') {
+    const full = `${branchMatch.owner}/${branchMatch.repo}`;
+    return { branches: BRANCHES[full] ?? ['main'] };
+  }
+
+  const nodeVerMatch = matchRepoNodeVersion(pathname);
+  if (nodeVerMatch && method === 'GET') {
+    const full = `${nodeVerMatch.owner}/${nodeVerMatch.repo}`;
+    return NODE_VERSION_HINTS[full] ?? { version: null, source: null };
+  }
+
+  if (pathname === '/api/apps' && method === 'GET') {
+    return { apps: apps.map(toAppSummary) };
+  }
+
+  if (pathname === '/api/apps/defaults' && method === 'GET') {
+    const name = query.get('name') || '';
+    const usedPorts = new Set(apps.map((a) => a.port));
+    let port = 4001;
+    while (usedPorts.has(port)) port++;
+    return { steps: defaultSteps(name ? `/${name}` : null), port, nodeVersion: '20.11.1' };
+  }
+
+  if (pathname === '/api/apps' && method === 'POST') {
+    validateAppInput(body, { isCreate: true });
+    const usedPorts = new Set(apps.map((a) => a.port));
+    let port = body.port ?? 4001;
+    while (usedPorts.has(port)) port++;
+    const app = makeApp({
+      id: uid('app'),
+      name: body.name,
+      repoFullName: body.repoFullName,
+      branch: body.branch,
+      port,
+      nodeVersion: body.nodeVersion || '20',
+      nginxPath: `/${body.name}`,
+      status: 'not_deployed',
+      healthy: false,
+    });
+    app.env = body.env?.length ? body.env : app.env;
+    app.steps = body.steps?.length ? body.steps : app.steps;
+    apps.push(app);
+    let deployment = null;
+    if (body.deploy) {
+      deployment = makeDeployment({ app, status: 'queued', mode: 'update', ageMinutes: 0 });
+      app.status = 'deploying';
+      app.activeDeploymentId = deployment.id;
+      entriesByDeployment.set(deployment.id, []);
+      ensureRunnerStarted(deployment.id);
+    }
+    return { app, deployment };
+  }
+
+  const appIdMatch = pathname.match(/^\/api\/apps\/([^/]+)$/);
+  if (appIdMatch && method === 'GET') {
+    return { app: findApp(appIdMatch[1]) };
+  }
+  if (appIdMatch && method === 'PATCH') {
+    const app = findApp(appIdMatch[1]);
+    validateAppInput({ ...body, id: app.id }, { isCreate: false });
+    Object.assign(app, body, { updatedAt: new Date().toISOString() });
+    return { app };
+  }
+  if (appIdMatch && method === 'DELETE') {
+    const app = findApp(appIdMatch[1]);
+    if (body?.confirmName !== app.name) {
+      throw new MockHttpError(400, 'Type the app name to confirm deletion');
+    }
+    apps = apps.filter((a) => a.id !== app.id);
+    return { ok: true };
+  }
+
+  const dupMatch = pathname.match(/^\/api\/apps\/([^/]+)\/duplicate$/);
+  if (dupMatch && method === 'POST') {
+    const source = findApp(dupMatch[1]);
+    validateAppInput({ name: body.name, repoFullName: source.repoFullName, branch: body.branch }, { isCreate: true });
+    const usedPorts = new Set(apps.map((a) => a.port));
+    let port = body.port ?? source.port + 1;
+    while (usedPorts.has(port)) port++;
+    const app = makeApp({
+      id: uid('app'),
+      name: body.name,
+      repoFullName: source.repoFullName,
+      branch: body.branch ?? source.branch,
+      port,
+      nodeVersion: body.nodeVersion || source.nodeVersion,
+      nginxPath: `/${body.name}`,
+      status: 'not_deployed',
+      healthy: false,
+    });
+    app.env = body.copyEnv ? source.env : [{ key: 'NODE_ENV', value: 'production' }];
+    app.steps = source.steps;
+    apps.push(app);
+    let deployment = null;
+    if (body.deploy) {
+      deployment = makeDeployment({ app, status: 'queued', mode: 'update', ageMinutes: 0 });
+      app.status = 'deploying';
+      app.activeDeploymentId = deployment.id;
+      entriesByDeployment.set(deployment.id, []);
+      ensureRunnerStarted(deployment.id);
+    }
+    return { app, deployment };
+  }
+
+  const deployMatch = pathname.match(/^\/api\/apps\/([^/]+)\/deploy$/);
+  if (deployMatch && method === 'POST') {
+    const app = findApp(deployMatch[1]);
+    if (app.activeDeploymentId) throw new MockHttpError(409, 'A deployment is already running for this app');
+    if (body.branch) app.branch = body.branch;
+    const deployment = makeDeployment({ app, status: 'queued', mode: body.mode ?? 'update', ageMinutes: 0 });
+    app.status = 'deploying';
+    app.activeDeploymentId = deployment.id;
+    entriesByDeployment.set(deployment.id, []);
+    ensureRunnerStarted(deployment.id);
+    return { deployment };
+  }
+
+  const restartMatch = pathname.match(/^\/api\/apps\/([^/]+)\/restart$/);
+  if (restartMatch && method === 'POST') {
+    const app = findApp(restartMatch[1]);
+    app.pm2.status = 'online';
+    app.status = 'online';
+    return { app: toAppSummary(app) };
+  }
+  const stopMatch = pathname.match(/^\/api\/apps\/([^/]+)\/stop$/);
+  if (stopMatch && method === 'POST') {
+    const app = findApp(stopMatch[1]);
+    app.pm2.status = 'stopped';
+    app.status = 'stopped';
+    return { app: toAppSummary(app) };
+  }
+
+  const logsMatch = pathname.match(/^\/api\/apps\/([^/]+)\/logs$/);
+  if (logsMatch && method === 'GET') {
+    const app = findApp(logsMatch[1]);
+    return {
+      text: [
+        `0|app-${app.name}  | [mock] pm2 runtime logs`,
+        `0|app-${app.name}  | Server listening on port ${app.port}`,
+        `0|app-${app.name}  | GET /health 200 3ms`,
+      ].join('\n'),
+    };
+  }
+
+  const appDeploysMatch = pathname.match(/^\/api\/apps\/([^/]+)\/deployments$/);
+  if (appDeploysMatch && method === 'GET') {
+    const app = findApp(appDeploysMatch[1]);
+    const limit = Number(query.get('limit')) || 50;
+    return { deployments: deployments.filter((d) => d.appId === app.id).sort(byCreatedAtDesc).slice(0, limit) };
+  }
+
+  if (pathname === '/api/deployments/active' && method === 'GET') {
+    return { deployments: deployments.filter((d) => d.status === 'queued' || d.status === 'running') };
+  }
+
+  if (pathname === '/api/deployments' && method === 'GET') {
+    let list = [...deployments];
+    if (query.get('app')) list = list.filter((d) => d.appId === query.get('app'));
+    if (query.get('status')) list = list.filter((d) => d.status === query.get('status'));
+    if (query.get('branch')) list = list.filter((d) => d.branch === query.get('branch'));
+    if (query.get('mode')) list = list.filter((d) => d.mode === query.get('mode'));
+    list = list.sort(byCreatedAtDesc);
+    const limit = Number(query.get('limit')) || 50;
+    return { deployments: list.slice(0, limit), nextBefore: list.length > limit ? list[limit - 1].createdAt : null };
+  }
+
+  const depIdMatch = pathname.match(/^\/api\/deployments\/([^/]+)$/);
+  if (depIdMatch && method === 'GET') {
+    const dep = findDeployment(depIdMatch[1]);
+    return { deployment: { ...dep, entryCount: (entriesByDeployment.get(dep.id) ?? []).length, repoFullName: dep.repoFullName } };
+  }
+
+  const entriesMatch = pathname.match(/^\/api\/deployments\/([^/]+)\/entries$/);
+  if (entriesMatch && method === 'GET') {
+    const dep = findDeployment(entriesMatch[1]);
+    const after = Number(query.get('after') ?? -1);
+    const limit = Number(query.get('limit')) || 2000;
+    const all = entriesByDeployment.get(dep.id) ?? [];
+    return { entries: all.filter((e) => e.i > after).slice(0, limit) };
+  }
+
+  const cancelMatch = pathname.match(/^\/api\/deployments\/([^/]+)\/cancel$/);
+  if (cancelMatch && method === 'POST') {
+    const dep = findDeployment(cancelMatch[1]);
+    const state = runners.get(dep.id);
+    if (state) state.cancelled = true;
+    else if (dep.status === 'running' || dep.status === 'queued') dep.status = 'cancelled';
+    return { deployment: dep };
+  }
+
+  const rollbackMatch = pathname.match(/^\/api\/deployments\/([^/]+)\/rollback$/);
+  if (rollbackMatch && method === 'POST') {
+    const source = findDeployment(rollbackMatch[1]);
+    if (source.status !== 'success') throw new MockHttpError(400, 'Can only roll back to a successful deployment');
+    const app = findApp(source.appId);
+    if (app.activeDeploymentId) throw new MockHttpError(409, 'A deployment is already running for this app');
+    const dep = makeDeployment({ app, status: 'queued', mode: 'rollback', branch: source.branch, rollbackOf: source.id, ageMinutes: 0 });
+    dep.commitSha = source.commitSha;
+    app.status = 'deploying';
+    app.activeDeploymentId = dep.id;
+    entriesByDeployment.set(dep.id, []);
+    ensureRunnerStarted(dep.id);
+    return { deployment: dep };
+  }
+
+  if (pathname === '/api/ports' && method === 'GET') {
+    return {
+      dashboard: { port: 3000 },
+      rows: apps
+        .map((app) => ({
+          port: app.port,
+          appId: app.id,
+          appName: app.name,
+          repoFullName: app.repoFullName,
+          branch: app.branch,
+          path: app.path,
+          nodeVersion: app.nodeVersion,
+          pm2Status: app.pm2.status,
+          health: app.health,
+          nginx: Boolean(app.path),
+          lastDeployedAt: app.lastDeployedAt,
+          conflict: null,
+        }))
+        .sort((a, b) => a.port - b.port),
+    };
+  }
+
+  if (pathname === '/api/node/versions' && method === 'GET') {
+    return { installed: ['18.20.4', '20.11.1', '22.11.0'], default: '20.11.1' };
+  }
+
+  if (pathname === '/api/system' && method === 'GET') {
+    const now = Date.now();
+    const sample = () => ({
+      t: new Date(now).toISOString(),
+      cpuPct: 20 + Math.random() * 30,
+      memUsed: 3.2 * 1024 ** 3,
+      memTotal: 8 * 1024 ** 3,
+      swapUsed: 0.1 * 1024 ** 3,
+      swapTotal: 1 * 1024 ** 3,
+      load1: 0.8,
+      load5: 0.6,
+      load15: 0.5,
+      diskUsedPct: 46,
+    });
+    return {
+      current: sample(),
+      history: Array.from({ length: 40 }, (_, idx) => ({ ...sample(), t: new Date(now - (40 - idx) * 30_000).toISOString() })),
+      info: { hostname: 'mock-ec2', platform: 'linux', uptimeSec: 86400 * 3, nodeVersion: '20.11.1', pm2Version: '5.4.2', nginxVersion: '1.24.0', cpuCount: 2 },
+      disks: [{ mount: '/', total: 40 * 1024 ** 3, used: 18 * 1024 ** 3, free: 22 * 1024 ** 3 }],
+      apps: apps.map((app) => ({
+        appId: app.id,
+        appName: app.name,
+        pm2Status: app.pm2.status,
+        cpu: app.pm2.cpu,
+        memory: app.pm2.memory,
+        restarts: app.pm2.restarts,
+        uptimeMs: app.pm2.uptimeMs,
+        diskBytes: app.diskBytes,
+        health: app.health,
+      })),
+    };
+  }
+
+  if (pathname === '/api/settings/info' && method === 'GET') {
+    return { github: { login: 'acme-bot', scopes: ['repo'], rateLimitRemaining: 4931 }, appsDir: '/home/ubuntu/apps', nginxEnabled: false, domainHint: null };
+  }
+
+  throw new MockHttpError(404, 'Not found (mock)');
+}
+
+function byCreatedAtDesc(a, b) {
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+}
+
+function jsonResponse(status, body) {
+  return new Response(JSON.stringify(body ?? null), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+function shouldMock(pathname) {
+  if (!pathname.startsWith('/api/')) return false;
+  if (pathname.startsWith('/api/auth/')) return false;
+  if (pathname === '/api/settings/password') return false;
+  if (pathname.startsWith('/api/config/')) return false;
+  return true;
+}
+
+export function installMockFetch() {
+  if (window.__mockApiInstalled) return;
+  window.__mockApiInstalled = true;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async (input, init = {}) => {
+    const rawUrl = typeof input === 'string' ? input : input.url;
+    const url = new URL(rawUrl, window.location.origin);
+    if (!shouldMock(url.pathname)) return originalFetch(input, init);
+
+    const method = (init.method || 'GET').toUpperCase();
+    let body;
+    if (init.body) {
+      try {
+        body = JSON.parse(init.body);
+      } catch {
+        body = undefined;
+      }
+    }
+
+    try {
+      const result = await route(url.pathname, method, body, url.searchParams);
+      return jsonResponse(200, result);
+    } catch (err) {
+      if (err instanceof MockHttpError) return jsonResponse(err.status, { error: err.message, issues: err.issues });
+      // eslint-disable-next-line no-console
+      console.error('[mockApi] unhandled error', err);
+      return jsonResponse(500, { error: 'Mock server error' });
+    }
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mockApi] enabled — intercepting /api/* except auth/config. Set localStorage.mockApi to "0" and reload to disable.');
+}
