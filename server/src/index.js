@@ -6,8 +6,10 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { ZodError } from 'zod';
 import { createAuthRouter } from './routes/auth.js';
+import { createReposRouter } from './routes/repos.js';
 import { loadConfig } from './config.js';
 import { connectDB } from './db.js';
+import { HttpError } from './lib/httpError.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,6 +26,7 @@ export function createApp(config) {
   });
 
   app.use('/api/auth', createAuthRouter(config));
+  app.use('/api/repos', createReposRouter(config));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -41,6 +44,11 @@ export function createApp(config) {
   app.use((err, req, res, next) => {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'Validation failed', issues: err.issues });
+    }
+    const status = err.status ?? err.statusCode;
+    const exposed = err instanceof HttpError ? err.expose !== false : err.expose === true;
+    if (status && exposed) {
+      return res.status(status).json({ error: err.message });
     }
     console.error(err.stack || err);
     return res.status(500).json({ error: 'Internal server error' });
