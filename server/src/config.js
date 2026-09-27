@@ -39,6 +39,7 @@ const fieldSchemas = {
   DEFAULT_NODE_VERSION: z.string().min(1).default('20'),
   NGINX_ENABLED: boolFromEnv(true),
   NODE_ENV: z.string().min(1).default('development'),
+  GIT_REMOTE_BASE: z.string().min(1).default('https://github.com'),
 };
 
 export const DEFAULT_REQUIRED = [
@@ -66,6 +67,7 @@ const ALWAYS_DEFAULTED = new Set([
   'DEFAULT_NODE_VERSION',
   'NGINX_ENABLED',
   'NODE_ENV',
+  'GIT_REMOTE_BASE',
 ]);
 
 function buildSchema(require) {

@@ -24,6 +24,7 @@ const ALL_CONFIG_KEYS = [
   'NGINX_ENABLED',
   'NODE_ENV',
   'GITHUB_TOKEN',
+  'GIT_REMOTE_BASE',
 ];
 
 const VALID_ENV = {

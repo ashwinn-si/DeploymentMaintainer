@@ -36,3 +36,104 @@ export function validateRef(ref) {
   }
   return ref;
 }
+
+// Reserved names: routes/paths the frontend router and API already claim.
+export const RESERVED_APP_NAMES = new Set([
+  'api', 'assets', 'login', 'ports', 'apps', 'new', 'deployments', 'server', 'settings',
+]);
+
+const APP_NAME_RE = /^[a-z0-9-]{1,40}$/;
+
+export function validateAppName(name) {
+  if (typeof name !== 'string' || !APP_NAME_RE.test(name)) {
+    throw new HttpError(400, 'App name must be 1-40 lowercase letters, digits or hyphens');
+  }
+  if (RESERVED_APP_NAMES.has(name)) {
+    throw new HttpError(400, `"${name}" is a reserved name`);
+  }
+  return name;
+}
+
+export function validatePort(port) {
+  const n = Number(port);
+  if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+    throw new HttpError(400, 'Port must be an integer between 1024 and 65535');
+  }
+  return n;
+}
+
+const NODE_VERSION_RE = /^\d+(\.\d+){0,2}$/;
+
+export function validateNodeVersion(version) {
+  if (typeof version !== 'string' || (version !== 'lts' && !NODE_VERSION_RE.test(version))) {
+    throw new HttpError(400, 'Invalid Node version');
+  }
+  return version;
+}
+
+const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]*$/;
+
+export function validateEnvKey(key) {
+  if (typeof key !== 'string' || !ENV_KEY_RE.test(key)) {
+    throw new HttpError(400, `Invalid env key: ${key}`);
+  }
+  return key;
+}
+
+export function validateEnvValue(value) {
+  if (typeof value !== 'string' || /[\n\r\0]/.test(value)) {
+    throw new HttpError(400, 'Env value must not contain newlines or null bytes');
+  }
+  return value;
+}
+
+const COMMIT_SHA_RE = /^[0-9a-f]{7,40}$/;
+
+export function validateCommitSha(sha) {
+  if (typeof sha !== 'string' || !COMMIT_SHA_RE.test(sha)) {
+    throw new HttpError(400, 'Invalid commit sha');
+  }
+  return sha;
+}
+
+const NGINX_PATH_RE = /^\/[a-z0-9-]+(\/[a-z0-9-]+)*$/;
+
+export function validateNginxPath(nginxPath) {
+  if (typeof nginxPath !== 'string' || !NGINX_PATH_RE.test(nginxPath)) {
+    throw new HttpError(400, 'Invalid nginx path');
+  }
+  return nginxPath;
+}
+
+const HEALTHCHECK_PATH_RE = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/;
+
+export function validateHealthCheckPath(healthPath) {
+  if (typeof healthPath !== 'string' || healthPath.length > 200 || !HEALTHCHECK_PATH_RE.test(healthPath)) {
+    throw new HttpError(400, 'Invalid health check path');
+  }
+  return healthPath;
+}
+
+const ENV_FILENAME_RE = /^\.?[A-Za-z0-9._-]{1,64}$/;
+
+export function validateEnvFilename(filename) {
+  const isDotOrDotDot = filename === '.' || filename === '..';
+  if (typeof filename !== 'string' || isDotOrDotDot || !ENV_FILENAME_RE.test(filename)) {
+    throw new HttpError(400, 'Invalid env filename');
+  }
+  return filename;
+}
+
+// Wraps a throwing validate* function for use in a zod .refine(); undefined
+// passes through so it composes with .optional().
+export function refinable(validator) {
+  return (value) => {
+    if (value === undefined) return true;
+    try {
+      validator(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
