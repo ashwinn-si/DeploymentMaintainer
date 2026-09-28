@@ -1,4 +1,6 @@
-# API contract (shared by backend 3b/4 and frontend 6/7)
+# API reference
+
+The contract between `server/` and `web/src/api.js`. Keep both in sync when changing an endpoint.
 
 All under `/api`, cookie auth (401 = dashboard session invalid, nothing else returns 401).
 Errors: `{ error: string, issues?: ZodIssue[] }`. Dates are ISO strings. IDs are `id` (string), never `_id`.
@@ -33,6 +35,11 @@ LogEntry = { i /*index*/, t, step: string|null /*step id*/, stream: 'cmd'|'stdou
 ```
 
 ## Endpoints
+
+- `GET /health` → `{ ok: true }` (no auth)
+- `POST /auth/login` body `{ email, password }` → sets the `dm_session` httpOnly cookie, `{ user: { id, email } }` (rate-limited 10 / 15 min; bad credentials → 401)
+- `POST /auth/logout` → clears the cookie, `{ ok: true }`
+- `GET /auth/me` → `{ user: { id, email } }` or 401
 
 - `GET /repos?q=&refresh=1` → `{ repos: [{ fullName, name, owner, private, defaultBranch, pushedAt, description, htmlUrl }] }`
 - `GET /repos/:owner/:repo/branches` → `{ branches: string[] }` (default first)

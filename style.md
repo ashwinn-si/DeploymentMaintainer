@@ -1,8 +1,8 @@
-# BudgetFlow — Glassmorphism Styling Reference
+# Glassmorphism Styling Reference
 
-How the frosted-glass look is actually built in this codebase: surfaces, blur, borders, highlights, shadows, radii, typography, motion and dark mode. The brand/primary color is intentionally left out of this document — wherever a component uses it, it's referred to only as "brand tint".
+The design system for the Deployment Maintainer dashboard: surfaces, blur, borders, highlights, shadows, radii, typography, motion and dark mode. Wherever a component uses the primary color it's called the "brand tint" (see §8a).
 
-Source of truth: [`app/globals.css`](app/globals.css), [`components/ui/GlassCard.tsx`](components/ui/GlassCard.tsx), [`components/ui/Modal.tsx`](components/ui/Modal.tsx), [`components/ui/PageHeader.tsx`](components/ui/PageHeader.tsx), [`components/ui/Button.tsx`](components/ui/Button.tsx), [`components/layout/`](components/layout/), [`app/layout.tsx`](app/layout.tsx).
+Source of truth: [`web/src/index.css`](web/src/index.css) (tokens + utilities), [`web/src/components/ui/`](web/src/components/ui/) (GlassCard, Button, Modal, PageHeader, SelectSheet, Meter, Loader, …), [`web/src/components/layout/`](web/src/components/layout/), [`web/src/main.jsx`](web/src/main.jsx) (toasts).
 
 ---
 
@@ -68,7 +68,7 @@ Note the inversion: light mode is a _mostly opaque_ white film (60–86%) for le
 
 ## 4. Glass utility classes
 
-All in `app/globals.css`. Every tier has the same four ingredients: **fill, blur, border, inset highlight + shadow**.
+All in `web/src/index.css`. Every tier has the same four ingredients: **fill, blur, border, inset highlight + shadow**.
 
 ```css
 .glass-strong {
@@ -160,7 +160,7 @@ All in `app/globals.css`. Every tier has the same four ingredients: **fill, blur
 
 ## 5. `GlassCard` component
 
-[`components/ui/GlassCard.tsx`](components/ui/GlassCard.tsx) wraps the utilities with radius, padding and motion:
+[`GlassCard.jsx`](web/src/components/ui/GlassCard.jsx) wraps the utilities with radius, padding and motion:
 
 | `variant`       | Class          | Radius               |
 | --------------- | -------------- | -------------------- |
@@ -217,9 +217,21 @@ Used for charts, tags and category dots (not for chrome).
 | `--data-purple` | `#8B5CF6` | `#A78BFA` |
 | `--data-teal`   | `#14B8A6` | `#2DD4BF` |
 
-Tag preset palette ([`lib/colors.ts`](lib/colors.ts)) also includes Pink `#EC4899`, Cyan `#06B6D4`, Rose `#F43F5E`, Indigo `#6366F1`, Orange `#F97316`.
 
 Status colors: warning/offline uses amber (`bg-amber-500/10`, `border-amber-500/20`, `text-amber-700 / dark:text-amber-400`); destructive uses rose (`bg-rose-500/90`, hover `rose-600`, `shadow-rose-500/20`); toast error icon `#EF4444`.
+
+---
+
+## 8a. Brand tint
+
+| Token          | Light                   | Dark                     | Use                                                     |
+| -------------- | ----------------------- | ------------------------ | ------------------------------------------------------- |
+| `--brand`      | `#2F7D52`               | `#5FBF86`                | Primary button, active nav, focus rings, wordmark, commands in logs |
+| `--brand-soft` | `rgba(47,125,82,0.14)`  | `rgba(95,191,134,0.18)`  | Ambient orbs, subtle fills                              |
+
+Primary buttons use white text in light mode and `#0B140F` text in dark mode for contrast.
+
+**Status mapping** (pills per §15): deploying/running/queued = brand + pulse · online/success/healthy = teal · stopped/cancelled = amber · failed/errored/unhealthy = rose · anything else = neutral.
 
 ---
 
@@ -238,7 +250,7 @@ Recurring type patterns:
 - **Ring center value:** `text-3xl sm:text-4xl font-medium tracking-tight`
 - **Micro label:** `text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]`
 - **Bottom-nav label:** `text-[10px]`
-- **Wordmark:** "Budget" in `--text-primary` + "Flow" in a lighter weight / brand tint
+- **Wordmark:** "Deploy" in `--text-primary` + "Maintainer" in a lighter weight / brand tint
 
 `html` gets `antialiased`.
 
@@ -275,7 +287,7 @@ transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
 
 **Danger:** `bg-rose-500/90 text-white hover:bg-rose-600 shadow-md shadow-rose-500/20`.
 
-Sizes (from `Button.tsx`):
+Sizes (from `Button.jsx`):
 
 | Size   | Classes                                                     |
 | ------ | ----------------------------------------------------------- |
@@ -292,20 +304,17 @@ Small glass icon controls (hamburger, theme toggle): `min-h-[38px] min-w-[38px] 
 
 ## 11. Navigation chrome
 
-### Mobile top bar ([`Navbar.tsx`](components/layout/Navbar.tsx))
+### Mobile top bar ([`Navbar.jsx`](web/src/components/layout/Navbar.jsx))
 
 `sticky top-0 z-30 glass-mid backdrop-blur-2xl border-b border-white/60 dark:border-white/10 shadow-sm px-4 py-2.5` — hidden on `lg+`.
 
-### Floating pill bottom nav ([`BottomNav.tsx`](components/layout/BottomNav.tsx))
+### Floating pill bottom nav (not used here)
 
-- Wrapper: `fixed bottom-3 left-3 right-3 z-40` + `pb-[env(safe-area-inset-bottom)]`, `pointer-events-none` so only the pill catches taps
-- Pill: `glass-strong backdrop-blur-2xl rounded-full px-2 py-2 shadow-2xl border border-white/60 dark:border-white/10`, 5-column grid
-- Items: icon `w-5 h-5` + `text-[10px]` label, `min-h-[44px]`; inactive `--text-muted`, hover `--text-primary`
-- Center action: 48px circle raised `-mt-6` above the pill, `border-2 border-white/80 dark:border-zinc-800`, `shadow-lg`, `active:scale-95`
+This dashboard has six destinations, so mobile uses the top bar + drawer instead of a bottom nav. If one is added later: `fixed bottom-3 left-3 right-3`, `glass-strong backdrop-blur-2xl rounded-full` pill with `pb-[env(safe-area-inset-bottom)]`, 44px items, floating over content rather than edge to edge.
 
-The nav floats _over_ content rather than spanning edge to edge — that gap is what lets it read as a glass object.
+### Sidebar ([`Sidebar.jsx`](web/src/components/layout/Sidebar.jsx))
 
-### Sidebar drawer ([`Sidebar.tsx`](components/layout/Sidebar.tsx))
+Fixed `glass-strong` panel on `lg+`; below `lg` the same content opens as the drawer described here.
 
 - Scrim: `fixed inset-0 bg-black/60 backdrop-blur-sm`
 - Panel: `w-72 max-w-[85vw] glass-strong backdrop-blur-2xl border-r border-white/60 dark:border-white/10 shadow-2xl p-6`, slides with `transition-transform duration-300 ease-in-out`
@@ -315,7 +324,7 @@ The nav floats _over_ content rather than spanning edge to edge — that gap is 
 
 ---
 
-## 12. Page header ([`PageHeader.tsx`](components/ui/PageHeader.tsx))
+## 12. Page header ([`PageHeader.jsx`](web/src/components/ui/PageHeader.jsx))
 
 A layered glass card rather than a utility class:
 
@@ -332,7 +341,7 @@ The orbs are static and clipped by `overflow-hidden`, so they only color the gla
 
 ---
 
-## 13. Modals / bottom sheets ([`Modal.tsx`](components/ui/Modal.tsx))
+## 13. Modals / bottom sheets ([`Modal.jsx`](web/src/components/ui/Modal.jsx))
 
 Rendered in a portal on `document.body`, `z-[9999]`.
 
@@ -373,7 +382,7 @@ focus:bg-white dark:focus:bg-black/40 focus:ring-3
 placeholder:text-[var(--text-muted)]/50
 ```
 
-**Select sheet trigger** ([`SelectSheet.tsx`](components/ui/SelectSheet.tsx)): `bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl px-4 py-2.5 shadow-xs hover:bg-white/80 dark:hover:bg-black/60`, with a custom CSS-triangle up/down caret in `--text-muted`. Options open in the glass bottom sheet as `rounded-xl` rows.
+**Select sheet trigger** ([`SelectSheet.jsx`](web/src/components/ui/SelectSheet.jsx)): `bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl px-4 py-2.5 shadow-xs hover:bg-white/80 dark:hover:bg-black/60`, with a custom CSS-triangle up/down caret in `--text-muted`. Options open in the glass bottom sheet as `rounded-xl` rows.
 
 Pattern: light mode inputs are **whiter** than the card; dark mode inputs are **darker** than the card (`black/25–40`). Focus makes them more solid.
 
@@ -387,7 +396,7 @@ Pattern: light mode inputs are **whiter** than the card; dark mode inputs are **
 
 ---
 
-## 16. Toasts ([`app/layout.tsx`](app/layout.tsx))
+## 16. Toasts ([`main.jsx`](web/src/main.jsx))
 
 `react-hot-toast`, `position: bottom-center`, styled as a glass-strong chip:
 
@@ -407,7 +416,7 @@ Icon secondary color is `--glass-strong-bg` so the check/cross glyph reads as cu
 
 ## 17. Animated ring & loader
 
-**Ring** ([`Ring.tsx`](components/ui/Ring.tsx)):
+**Ring** ([`Meter.jsx`](web/src/components/ui/Meter.jsx), exported alongside the bar meter; color by threshold: teal < 70%, amber 70–90%, rose > 90%):
 
 - SVG rotated `-90deg` so the arc starts at 12 o'clock
 - Track: `text-black/[0.07] dark:text-white/[0.08]`
@@ -415,7 +424,7 @@ Icon secondary color is `--glass-strong-bg` so the check/cross glyph reads as cu
 - Draw-in: `stroke-dashoffset` animates from full to target over `1.2s cubic-bezier(0.4, 0, 0.2, 1)`, starting 150ms after mount
 - Defaults: 180px size, 10px stroke; value clamped 0–100 for the arc
 
-**Loader** ([`Loader.tsx`](components/ui/Loader.tsx)): blurred radial halo (`blur-2xl`) behind concentric faint rings (10–20% opacity), spinning arcs, a glowing center dot, wordmark, and three bouncing 4px dots.
+**Loader** ([`Loader.jsx`](web/src/components/ui/Loader.jsx)): blurred radial halo (`blur-2xl`) behind concentric faint rings (10–20% opacity), spinning arcs, a glowing center dot, wordmark, and three bouncing 4px dots.
 
 ---
 

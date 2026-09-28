@@ -197,6 +197,8 @@ pm2 reload deployment-maintainer
 - **The dashboard doesn't come back after a reboot** — `pm2 startup` wasn't run (or the printed
   `sudo env PATH=...` command wasn't run afterward), or it was run from a shell without `fnm` on
   `PATH`. Redo step 10 from a fresh login shell, then `pm2 save` again.
+- **Changed an app's start command but it still runs the old one** — `pm2 startOrReload` keeps
+  the old script/args for a running process. Run `pm2 delete app-<name>`, then deploy again.
 - **Disk full / deploys start failing** — check the Server page's disk meter, then delete unused
   apps from the dashboard UI (App detail → Delete) rather than `rm -rf`ing folders by hand, so
   PM2 and Nginx stay in sync with what Mongo thinks exists.

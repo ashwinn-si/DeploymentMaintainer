@@ -10,14 +10,17 @@ can be deployed many times as independent apps, each with its own branch, port, 
 - GitHub repo/branch picker, per-app Node version (via [fnm](https://github.com/Schniz/fnm))
 - Configurable deploy pipeline — git sync, install, build, PM2 start, health check, Nginx routing,
   plus arbitrary custom steps
-- Live streaming deploy logs (SSE), step-by-step status, cancel mid-deploy
+- Deploy any branch on demand (update in place or fresh re-clone); duplicate an app to run another branch side by side
+- Live streaming deploy logs (SSE) on the home page, a global Deployments page and a per-deploy detail view, with step timeline, cancel, copy and download; secrets are masked
 - Auto-rollback on a failed health check, one-click manual rollback to any past successful deploy
-- Server health (CPU/RAM/disk, per-app resource usage) and a ports/routing overview
-- Config export/import (passphrase-encrypted) for moving to a new box
+- Server health (CPU/RAM/disk with 1h history, per-app memory and disk use, app health pings) and a ports/routing overview
+- Settings: change password, GitHub token status, passphrase-encrypted config export/import
 
 ## Local development
 
-Requires Node 20+ and a MongoDB instance (local or Docker).
+Requires Node 20+ and a MongoDB instance (local or Docker). The test suite expects MongoDB on
+`127.0.0.1:27017` and uses fake `pm2`/`fnm`/`sudo` executables, so neither needs installing to run
+tests. Running real deploys locally does need `fnm` and `pm2`.
 
 ```bash
 npm install
@@ -34,6 +37,16 @@ npm run seed        # creates the admin user from server/.env
 npm run dev          # backend on :3000
 npm run dev:web       # frontend dev server (Vite), proxies /api to :3000
 npm test              # server test suite
+```
+
+## Project layout
+
+```
+server/   Express API, deploy pipeline (src/steps, src/services), scripts/seed + clear-db, tests
+web/      React + Vite + Tailwind dashboard (styled per style.md)
+deploy/   EC2 bootstrap guide, Nginx site, sudoers rule, PM2 ecosystem for the dashboard
+docs/     API reference
+style.md  UI design system
 ```
 
 ## Production deployment
