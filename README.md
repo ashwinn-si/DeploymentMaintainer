@@ -52,3 +52,12 @@ MongoDB, fnm, certbot, sudoers).
 | `npm run seed` | Creates/resets the admin user from `server/.env` |
 | `npm run clear-db` | Drops the database (typed confirmation, or `--yes`) |
 | `npm test` | Runs the server test suite |
+
+## Known limitations
+
+- **Changed start command on redeploy**: `pm2 startOrReload` doesn't apply a new start command to an already-running app. Delete and redeploy the app, or run `pm2 delete app-<name>` before redeploying. (Deferred; fix belongs in `server/src/services/pm2.js`.)
+- **Single process only**: the deploy lock is in memory, so never run the dashboard in pm2 cluster mode or as multiple instances.
+- **Not yet verified on a real server**: pipeline tests use fake `pm2`/`fnm`/`sudo`, and several pages were only checked against the dev mock. Treat the first EC2 deploy as the integration test.
+- **Secrets**: app env is encrypted in MongoDB but written in plaintext (mode 600) to each app's `.env`, its `ecosystem.config.cjs`, and pm2's dump. Log redaction is best-effort: values shorter than 4 chars and common values like `true` or `production` aren't masked. Custom step commands run arbitrary code by design.
+- **`ENCRYPTION_KEY` rotation** makes stored env unreadable, so export config first (Settings → Backup).
+- **Rollbacks** use the app's current env and steps, not the ones from the target deployment.
