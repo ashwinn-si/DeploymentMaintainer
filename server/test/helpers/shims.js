@@ -78,6 +78,23 @@ function writeState(state) {
   if (f) fs.writeFileSync(f, JSON.stringify(state));
 }
 
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function waitForDeath(pid, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && isAlive(pid)) {
+    const spinUntil = Date.now() + 20;
+    while (Date.now() < spinUntil) { /* brief synchronous spin; test infra only */ }
+  }
+}
+
 const [sub, ...rest] = args;
 
 if (sub === 'startOrReload') {
@@ -85,6 +102,20 @@ if (sub === 'startOrReload') {
   delete require.cache[require.resolve(ecoPath)];
   const cfg = require(ecoPath);
   const appCfg = cfg.apps[0];
+
+  // Real pm2 stops the old process before starting the new one; without this a
+  // crashing new version can be masked by the still-running previous process.
+  const preState = readState();
+  const previous = preState[appCfg.name];
+  if (previous && previous.pid && isAlive(previous.pid)) {
+    try {
+      process.kill(previous.pid, 'SIGKILL');
+    } catch {
+      // already gone
+    }
+    waitForDeath(previous.pid, 2000);
+  }
+
   const child = spawn(appCfg.script, appCfg.args || [], {
     cwd: appCfg.cwd,
     env: { ...process.env, ...appCfg.env },
@@ -93,10 +124,11 @@ if (sub === 'startOrReload') {
   });
   child.unref();
   const state = readState();
+  const prevRestartTime = previous?.pm2_env?.restart_time ?? -1;
   state[appCfg.name] = {
     name: appCfg.name,
     pid: child.pid,
-    pm2_env: { status: 'online', restart_time: 0 },
+    pm2_env: { status: 'online', restart_time: prevRestartTime + 1 },
   };
   writeState(state);
   process.stdout.write('started ' + appCfg.name + ' pid ' + child.pid + '\\n');

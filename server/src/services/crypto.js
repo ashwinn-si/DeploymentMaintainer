@@ -37,6 +37,19 @@ export function decryptJSON(config, blob) {
   return decryptWithKey(Buffer.from(config.ENCRYPTION_KEY, 'hex'), blob);
 }
 
+// Wraps decryptJSON for an App's envEncrypted blob specifically: null/missing
+// means "no env yet" ({}), but a genuine decrypt failure (e.g. ENCRYPTION_KEY
+// changed since this app was saved) must surface clearly rather than
+// silently deploying with an empty env.
+export function decryptAppEnv(config, envEncrypted) {
+  if (!envEncrypted) return {};
+  try {
+    return decryptJSON(config, envEncrypted);
+  } catch (err) {
+    throw new HttpError(500, "Could not decrypt this app's environment — was ENCRYPTION_KEY changed?", { cause: err });
+  }
+}
+
 export function encryptWithPassphrase(obj, passphrase) {
   const salt = crypto.randomBytes(SCRYPT_SALT_LENGTH);
   const key = crypto.scryptSync(passphrase, salt, SCRYPT_KEYLEN);

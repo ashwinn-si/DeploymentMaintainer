@@ -62,7 +62,7 @@ test('App.steps preserves arbitrary per-step config', async () => {
 });
 
 function makeDeployment(appId, overrides = {}) {
-  return { appId, branch: 'main', mode: 'update', ...overrides };
+  return { appId, number: 1, branch: 'main', mode: 'update', nodeVersion: '20', ...overrides };
 }
 
 test('Deployment requires appId, branch and mode', async () => {
@@ -98,8 +98,8 @@ test('Deployment stores ordered log entries with stream and step', async () => {
   await Deployment.updateOne(
     { _id: deployment._id },
     { $push: { entries: { $each: [
-      { step: 'gitSync', stream: 'cmd', text: 'git clone ...' },
-      { step: 'gitSync', stream: 'stdout', text: 'Cloning into ...' },
+      { i: 0, step: 'gitSync', stream: 'cmd', text: 'git clone ...' },
+      { i: 1, step: 'gitSync', stream: 'stdout', text: 'Cloning into ...' },
     ] } } },
   );
   const reloaded = await Deployment.findById(deployment._id).lean();

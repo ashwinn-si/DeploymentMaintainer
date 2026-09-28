@@ -9,7 +9,7 @@ export function label(config) {
 }
 
 export async function run(ctx) {
-  const { app, config, log, signal, state, step, stepId } = ctx;
+  const { app, env, config, log, signal, state, step, stepId } = ctx;
   const command = step?.config?.command;
   if (!command) {
     throw new Error('custom step is missing a command');
@@ -20,7 +20,12 @@ export async function run(ctx) {
   const [cmd, argv] = withNode(app.nodeVersion, bin, args);
 
   log.cmd(command, stepId);
-  const result = await shellRun(cmd, argv, { cwd: dir, onLine: log.onLine(stepId), signal });
+  const result = await shellRun(cmd, argv, {
+    cwd: dir,
+    env: { ...process.env, ...env, PORT: String(app.port) },
+    onLine: log.onLine(stepId),
+    signal,
+  });
   if (result.code !== 0) {
     throw new Error(`"${label(step.config)}" exited with code ${result.code}`);
   }

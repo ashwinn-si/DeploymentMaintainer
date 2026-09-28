@@ -7,9 +7,14 @@ import cookieParser from 'cookie-parser';
 import { ZodError } from 'zod';
 import { createAuthRouter } from './routes/auth.js';
 import { createReposRouter } from './routes/repos.js';
+import { createAppsRouter } from './routes/apps.js';
+import { createDeploymentsRouter } from './routes/deployments.js';
+import { createPortsRouter } from './routes/ports.js';
+import { createNodeRouter } from './routes/node.js';
 import { loadConfig } from './config.js';
 import { connectDB } from './db.js';
 import { HttpError } from './lib/httpError.js';
+import { recoverInterruptedDeployments } from './services/deployer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +32,10 @@ export function createApp(config) {
 
   app.use('/api/auth', createAuthRouter(config));
   app.use('/api/repos', createReposRouter(config));
+  app.use('/api/apps', createAppsRouter(config));
+  app.use('/api/deployments', createDeploymentsRouter(config));
+  app.use('/api/ports', createPortsRouter(config));
+  app.use('/api/node', createNodeRouter(config));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -67,6 +76,10 @@ async function main() {
   }
 
   await connectDB(config.MONGO_URI);
+  const recovered = await recoverInterruptedDeployments();
+  if (recovered > 0) {
+    console.log(`Recovered ${recovered} deployment(s) interrupted by a restart.`);
+  }
   const app = createApp(config);
   app.listen(config.PORT, () => {
     console.log(`Server listening on port ${config.PORT}`);

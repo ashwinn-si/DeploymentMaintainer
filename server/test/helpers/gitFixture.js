@@ -71,6 +71,19 @@ export async function createGitFixture() {
     shaOf(branch) {
       return git(seedDir, ['rev-parse', branch]);
     },
+    // Branches off fromBranch instead of mutating it in place — for tests that need
+    // to commit something "bad" (e.g. a server.js that crashes) without poisoning
+    // a shared branch like main for every other test sharing this fixture.
+    createBranchFrom(newBranch, fromBranch, { filename = 'extra.txt', content = 'x', message = 'update' } = {}) {
+      git(seedDir, ['checkout', '-q', fromBranch]);
+      git(seedDir, ['checkout', '-q', '-B', newBranch]);
+      fs.writeFileSync(path.join(seedDir, filename), content);
+      git(seedDir, ['add', '-A']);
+      git(seedDir, ['commit', '-q', '-m', message]);
+      git(seedDir, ['push', '-q', '-f', 'origin', newBranch]);
+      git(seedDir, ['checkout', '-q', 'main']);
+      return git(seedDir, ['rev-parse', 'HEAD']);
+    },
     async cleanup() {
       await fsp.rm(root, { recursive: true, force: true });
     },

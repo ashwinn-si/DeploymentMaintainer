@@ -37,6 +37,8 @@ const appSchema = new mongoose.Schema(
     health: { type: healthSchema, default: () => ({}) },
     currentCommitSha: { type: String, default: null },
     lastDeployedAt: { type: Date, default: null },
+    // Atomically incremented (findOneAndUpdate $inc) to hand out per-app deployment numbers.
+    deploySeq: { type: Number, default: 0 },
   },
   { timestamps: true },
 );

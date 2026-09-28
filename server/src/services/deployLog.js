@@ -13,6 +13,17 @@ async function defaultPersist(deploymentId, entries) {
   await Deployment.updateOne({ _id: deploymentId }, { $push: { entries: { $each: entries } } });
 }
 
+// deploymentId (string) -> { getUnflushed }. Lets a late SSE subscriber see
+// entries that were pushed (and emitted as 'line') before it connected but
+// haven't hit the flush interval yet, so they're missing from both the DB
+// replay and the live event stream it just subscribed to.
+const activeLogs = new Map();
+
+export function getUnflushedEntries(deploymentId) {
+  const entry = activeLogs.get(String(deploymentId));
+  return entry ? entry.getUnflushed() : [];
+}
+
 export function createDeployLog(deployment, options = {}) {
   const {
     secrets = [],
@@ -29,6 +40,10 @@ export function createDeployLog(deployment, options = {}) {
   let truncated = false;
   let closed = false;
   let flushTimer = null;
+  let nextIndex = 0;
+
+  const registryKey = String(deploymentId);
+  activeLogs.set(registryKey, { getUnflushed: () => buffer.slice() });
 
   function redact(text) {
     let out = text;
@@ -55,7 +70,8 @@ export function createDeployLog(deployment, options = {}) {
 
     if (!force && totalBytes + size > maxBytes) {
       truncated = true;
-      const entry = { t: new Date(), step, stream: 'error', text: TRUNCATED_MESSAGE };
+      const entry = { i: nextIndex, t: new Date(), step, stream: 'error', text: TRUNCATED_MESSAGE };
+      nextIndex += 1;
       buffer.push(entry);
       deployEvents.emit('line', { deploymentId, ...entry });
       scheduleFlush();
@@ -63,7 +79,8 @@ export function createDeployLog(deployment, options = {}) {
     }
 
     if (!force) totalBytes += size;
-    const entry = { t: new Date(), step, stream, text: redacted };
+    const entry = { i: nextIndex, t: new Date(), step, stream, text: redacted };
+    nextIndex += 1;
     buffer.push(entry);
     deployEvents.emit('line', { deploymentId, ...entry });
     scheduleFlush();
@@ -104,6 +121,7 @@ export function createDeployLog(deployment, options = {}) {
     close: async () => {
       await flush();
       closed = true;
+      activeLogs.delete(registryKey);
       deployEvents.emit('done', { deploymentId });
     },
   };
