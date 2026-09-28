@@ -48,7 +48,7 @@ See §3 "Not yet verified". Stage 4 endpoints were smoke-tested against the prod
 
 ## 3. Known issues and risks
 
-### Not yet verified (highest priority after Stage 4)
+### Not yet verified (highest priority)
 - **Never run on a real Ubuntu box.** All pipeline tests use fake `pm2`/`fnm`/`sudo` scripts. The first real EC2 deploy is the true integration test. Check in particular: `fnm exec --using=<v> -- <cmd>` behaviour, PATH inside the generated `ecosystem.config.cjs`, `pm2 startOrReload --update-env`, the `sudo -n nginx -t` / `systemctl reload nginx` sudoers match, and `pm2 save` / `pm2 startup` surviving a reboot.
 - **Frontend Stages 6–7 were only exercised against the dev mock** (`web/src/dev/mockApi.js`, enabled with `localStorage.mockApi='1'` in dev), not the real backend. Browser verification was stopped partway at the owner's request. An integration pass is needed: SSE via the Vite proxy and through Nginx, log download, the export blob download, the import flow, and error messages from real `{ error, issues }` responses at form fields.
 - No frontend tests.
