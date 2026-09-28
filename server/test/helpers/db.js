@@ -14,6 +14,11 @@ export async function connectTestDB() {
   const config = loadConfig({ require: ['MONGO_URI'] });
   const uri = config.MONGO_URI.replace(/\/([^/?]+)(\?|$)/, `/$1_test_${RUN_ID}$2`);
   await mongoose.connect(uri);
+  // Index builds (e.g. App.name's unique index) happen in the background by
+  // default; without this, a test asserting a unique-index rejection can
+  // race ahead of the index actually existing, especially under the extra
+  // contention of running many test files in parallel.
+  await Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).init()));
   connected = true;
   return mongoose.connection;
 }

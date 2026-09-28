@@ -11,10 +11,14 @@ import { createAppsRouter } from './routes/apps.js';
 import { createDeploymentsRouter } from './routes/deployments.js';
 import { createPortsRouter } from './routes/ports.js';
 import { createNodeRouter } from './routes/node.js';
+import { createSystemRouter } from './routes/system.js';
+import { createSettingsRouter } from './routes/settings.js';
+import { createConfigIoRouter } from './routes/config-io.js';
 import { loadConfig } from './config.js';
-import { connectDB } from './db.js';
+import { connectDB, disconnectDB } from './db.js';
 import { HttpError } from './lib/httpError.js';
 import { recoverInterruptedDeployments } from './services/deployer.js';
+import { startMonitor, stopMonitor } from './services/monitor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +27,7 @@ export function createApp(config) {
 
   app.set('trust proxy', 1);
   app.use(helmet());
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '2mb' }));
   app.use(cookieParser());
 
   app.get('/api/health', (req, res) => {
@@ -36,6 +40,9 @@ export function createApp(config) {
   app.use('/api/deployments', createDeploymentsRouter(config));
   app.use('/api/ports', createPortsRouter(config));
   app.use('/api/node', createNodeRouter(config));
+  app.use('/api/system', createSystemRouter(config));
+  app.use('/api/settings', createSettingsRouter(config));
+  app.use('/api/config', createConfigIoRouter(config));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -80,10 +87,30 @@ async function main() {
   if (recovered > 0) {
     console.log(`Recovered ${recovered} deployment(s) interrupted by a restart.`);
   }
+  startMonitor(config);
+
   const app = createApp(config);
-  app.listen(config.PORT, () => {
+  const server = app.listen(config.PORT, () => {
     console.log(`Server listening on port ${config.PORT}`);
   });
+
+  // pm2 reload sends SIGINT, so this must actually drain rather than just exit.
+  let shuttingDown = false;
+  async function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`${signal} received, shutting down...`);
+    stopMonitor();
+    await new Promise((resolve) => {
+      server.close(resolve);
+      // Idle keep-alive sockets would otherwise hold close() open indefinitely.
+      server.closeIdleConnections?.();
+    });
+    await disconnectDB();
+    process.exit(0);
+  }
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);

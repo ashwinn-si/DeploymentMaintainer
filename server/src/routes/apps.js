@@ -20,6 +20,7 @@ import { encryptJSON, decryptAppEnv } from '../services/crypto.js';
 import { safeRemoveAppDir } from '../services/git.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
+import * as system from '../services/system.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
 
 const envEntrySchema = z.object({ key: z.string(), value: z.string() });
@@ -101,12 +102,14 @@ async function buildAppDetail(appDoc, config) {
   const pm2 = await getPm2Info(app.name);
 
   const env = envObjectToArray(decryptAppEnv(config, app.envEncrypted));
+  // Kicks off a background du if the cache is stale/empty; never awaited here.
+  system.refreshFolderSize(config, app.name);
 
   return serializeAppDetail(app, {
     pm2,
     activeDeploymentId: getActiveDeploymentId(app._id),
     env,
-    diskBytes: null,
+    diskBytes: system.getCachedFolderSize(app.name),
   });
 }
 
