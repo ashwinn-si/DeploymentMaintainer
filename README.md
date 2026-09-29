@@ -44,15 +44,16 @@ npm test              # server test suite
 ```
 server/   Express API, deploy pipeline (src/steps, src/services), scripts/seed + clear-db, tests
 web/      React + Vite + Tailwind dashboard (styled per style.md)
-deploy/   EC2 bootstrap guide, Nginx site, sudoers rule, PM2 ecosystem for the dashboard
+deploy/   Nginx site, sudoers rule, PM2 ecosystem for the dashboard (see DEPLOYMENT.md)
 docs/     API reference
 style.md  UI design system
 ```
 
 ## Production deployment
 
-See [`deploy/README.md`](deploy/README.md) for a full, copy-pasteable EC2 bootstrap (Nginx, PM2,
-MongoDB, fnm, certbot, sudoers).
+See **[DEPLOYMENT.md](DEPLOYMENT.md)**: AWS setup (key pair, EC2, security group, Elastic IP, DNS),
+the GitHub token, server bootstrap (fnm, PM2, MongoDB, Nginx, sudoers, certbot) and deploying your
+first app.
 
 ## Scripts (repo root)
 
