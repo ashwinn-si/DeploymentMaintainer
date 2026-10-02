@@ -27,46 +27,42 @@ Browser ─▶ web/ (Vercel, deploy.ashwinsi.in)
   - `.gitignore`: now ignores `server.md` (the owner's local notes, which contain credentials) and `*.secrets.md`.
 - `server.md` must **never** be committed. It was never committed or pushed (verified).
 
-## Live EC2 status (first server, being set up via `deployment-helper.md`)
+## Live EC2 status (first server — control + agent, agent now on `api1.ashwinsi.in`)
 | Step | Status |
 |---|---|
 | Packages, swap, fnm, PM2, clone, `npm ci` | Done |
 | `server/.env`, `control/.env` (Atlas URIs fixed to one clean `?retryWrites=true&w=majority`) | Done |
-| Admin password / `npm run seed` | Password was reset; confirm the seed printed "Created/Reset admin user" |
+| Admin password / `npm run seed` | Done |
 | Nginx sites `dm-agent` + `dm-control`, sudoers | Done |
 | Certbot `control.ashwinsi.in` | ✅ issued |
-| Certbot `api.ashwinsi.in` | ❌ **intentionally deferred**: `api.ashwinsi.in` still points to the **old server** |
-| PM2 | Now runs `deployment-maintainer` + `deployment-control` from `deploy/*.config.cjs`, plus `pm2 save` and `pm2 startup` |
-| `curl localhost:3000/deployment-manager` / `https://control…/api/health` | ❌ **Last seen: no response / 502.** Waiting on diagnostics (see below) |
-| Nginx 301 fix on the EC2 (`location /api/servers` / `/api/deployments` without trailing slash) | Commands given; **not confirmed applied** |
-| Vercel UI | Not set up yet |
-| Add Server | Not done yet; plan is to use URL **`http://localhost:3000`** (allowed for localhost) until `api.ashwinsi.in` moves |
+| Certbot `api1.ashwinsi.in` | ✅ issued. **`api.ashwinsi.in` was deliberately left alone** — it still points to the old server; this box's agent uses `api1.ashwinsi.in` instead, so the domain-migration plan in earlier notes no longer applies |
+| PM2 | `deployment-maintainer` + `deployment-control`, both online and confirmed listening (3000 / 3100) |
+| `curl localhost:3000/deployment-manager`, `localhost:3100/api/health`, `https://api1.ashwinsi.in/deployment-manager`, `https://control.ashwinsi.in/api/health` | ✅ all working |
+| Vercel UI | Working — dashboard login confirmed |
+| Add Server | In progress / being finished — URL `https://api1.ashwinsi.in`, "I already have an ID and secret" from `server/.env` |
+
+### Bug found and fixed this session: PM2 silently never started the apps
+Both `server/src/index.js` and `control/src/index.js` guarded their startup with:
+```js
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+if (isMain) main();
+```
+PM2's fork mode `require()`s the script into its own `ProcessContainerFork.js` wrapper instead of spawning it as a real `node script.js` process, so `process.argv[1]` is PM2's internal path, never the script's own URL. `main()` silently never ran — PM2 reported "online", CPU/memory looked plausible, but nothing ever listened and the log files stayed empty (0 bytes) no matter how many times the processes were restarted. `node src/index.js` run by hand always worked, which is what made it so confusing.
+
+**Fix (commit `8e62f48`):** `main` is now exported from each `index.js`, and a new `server/src/start.js` / `control/src/start.js` calls it unconditionally. `deploy/ecosystem.*.config.cjs` now point PM2 at `src/start.js` instead of `src/index.js`. `npm start`/`npm run dev` and the test suites (which only import `createApp`) are unaffected. If PM2-managed apps ever show "online" with empty logs and nothing listening again, this is the first thing to check — confirm with:
+```bash
+sed -i '/^const isMain = /i console.log("argv1:", process.argv[1], "| url:", fileURLToPath(import.meta.url));' server/src/index.js
+pm2 restart deployment-maintainer && pm2 logs deployment-maintainer --lines 5 --nostream
+# then revert the sed edit
+```
 
 ### Immediate next steps
-1. On the EC2, apply the Nginx fix if not done:
-   ```bash
-   sudo sed -i 's#location /api/servers/ {#location /api/servers {#' /etc/nginx/sites-available/dm-control
-   sudo sed -i 's#location /api/deployments/ {#location /api/deployments {#' /etc/nginx/sites-available/dm-agent
-   sudo nginx -t && sudo systemctl reload nginx
-   ```
-2. Diagnose the 502:
-   ```bash
-   pm2 status
-   pm2 logs deployment-maintainer --lines 40 --nostream
-   pm2 logs deployment-control --lines 40 --nostream
-   ```
-   Both apps connect to MongoDB Atlas **before** listening. Likely causes, in order:
-   - Atlas **Network Access** is missing the EC2's Elastic IP (`MongooseServerSelectionError`, after about 30s)
-   - a wrong password in `MONGO_URI` (`bad auth`)
-   - `Invalid configuration: …`, a bad `.env` line
-   Success looks like `Server listening on port 3000` / `Control plane listening on port 3100`.
-3. Expected checks: handshake JSON from `localhost:3000/deployment-manager`, `{"ok":true}` from `https://control.ashwinsi.in/api/health`, and **204** for the CORS preflight (`deployment-helper.md` §3.13).
-4. Vercel (`deployment-helper.md` Part 5): import **only the `web` project** (not "Services"), Root Directory `web`, preset Vite, env `VITE_API_URL=https://control.ashwinsi.in`, then the custom domain `deploy.ashwinsi.in`. A `*.vercel.app` URL can't log in (same-site cookie).
-5. Log in, then **Add Server** with URL `http://localhost:3000`, "I already have an ID and secret", and the values from `grep -E '^SERVER_(ID|SECRET)=' server/.env`.
-6. Later, to move `api.ashwinsi.in`: point its DNS A record at this EC2, run `certbot` for it, then in the dashboard **Servers → Edit URL → `https://api.ashwinsi.in`**.
+1. Finish **Add Server** in the dashboard: URL `https://api1.ashwinsi.in`, "I already have an ID and secret", values from `grep -E '^SERVER_(ID|SECRET)=' server/.env` on the EC2.
+2. Do the security to-dos below — several real secrets (Atlas password, `JWT_SECRET`, `ENCRYPTION_KEY`, admin password) were pasted into chat during debugging this session and must be rotated.
+3. If a **second** agent-only server is added later, `deployment-helper.md` Part 7 now needs its `script: 'src/index.js'` references in the copy-paste commands double-checked against the new `src/start.js` entry point (the doc itself wasn't updated this session).
 
 ## Security to-dos (do these)
-- **Rotate the GitHub token and the Atlas DB password.** Both were pasted into chat and sit in plain text in `server.md`. After rotating, update `GITHUB_TOKEN` and both `MONGO_URI`s on the EC2, then run `pm2 reload deployment-maintainer deployment-control`.
+- **Rotate the GitHub token, the Atlas DB password, `JWT_SECRET`, `ENCRYPTION_KEY` (both `.env` files), and the admin password.** All were pasted into chat again during this session's PM2/Mongo debugging (not just `server.md` from before). After rotating Atlas/GitHub, update `GITHUB_TOKEN` and both `MONGO_URI`s on the EC2; after rotating `JWT_SECRET`/`ENCRYPTION_KEY`, every encrypted value they protect (stored server secrets, sessions) becomes unreadable, so expect to re-add servers and re-log-in; then run `pm2 reload deployment-maintainer deployment-control`.
 - **Rotate `SERVER_SECRET`** once things work (it was pasted in chat): **Servers → ⋯ → Rotate secret**, update `server/.env`, then `pm2 reload deployment-maintainer`.
 - Clear secrets from the EC2 shell history if any were typed into commands: `history -c && history -w`.
 - Prefer a dedicated Atlas user (e.g. `dm-app`, "Read and write to any database") over `root`.

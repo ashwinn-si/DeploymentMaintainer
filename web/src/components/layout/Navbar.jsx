@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Menu, Rocket } from 'lucide-react';
+import { Menu, Rocket, X } from 'lucide-react';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
 import { SidebarContent } from './Sidebar.jsx';
 
@@ -55,11 +55,25 @@ export function Navbar({ deploying = false }) {
             />
             <motion.div
               className="glass-strong absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-white/60 shadow-2xl backdrop-blur-2xl dark:border-white/10"
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={{ left: 0.4, right: 0 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.x < -80 || info.velocity.x < -400) setOpen(false);
+              }}
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ duration: 0.3, ease: 'easeInOut' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 320 }}
             >
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close menu"
+                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-xl text-[var(--text-muted)] transition-colors hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
               <SidebarContent deploying={deploying} onNavigate={() => setOpen(false)} />
             </motion.div>
           </div>
