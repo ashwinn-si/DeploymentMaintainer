@@ -307,7 +307,7 @@ Enter your email and agree to the terms. Certbot adds TLS and an HTTP → HTTPS 
 ### 3.12 Start the agent under PM2 and survive reboots
 ```bash
 cd ~/deployment_maintainer
-pm2 start deploy/ecosystem.server.cjs
+pm2 start deploy/ecosystem.server.config.cjs
 pm2 save
 pm2 startup
 ```
@@ -393,7 +393,7 @@ This adds a second certificate; auto-renewal covers both.
 ### 4.5 Start the control plane under PM2
 ```bash
 cd ~/deployment_maintainer
-pm2 start deploy/ecosystem.control.cjs
+pm2 start deploy/ecosystem.control.config.cjs
 pm2 save
 pm2 status          # deployment-maintainer and deployment-control, both online
 curl -s localhost:3100/api/health    # {"ok":true}
@@ -428,7 +428,7 @@ Each extra server is its own EC2 with its own agent, apps and MongoDB. It does *
 1. **Part 1** for the new EC2: key pair (or reuse one), instance, security group, Elastic IP. Add **one DNS A record** for it, e.g. `api2` → the new IP. That name is its `YOUR_SERVER_DOMAIN`.
 2. **Part 3**, steps 3.1 to 3.11, on the new server. Generate a new deploy key on this server in 3.6 and add it to the repo's Deploy keys too (GitHub won't accept the same key twice), and give it a `GITHUB_TOKEN`. Skip Part 4. In 3.7, copy `.env.example` and fill everything except `SERVER_ID` and `SERVER_SECRET`, which come next. Don't start PM2 yet.
 3. In the dashboard: **Servers → Add Server**. Enter a name and `https://api2.yourdomain.com`. The dialog generates a `SERVER_ID` and `SERVER_SECRET` and shows them as a `.env` snippet.
-4. Paste the two lines into the new server's `server/.env`, then run step 3.12 there (`pm2 start deploy/ecosystem.server.cjs`, `pm2 save`, `pm2 startup`). If the agent was already running, `pm2 reload deployment-maintainer` instead.
+4. Paste the two lines into the new server's `server/.env`, then run step 3.12 there (`pm2 start deploy/ecosystem.server.config.cjs`, `pm2 save`, `pm2 startup`). If the agent was already running, `pm2 reload deployment-maintainer` instead.
 5. Back in the dialog, click **Verify & add**. The server should show **online**.
 
 Use the sidebar's server switcher to move between servers. Each server has its own apps, deployments, ports and settings.

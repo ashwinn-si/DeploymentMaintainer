@@ -9,8 +9,8 @@ There are two kinds of site. Every server runs an **agent** (the API plus the de
 | `nginx-server.conf` | `/etc/nginx/sites-available/deployment-maintainer` | every server | Agent site (`YOUR_SERVER_DOMAIN`): proxies `/api/` and `/deployment-manager` to `:3000`, streams `/api/deployments/` unbuffered (SSE), returns 404 for `/`, and includes the per-app route files from `/etc/nginx/deployer-apps/*.conf` |
 | `nginx-control.conf` | `/etc/nginx/sites-available/deployment-control` | server 1 only | Control plane site (`YOUR_CONTROL_DOMAIN`): proxies `/` to `:3100` and streams `/api/servers/` unbuffered (SSE) |
 | `sudoers-deployer` | `/etc/sudoers.d/deployer` (root, 0440) | every server | Lets the `ubuntu` user run only `nginx -t` and `systemctl reload nginx` without a password |
-| `ecosystem.server.cjs` | `pm2 start deploy/ecosystem.server.cjs` | every server | PM2 definition for the agent (`deployment-maintainer`; single fork-mode process, never cluster it, the deploy lock is in memory) |
-| `ecosystem.control.cjs` | `pm2 start deploy/ecosystem.control.cjs` | server 1 only | PM2 definition for the control plane (`deployment-control`; single fork-mode process) |
+| `ecosystem.server.config.cjs` | `pm2 start deploy/ecosystem.server.config.cjs` | every server | PM2 definition for the agent (`deployment-maintainer`; single fork-mode process, never cluster it, the deploy lock is in memory) |
+| `ecosystem.control.config.cjs` | `pm2 start deploy/ecosystem.control.config.cjs` | server 1 only | PM2 definition for the control plane (`deployment-control`; single fork-mode process) |
 
 Replace `YOUR_SERVER_DOMAIN` / `YOUR_CONTROL_DOMAIN` with `sed` when installing (see DEPLOYMENT.md), then run certbot for each domain. Certbot adds the TLS block, so keep the templates HTTP-only.
 

@@ -1,7 +1,7 @@
 // PM2 app definition for the control plane (the dashboard). Only on the server
 // that hosts it.
 //
-//   pm2 start deploy/ecosystem.control.cjs
+//   pm2 start deploy/ecosystem.control.config.cjs
 //
 // `cwd` is resolved relative to this file so it works regardless of where the
 // repo is cloned. Keep it a single fork-mode process.

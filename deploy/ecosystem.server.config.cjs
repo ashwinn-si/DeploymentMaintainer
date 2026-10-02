@@ -2,7 +2,7 @@
 // those get their own generated ecosystem.config.cjs from services/pm2.js).
 // Used on every server you manage.
 //
-//   pm2 start deploy/ecosystem.server.cjs
+//   pm2 start deploy/ecosystem.server.config.cjs
 //
 // `cwd` is resolved relative to this file so it works regardless of where the
 // repo is cloned. Keep it a single fork-mode process: the deploy lock is in memory.
