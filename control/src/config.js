@@ -18,6 +18,35 @@ function boolFromEnv(defaultValue) {
   }, z.boolean());
 }
 
+// Comma-separated list of exact origins, e.g. "https://deploy.example.com,http://localhost:5173".
+const corsOrigins = z.preprocess(
+  (val) => {
+    if (val === undefined || val === null) return [];
+    if (Array.isArray(val)) return val;
+    return String(val)
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  },
+  z.array(z.string()).superRefine((entries, ctx) => {
+    for (const entry of entries) {
+      let origin = null;
+      try {
+        const url = new URL(entry);
+        if (url.protocol === 'http:' || url.protocol === 'https:') origin = url.origin;
+      } catch {
+        // falls through to the issue below
+      }
+      if (origin !== entry) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `CORS_ORIGINS entry "${entry}" must be an origin like https://app.example.com (http/https, no path, no trailing slash)`,
+        });
+      }
+    }
+  }),
+);
+
 // Presence of non-defaulted fields is enforced per entrypoint via loadConfig({ require }).
 const fieldSchemas = {
   PORT: z.coerce.number().int().positive().default(3100),
@@ -30,6 +59,7 @@ const fieldSchemas = {
   ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD must be at least 12 characters long'),
   NODE_ENV: z.string().min(1).default('development'),
   ALLOW_INSECURE_SERVER_URLS: boolFromEnv(false),
+  CORS_ORIGINS: corsOrigins,
 };
 
 export const DEFAULT_REQUIRED = ['MONGO_URI', 'JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -43,7 +73,7 @@ export class ConfigError extends Error {
 }
 
 // Never wrap these in .optional(): zod would skip their defaults when the key is absent.
-const ALWAYS_DEFAULTED = new Set(['PORT', 'NODE_ENV', 'ALLOW_INSECURE_SERVER_URLS']);
+const ALWAYS_DEFAULTED = new Set(['PORT', 'NODE_ENV', 'ALLOW_INSECURE_SERVER_URLS', 'CORS_ORIGINS']);
 
 function buildSchema(require) {
   const shape = {};

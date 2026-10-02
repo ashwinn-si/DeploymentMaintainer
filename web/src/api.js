@@ -1,3 +1,10 @@
+const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+
+// Absolute (or same-origin, when VITE_API_URL is empty) URL for a control plane `/api` path.
+export function apiUrl(path) {
+  return `${API_URL}/api${path}`;
+}
+
 export class ApiError extends Error {
   constructor(status, message, issues) {
     super(message);
@@ -31,7 +38,7 @@ export function toQuery(params = {}) {
 async function request(path, options = {}) {
   const { method = 'GET', body, headers, ...rest } = options;
 
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     credentials: 'include',
     headers: {
@@ -116,8 +123,8 @@ export function serverApi(serverId) {
       active: () => get('/deployments/active'),
       get: (id) => get(`/deployments/${id}`),
       entries: (id, after = -1, limit = 2000) => get(`/deployments/${id}/entries${toQuery({ after, limit })}`),
-      streamUrl: (id, after = -1) => `/api${base}/deployments/${id}/stream${toQuery({ after })}`,
-      downloadUrl: (id) => `/api${base}/deployments/${id}/download`,
+      streamUrl: (id, after = -1) => apiUrl(`${base}/deployments/${id}/stream${toQuery({ after })}`),
+      downloadUrl: (id) => apiUrl(`${base}/deployments/${id}/download`),
       cancel: (id) => post(`/deployments/${id}/cancel`),
       rollback: (id) => post(`/deployments/${id}/rollback`),
     },
@@ -135,8 +142,8 @@ export function serverApi(serverId) {
     },
     config: {
       // POST /config/export returns a file attachment, not JSON, so callers use
-      // fetch() + blob() with exportUrl (see ServerSettings.jsx).
-      exportUrl: `/api${base}/config/export`,
+      // fetch() + blob() (see lib/download.js).
+      exportUrl: apiUrl(`${base}/config/export`),
       importPreview: (body) => post('/config/import/preview', body),
       importApply: (body) => post('/config/import', body),
     },

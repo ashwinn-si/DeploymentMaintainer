@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button.jsx';
 import { Toggle } from '../components/ui/Toggle.jsx';
 import { StatusPill } from '../components/ui/StatusPill.jsx';
 import { ApiError } from '../api.js';
+import { downloadFile } from '../lib/download.js';
 import { useServer } from '../context/ServerContext.jsx';
 
 function SectionCard({ icon: Icon, title, description, children }) {
@@ -133,28 +134,12 @@ function ExportPanel() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch(api.config.exportUrl, {
+      await downloadFile(api.config.exportUrl, {
         method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appIds: [...selected], passphrase }),
+        body: { appIds: [...selected], passphrase },
+        fallbackFilename: `deployer-config-${new Date().toISOString().slice(0, 10)}.json`,
+        errorMessage: 'Export failed',
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? 'Export failed');
-      }
-      const disposition = res.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      const filename = match?.[1] ?? `deployer-config-${new Date().toISOString().slice(0, 10)}.json`;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
       toast.success('Config exported');
       setPassphrase('');
       setConfirm('');

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ArrowDownToLine, Pause } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { downloadFile } from '../lib/download.js';
 
 const STREAM_CLASS = {
   stderr: 'text-rose-500',
@@ -53,6 +54,14 @@ export function LogViewer({
       toast.success('Log copied');
     } catch {
       toast.error('Could not copy to clipboard');
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      await downloadFile(downloadUrl, { fallbackFilename: filename, errorMessage: 'Could not download log' });
+    } catch (err) {
+      toast.error(err.message || 'Could not download log');
     }
   };
 
@@ -110,14 +119,14 @@ export function LogViewer({
             <Copy className="h-4 w-4" />
           </button>
           {downloadUrl ? (
-            <a
-              href={downloadUrl}
-              download={filename}
+            <button
+              type="button"
+              onClick={handleDownload}
               title="Download log"
               className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
             >
               <Download className="h-4 w-4" />
-            </a>
+            </button>
           ) : null}
         </div>
       </div>

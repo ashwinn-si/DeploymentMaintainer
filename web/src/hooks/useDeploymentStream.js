@@ -116,7 +116,7 @@ export function useDeploymentStream(serverId, id) {
           if (!cancelled) attach(createMockStream(serverId, id, lastIndexRef.current));
         });
       } else {
-        attach(new EventSource(api.streamUrl(id, lastIndexRef.current)));
+        attach(new EventSource(api.streamUrl(id, lastIndexRef.current), { withCredentials: true }));
       }
     }
 

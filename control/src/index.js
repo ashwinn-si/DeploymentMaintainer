@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import { ZodError } from 'zod';
 import { createAuthRouter } from './routes/auth.js';
 import { createAccountRouter } from './routes/account.js';
 import { createServersRouter } from './routes/servers.js';
 import { createProxyHandler } from './routes/proxy.js';
 import { requireAuth } from './middleware/auth.js';
+import { createOriginCheck } from './middleware/originCheck.js';
 import { createStatusCache } from './services/statusCache.js';
 import { loadConfig } from './config.js';
 import { connectDB, disconnectDB } from './db.js';
@@ -24,6 +26,25 @@ export function createApp(config) {
   app.set('trust proxy', 1);
   app.use(helmet());
   app.use(cookieParser());
+
+  // CORS (only when the UI is hosted on another origin) and the CSRF origin check run before
+  // the proxy and every router so proxied/streamed responses and preflights are covered too.
+  const corsOrigins = config.CORS_ORIGINS ?? [];
+  if (corsOrigins.length > 0) {
+    const allowed = new Set(corsOrigins);
+    app.use(
+      '/api',
+      cors({
+        origin: (origin, callback) => callback(null, allowed.has(origin)),
+        credentials: true,
+        methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Last-Event-ID'],
+        exposedHeaders: ['Content-Disposition'],
+        maxAge: 600,
+      }),
+    );
+  }
+  app.use('/api', createOriginCheck(config));
 
   // Mounted before express.json() so request bodies stream through untouched.
   app.all('/api/servers/:id/api/*rest', requireAuth(config), createProxyHandler(config, statusCache));

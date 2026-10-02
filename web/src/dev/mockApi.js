@@ -1245,6 +1245,19 @@ export function installMockFetch() {
         });
       }
 
+      const downloadMatch = agentPath.match(/^\/api\/deployments\/([^/]+)\/download$/);
+      if (downloadMatch && method === 'GET') {
+        const dep = findDeployment(downloadMatch[1]);
+        const text = (entriesByDeployment.get(dep.id) ?? []).map((e) => e.text).join('\n');
+        return new Response(text, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Content-Disposition': `attachment; filename="deployment-${dep.id}.log"`,
+          },
+        });
+      }
+
       const result = await route(serverId, agentPath, method, body, url.searchParams);
       return jsonResponse(200, result);
     } catch (err) {
