@@ -1,8 +1,35 @@
+# Dependencies and build output
 node_modules/
 dist/
+coverage/
+
+# Environment files (secrets) — any folder; only the templates are committed
 .env
 .env.*
 !.env.example
+dm-setup.env
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+dm_deploy*
+
+# Exports and backups that can contain app config or data
+deployer-config-*.json
+backup-*/
+*.dump
+*.archive
+
+# Tool state
+.vercel/
+.claude/settings.local.json
+
+# Local data, logs, OS files
+.data/
 *.log
 .DS_Store
-.data/
