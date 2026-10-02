@@ -37,10 +37,8 @@ export function validateRef(ref) {
   return ref;
 }
 
-// Reserved names: routes/paths the frontend router and API already claim.
-export const RESERVED_APP_NAMES = new Set([
-  'api', 'assets', 'login', 'ports', 'apps', 'new', 'deployments', 'server', 'settings',
-]);
+// Reserved names: paths this server's own Nginx site already claims.
+export const RESERVED_APP_NAMES = new Set(['api', 'deployment-manager']);
 
 const APP_NAME_RE = /^[a-z0-9-]{1,40}$/;
 

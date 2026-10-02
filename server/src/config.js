@@ -22,7 +22,10 @@ function boolFromEnv(defaultValue) {
 const fieldSchemas = {
   PORT: z.coerce.number().int().positive().default(3000),
   MONGO_URI: z.string().min(1, 'MONGO_URI is required'),
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long'),
+  SERVER_ID: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/, 'SERVER_ID must be 8-64 characters: letters, digits, _ or -'),
+  SERVER_SECRET: z.string().min(32, 'SERVER_SECRET must be at least 32 characters long'),
   ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be exactly 64 hex characters'),
@@ -31,8 +34,6 @@ const fieldSchemas = {
     (v) => (v === '' ? undefined : v),
     z.string().min(1, 'GITHUB_TOKEN must not be empty').optional(),
   ),
-  ADMIN_EMAIL: z.string().email('ADMIN_EMAIL must be a valid email address'),
-  ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD must be at least 12 characters long'),
   APPS_DIR: z.string().min(1, 'APPS_DIR is required'),
   NGINX_APPS_DIR: z.string().min(1, 'NGINX_APPS_DIR is required'),
   APP_PORT_START: z.coerce.number().int().positive().default(4001),
@@ -44,10 +45,9 @@ const fieldSchemas = {
 
 export const DEFAULT_REQUIRED = [
   'MONGO_URI',
-  'JWT_SECRET',
+  'SERVER_ID',
+  'SERVER_SECRET',
   'ENCRYPTION_KEY',
-  'ADMIN_EMAIL',
-  'ADMIN_PASSWORD',
   'APPS_DIR',
   'NGINX_APPS_DIR',
 ];

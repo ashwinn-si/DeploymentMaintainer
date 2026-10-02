@@ -115,7 +115,7 @@ test('GET /system history reflects the monitor ring buffer', async () => {
   }
 });
 
-test('GET /system is rejected without a session', async () => {
+test('GET /system is rejected without a bearer token', async () => {
   const server = await setupTestServer();
   try {
     const request = (await import('supertest')).default;

@@ -34,7 +34,7 @@ test('POST /apps validation: reserved name, duplicate name, taken port, bad env 
   try {
     const { agent, fixture, config } = server;
 
-    const reserved = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'settings' }));
+    const reserved = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'deployment-manager' }));
     assert.equal(reserved.status, 400);
 
     const created = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'dup-app', port: config.APP_PORT_START + 50 }));

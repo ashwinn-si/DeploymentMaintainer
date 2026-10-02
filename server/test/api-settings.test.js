@@ -27,6 +27,8 @@ test('GET /settings/info reports a github error (never throws) when GITHUB_TOKEN
     assert.equal(res.body.appsDir, server.config.APPS_DIR);
     assert.equal(res.body.nginxEnabled, server.config.NGINX_ENABLED);
     assert.equal(res.body.domainHint, null);
+    assert.equal(res.body.serverId, server.config.SERVER_ID);
+    assert.ok(res.body.hostname);
   } finally {
     await server.cleanup();
     await clearTestDB();
@@ -48,43 +50,6 @@ test('GET /settings/info returns github token info when GITHUB_TOKEN is set', as
   } finally {
     setFetchImpl();
     __resetCache();
-    await server.cleanup();
-    await clearTestDB();
-  }
-});
-
-test('POST /settings/password: wrong current password is 400; success rotates the session, invalidating the old cookie', async () => {
-  const server = await setupTestServer();
-  try {
-    const { agent, config, app } = server;
-    const request = (await import('supertest')).default;
-
-    const freshLogin = await request(app).post('/api/auth/login').send({ email: config.ADMIN_EMAIL, password: config.ADMIN_PASSWORD });
-    assert.equal(freshLogin.status, 200);
-    const oldCookie = freshLogin.headers['set-cookie'];
-    assert.ok(oldCookie);
-
-    const wrong = await agent.post('/api/settings/password').send({ currentPassword: 'totally-wrong-password', newPassword: 'brand-new-password-1' });
-    assert.equal(wrong.status, 400);
-    assert.match(wrong.body.error, /incorrect/i);
-
-    const tooShort = await agent.post('/api/settings/password').send({ currentPassword: config.ADMIN_PASSWORD, newPassword: 'short' });
-    assert.equal(tooShort.status, 400);
-
-    const same = await agent.post('/api/settings/password').send({ currentPassword: config.ADMIN_PASSWORD, newPassword: config.ADMIN_PASSWORD });
-    assert.equal(same.status, 400);
-    assert.match(same.body.error, /different/i);
-
-    const ok = await agent.post('/api/settings/password').send({ currentPassword: config.ADMIN_PASSWORD, newPassword: 'brand-new-password-1' });
-    assert.equal(ok.status, 200);
-    assert.deepEqual(ok.body, { ok: true });
-
-    const oldCookieRes = await request(app).get('/api/auth/me').set('Cookie', oldCookie);
-    assert.equal(oldCookieRes.status, 401, 'the pre-change cookie must be invalidated by the tokenVersion bump');
-
-    const newCookieRes = await agent.get('/api/auth/me');
-    assert.equal(newCookieRes.status, 200, "the agent's jar was updated with the reissued cookie");
-  } finally {
     await server.cleanup();
     await clearTestDB();
   }

@@ -1,10 +1,8 @@
-import bcrypt from 'bcryptjs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import request from 'supertest';
 import { createApp } from '../../src/index.js';
-import User from '../../src/models/User.js';
 import { createShims, patchProcessEnv } from './shims.js';
 import { createGitFixture } from './gitFixture.js';
 import { connectTestDB } from './db.js';
@@ -27,11 +25,10 @@ export async function setupTestServer({ nginxEnabled = false } = {}) {
   const config = {
     PORT: 3099,
     MONGO_URI: 'unused-in-tests',
-    JWT_SECRET: 'x'.repeat(32),
+    SERVER_ID: 'test-server-01',
+    SERVER_SECRET: 'x'.repeat(40),
     ENCRYPTION_KEY: 'a'.repeat(64),
     GITHUB_TOKEN: undefined,
-    ADMIN_EMAIL: 'admin@example.com',
-    ADMIN_PASSWORD: 'test-admin-password',
     APPS_DIR: appsDir,
     NGINX_APPS_DIR: nginxAppsDir,
     APP_PORT_START: PORT_BASE,
@@ -41,15 +38,19 @@ export async function setupTestServer({ nginxEnabled = false } = {}) {
     GIT_REMOTE_BASE: fixture.remoteBase,
   };
 
-  const passwordHash = await bcrypt.hash(config.ADMIN_PASSWORD, 4);
-  await User.create({ email: config.ADMIN_EMAIL, passwordHash });
-
   const app = createApp(config);
-  const agent = request.agent(app);
-  await agent.post('/api/auth/login').send({ email: config.ADMIN_EMAIL, password: config.ADMIN_PASSWORD }).expect(200);
+  const bearer = `Bearer ${config.SERVER_SECRET}`;
+  // Same surface as a supertest agent, with the bearer header pre-set on every request.
+  const agent = Object.fromEntries(
+    ['get', 'post', 'put', 'patch', 'delete'].map((method) => [
+      method,
+      (url) => request(app)[method](url).set('Authorization', bearer),
+    ]),
+  );
 
   return {
     agent,
+    bearer,
     app,
     config,
     shims,

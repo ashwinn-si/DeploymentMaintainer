@@ -35,7 +35,7 @@ async function main() {
   }
 
   await mongoose.connection.dropDatabase();
-  console.log(`Dropped database "${dbName}". Run "npm run seed" to recreate the admin user.`);
+  console.log(`Dropped database "${dbName}".`);
   await disconnectDB();
 }
 

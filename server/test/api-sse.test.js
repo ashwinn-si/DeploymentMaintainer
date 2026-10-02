@@ -11,7 +11,6 @@ import Deployment from '../src/models/Deployment.js';
 let server;
 let httpServer;
 let baseUrl;
-let cookie;
 
 test.before(async () => {
   server = await setupTestServer();
@@ -19,14 +18,6 @@ test.before(async () => {
   await new Promise((resolve) => httpServer.once('listening', resolve));
   const { port } = httpServer.address();
   baseUrl = `http://127.0.0.1:${port}`;
-
-  const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: server.config.ADMIN_EMAIL, password: server.config.ADMIN_PASSWORD }),
-  });
-  const setCookie = loginRes.headers.get('set-cookie');
-  cookie = setCookie.split(';')[0];
 });
 
 test.after(async () => {
@@ -46,7 +37,7 @@ function stepsFor(name) {
 async function createTestApp(name, portOffset) {
   const res = await fetch(`${baseUrl}/api/apps`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    headers: { 'Content-Type': 'application/json', Authorization: server.bearer },
     body: JSON.stringify({
       name,
       repoFullName: server.fixture.repoFullName,
@@ -65,7 +56,7 @@ async function createTestApp(name, portOffset) {
 async function deploy(appId, payload = { mode: 'update' }) {
   const res = await fetch(`${baseUrl}/api/apps/${appId}/deploy`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
+    headers: { 'Content-Type': 'application/json', Authorization: server.bearer },
     body: JSON.stringify(payload),
   });
   const body = await res.json();
@@ -76,7 +67,7 @@ async function deploy(appId, payload = { mode: 'update' }) {
 async function waitForFinish(id, timeoutMs = 25000) {
   const start = Date.now();
   for (;;) {
-    const res = await fetch(`${baseUrl}/api/deployments/${id}`, { headers: { Cookie: cookie } });
+    const res = await fetch(`${baseUrl}/api/deployments/${id}`, { headers: { Authorization: server.bearer } });
     const { deployment } = await res.json();
     if (['success', 'failed', 'cancelled'].includes(deployment.status)) return deployment;
     if (Date.now() - start > timeoutMs) throw new Error('deployment did not finish in time');
@@ -88,7 +79,7 @@ function openSSE(deploymentId, after) {
   return new Promise((resolve, reject) => {
     const suffix = after !== undefined ? `?after=${after}` : '';
     const url = new URL(`${baseUrl}/api/deployments/${deploymentId}/stream${suffix}`);
-    const req = http.get(url, { headers: { Cookie: cookie } }, (res) => {
+    const req = http.get(url, { headers: { Authorization: server.bearer } }, (res) => {
       const events = [];
       let buffer = '';
       res.on('data', (chunk) => {
@@ -158,7 +149,7 @@ test('SSE on an already-finished deployment replays and immediately sends status
   assert.equal(doneEvents.length, 1);
   assert.equal(doneEvents[0].data.status, 'success');
 
-  const entriesRes = await fetch(`${baseUrl}/api/deployments/${finished.id}/entries?after=-1&limit=5000`, { headers: { Cookie: cookie } });
+  const entriesRes = await fetch(`${baseUrl}/api/deployments/${finished.id}/entries?after=-1&limit=5000`, { headers: { Authorization: server.bearer } });
   const { entries } = await entriesRes.json();
   const lineEvents = events.filter((e) => e.event === 'line');
   assert.equal(lineEvents.length, entries.length, 'replay via SSE should match the entries endpoint');
@@ -169,7 +160,7 @@ test('a SSE reconnect with ?after= only receives entries past that index', async
   const deployment = await deploy(app.id);
   const finished = await waitForFinish(deployment.id);
 
-  const entriesRes = await fetch(`${baseUrl}/api/deployments/${finished.id}/entries?after=-1&limit=5000`, { headers: { Cookie: cookie } });
+  const entriesRes = await fetch(`${baseUrl}/api/deployments/${finished.id}/entries?after=-1&limit=5000`, { headers: { Authorization: server.bearer } });
   const { entries } = await entriesRes.json();
   assert.ok(entries.length > 3);
   const cutoff = entries[2].i;

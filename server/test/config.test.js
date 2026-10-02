@@ -4,10 +4,9 @@ import { loadConfig, ConfigError } from '../src/config.js';
 
 const REQUIRED_KEYS = [
   'MONGO_URI',
-  'JWT_SECRET',
+  'SERVER_ID',
+  'SERVER_SECRET',
   'ENCRYPTION_KEY',
-  'ADMIN_EMAIL',
-  'ADMIN_PASSWORD',
   'APPS_DIR',
   'NGINX_APPS_DIR',
 ];
@@ -29,10 +28,9 @@ const ALL_CONFIG_KEYS = [
 
 const VALID_ENV = {
   MONGO_URI: 'mongodb://127.0.0.1:27017/test',
-  JWT_SECRET: 'x'.repeat(32),
+  SERVER_ID: 'test-server-01',
+  SERVER_SECRET: 'x'.repeat(32),
   ENCRYPTION_KEY: 'a'.repeat(64),
-  ADMIN_EMAIL: 'admin@example.com',
-  ADMIN_PASSWORD: 'x'.repeat(12),
   APPS_DIR: '/tmp/apps',
   NGINX_APPS_DIR: '/tmp/nginx-apps',
 };
@@ -82,10 +80,18 @@ test('loadConfig throws ConfigError listing every missing required var', () => {
   });
 });
 
-test('loadConfig rejects a too-short JWT_SECRET', () => {
-  withEnv({ ...VALID_ENV, JWT_SECRET: 'too-short' }, () => {
-    assert.throws(() => loadConfig(), /JWT_SECRET/);
+test('loadConfig rejects a too-short SERVER_SECRET', () => {
+  withEnv({ ...VALID_ENV, SERVER_SECRET: 'too-short' }, () => {
+    assert.throws(() => loadConfig(), /SERVER_SECRET/);
   });
+});
+
+test('loadConfig rejects a malformed SERVER_ID', () => {
+  for (const bad of ['short', 'has space!', 'x'.repeat(65)]) {
+    withEnv({ ...VALID_ENV, SERVER_ID: bad }, () => {
+      assert.throws(() => loadConfig(), /SERVER_ID/);
+    });
+  }
 });
 
 test('loadConfig rejects a malformed ENCRYPTION_KEY', () => {
@@ -102,7 +108,7 @@ test('loadConfig respects a narrower require list (e.g. for clear-db)', () => {
 });
 
 test('a narrower require list still validates the format of vars that are present', () => {
-  withEnv({ MONGO_URI: VALID_ENV.MONGO_URI, ADMIN_EMAIL: 'not-an-email' }, () => {
-    assert.throws(() => loadConfig({ require: ['MONGO_URI'] }), /ADMIN_EMAIL/);
+  withEnv({ MONGO_URI: VALID_ENV.MONGO_URI, SERVER_ID: 'bad id' }, () => {
+    assert.throws(() => loadConfig({ require: ['MONGO_URI'] }), /SERVER_ID/);
   });
 });
