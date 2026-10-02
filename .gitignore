@@ -33,3 +33,7 @@ backup-*/
 .data/
 *.log
 .DS_Store
+
+# Personal notes with credentials — never commit
+server.md
+*.secrets.md
