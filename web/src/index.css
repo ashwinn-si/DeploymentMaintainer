@@ -291,3 +291,12 @@ input[type='datetime-local'] {
 .animate-modal-in {
   animation: modal-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Keep browser autofill from painting a solid light background over the frosted inputs. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}

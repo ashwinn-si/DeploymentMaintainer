@@ -2,7 +2,7 @@ import { useId } from 'react';
 
 const FIELD_BASE =
   'w-full min-h-[44px] bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 ' +
-  'rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 shadow-xs transition-all outline-none ' +
+  'rounded-2xl py-2.5 sm:py-3 shadow-xs transition-all outline-none ' +
   'focus:bg-white dark:focus:bg-black/40 focus:ring-3 focus:ring-[var(--brand)]/30 ' +
   'placeholder:text-[var(--text-muted)]/50 text-[var(--text-primary)]';
 
@@ -23,7 +23,7 @@ export function Input({ label, hint, icon: Icon, error, className = '', id, ...r
         ) : null}
         <input
           id={inputId}
-          className={[FIELD_BASE, Icon ? 'pl-10' : '', error ? 'ring-2 ring-rose-500/50' : '', className]
+          className={[FIELD_BASE, Icon ? 'pl-11 pr-3.5 sm:pr-4' : 'px-3.5 sm:px-4', error ? 'ring-2 ring-rose-500/50' : '', className]
             .filter(Boolean)
             .join(' ')}
           {...rest}
