@@ -40,7 +40,7 @@ function StepIndicator({ labels, current }) {
             <span
               className={[
                 'flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold',
-                active || done ? 'bg-[var(--brand)] text-white dark:text-[#0B140F]' : 'bg-black/5 text-[var(--text-muted)] dark:bg-white/10',
+                active || done ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11]' : 'bg-black/5 text-[var(--text-muted)] dark:bg-white/10',
               ].join(' ')}
             >
               {i + 1}

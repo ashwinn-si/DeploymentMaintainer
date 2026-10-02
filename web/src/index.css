@@ -12,13 +12,13 @@
 
 :root {
   /* Atmosphere */
-  --bg-cream: #f5f0e8;
-  --bg-sage-light: #e8f0e9;
-  --bg-sage: #dcebdd;
+  --bg-base: #f5f6f8;
+  --bg-mid: #eceef2;
+  --bg-deep: #e3e6ec;
   --page-bg:
-    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(180, 210, 185, 0.55) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 70% at 15% 85%, rgba(210, 195, 170, 0.4) 0%, transparent 55%),
-    linear-gradient(160deg, #f5f0e8 0%, #e8ede3 45%, #dce8dc 100%);
+    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(186, 220, 245, 0.55) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 70% at 15% 85%, rgba(203, 210, 225, 0.45) 0%, transparent 55%),
+    linear-gradient(160deg, #f5f6f8 0%, #eceef2 45%, #e3e6ec 100%);
 
   /* Glass */
   --glass-strong-bg: rgba(255, 255, 255, 0.86);
@@ -28,9 +28,9 @@
   --glass-highlight: #ffffff;
 
   /* Text */
-  --text-primary: #16281a;
-  --text-secondary: #3a4f3d;
-  --text-muted: #7a8c7c;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
 
   /* Data */
   --data-amber: #f59e0b;
@@ -40,18 +40,18 @@
   --data-teal: #14b8a6;
 
   /* Brand */
-  --brand: #2f7d52;
-  --brand-soft: rgba(47, 125, 82, 0.14);
+  --brand: #0284c7;
+  --brand-soft: rgba(2, 132, 199, 0.14);
 }
 
 :root[data-theme='dark'] {
-  --bg-cream: #0b140f;
-  --bg-sage-light: #101b14;
-  --bg-sage: #142219;
+  --bg-base: #0b0d11;
+  --bg-mid: #11141a;
+  --bg-deep: #161a22;
   --page-bg:
-    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(95, 191, 134, 0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 70% at 15% 85%, rgba(210, 195, 170, 0.08) 0%, transparent 55%),
-    linear-gradient(160deg, #0b140f 0%, #101b14 45%, #142219 100%);
+    radial-gradient(ellipse 70% 60% at 80% 10%, rgba(56, 189, 248, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 70% at 15% 85%, rgba(148, 163, 184, 0.06) 0%, transparent 55%),
+    linear-gradient(160deg, #0b0d11 0%, #11141a 45%, #161a22 100%);
 
   --glass-strong-bg: rgba(255, 255, 255, 0.08);
   --glass-mid-bg: rgba(255, 255, 255, 0.05);
@@ -59,9 +59,9 @@
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-highlight: rgba(255, 255, 255, 0.2);
 
-  --text-primary: #e9f3ea;
-  --text-secondary: #b6c9b8;
-  --text-muted: #7e9481;
+  --text-primary: #e5e7eb;
+  --text-secondary: #aeb6c4;
+  --text-muted: #7c8596;
 
   --data-amber: #fbbf24;
   --data-blue: #60a5fa;
@@ -69,8 +69,8 @@
   --data-purple: #a78bfa;
   --data-teal: #2dd4bf;
 
-  --brand: #5fbf86;
-  --brand-soft: rgba(95, 191, 134, 0.18);
+  --brand: #38bdf8;
+  --brand-soft: rgba(56, 189, 248, 0.18);
 }
 
 @theme {
@@ -164,8 +164,8 @@ h4,
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(22, 40, 26, 0.05),
-    0 2px 6px rgba(22, 40, 26, 0.03);
+    0 8px 24px rgba(15, 23, 42, 0.05),
+    0 2px 6px rgba(15, 23, 42, 0.03);
 }
 
 .glass-nav {
@@ -175,7 +175,7 @@ h4,
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(22, 40, 26, 0.06);
+    0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .glass-interactive {
@@ -221,16 +221,16 @@ h4,
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(122, 140, 124, 0.25);
+  background: rgba(107, 114, 128, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(122, 140, 124, 0.45);
+  background: rgba(107, 114, 128, 0.45);
 }
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(122, 140, 124, 0.25) transparent;
+  scrollbar-color: rgba(107, 114, 128, 0.25) transparent;
 }
 
 .select-caret {

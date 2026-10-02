@@ -10,7 +10,7 @@ const SIZES = {
 
 const VARIANTS = {
   primary:
-    'text-white dark:text-[#0B140F] font-semibold shadow-md shadow-black/10 dark:shadow-black/30 bg-[var(--brand)] hover:brightness-110',
+    'text-white dark:text-[#0B0D11] font-semibold shadow-md shadow-black/10 dark:shadow-black/30 bg-[var(--brand)] hover:brightness-110',
   ghost: 'btn-ghost',
   danger: 'bg-rose-500/90 text-white hover:bg-rose-600 shadow-md shadow-rose-500/20',
 };

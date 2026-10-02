@@ -81,9 +81,9 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
               'max-h-[90dvh] sm:max-h-[85vh]',
               'rounded-t-[28px] sm:rounded-3xl',
               'border border-white/80 dark:border-white/10',
-              'bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95',
-              'dark:from-[#112017]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95',
-              'backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(20,50,30,0.2)]',
+              'bg-gradient-to-b from-white/95 via-[#F8F9FB]/92 to-[#EEF1F6]/95',
+              'dark:from-[#161A23]/95 dark:via-[#11151C]/95 dark:to-[#0C0F14]/95',
+              'backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.2)]',
               SIZES[size] ?? SIZES.md,
             ].join(' ')}
           >

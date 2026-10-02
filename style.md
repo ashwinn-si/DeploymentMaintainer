@@ -25,10 +25,10 @@ Defined once as `--page-bg` and applied to `body`:
 ```css
 /* Light */
 --page-bg:
-  radial-gradient(ellipse 70% 60% at 80% 10%, rgba(180, 210, 185, 0.55) 0%, transparent 60%),
+  radial-gradient(ellipse 70% 60% at 80% 10%, rgba(186, 220, 245, 0.55) 0%, transparent 60%),
   /* key light, top-right  */
-  radial-gradient(ellipse 50% 70% at 15% 85%, rgba(210, 195, 170, 0.4) 0%, transparent 55%),
-  /* fill light, bottom-left */ linear-gradient(160deg, #f5f0e8 0%, #e8ede3 45%, #dce8dc 100%); /* cream → sage */
+  radial-gradient(ellipse 50% 70% at 15% 85%, rgba(203, 210, 225, 0.45) 0%, transparent 55%),
+  /* fill light, bottom-left */ linear-gradient(160deg, #f5f6f8 0%, #eceef2 45%, #e3e6ec 100%); /* cloud → slate */
 
 body {
   background: var(--page-bg);
@@ -39,16 +39,16 @@ body {
 }
 ```
 
-- **Light mode:** warm cream `#F5F0E8` → sage `#E8EDE3` → `#DCE8DC`, sage bloom top-right, sand bloom bottom-left.
-- **Dark mode:** deep forest near-blacks `#0B140F` → `#101B14` → `#142219`, with the same two bloom positions reduced to a faint brand-tinted glow (12% and 8% opacity).
+- **Light mode:** cool cloud-white `#F5F6F8` → slate `#ECEEF2` → `#E3E6EC`, sky bloom top-right, slate bloom bottom-left.
+- **Dark mode:** deep slate near-blacks `#0B0D11` → `#11141A` → `#161A22`, with the same two bloom positions reduced to a faint sky-blue glow (10%) and slate glow (6%).
 
 Background atmosphere tokens:
 
 | Token             | Light     | Dark      |
 | ----------------- | --------- | --------- |
-| `--bg-cream`      | `#F5F0E8` | `#0B140F` |
-| `--bg-sage-light` | `#E8F0E9` | `#101B14` |
-| `--bg-sage`       | `#DCEBDD` | `#142219` |
+| `--bg-base`       | `#F5F6F8` | `#0B0D11` |
+| `--bg-mid`        | `#ECEEF2` | `#11141A` |
+| `--bg-deep`       | `#E3E6EC` | `#161A22` |
 
 ---
 
@@ -105,14 +105,14 @@ All in `web/src/index.css`. Every tier has the same four ingredients: **fill, bl
 }
 
 .glass-card {
-  /* mid-tier with warm-tinted shadow */
+  /* mid-tier with slate-tinted shadow */
   background: var(--glass-mid-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(22, 40, 26, 0.05),
-    0 2px 6px rgba(22, 40, 26, 0.03);
+    0 8px 24px rgba(15, 23, 42, 0.05),
+    0 2px 6px rgba(15, 23, 42, 0.03);
 }
 
 .glass-nav {
@@ -122,7 +122,7 @@ All in `web/src/index.css`. Every tier has the same four ingredients: **fill, bl
   border: 1px solid var(--glass-border);
   box-shadow:
     inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(22, 40, 26, 0.06);
+    0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .glass-interactive {
@@ -140,7 +140,7 @@ All in `web/src/index.css`. Every tier has the same four ingredients: **fill, bl
 
 - **The inset top highlight** (`inset 0 1px 0 var(--glass-highlight)`) is what makes a translucent box look like a slab of glass with thickness. Every glass surface and ghost button has it.
 - **Blur scales with tier:** 20px → 16px → 10px. Stronger panels blur more; nested panels blur less, so glass-on-glass doesn't turn to fog.
-- **Shadows are low-opacity and large-radius** (4–6%, 12–32px spread). The `glass-card` / `glass-nav` shadows use the warm near-black `rgba(22,40,26,…)` instead of pure black so they sit naturally on the cream/sage field.
+- **Shadows are low-opacity and large-radius** (4–6%, 12–32px spread). The `glass-card` / `glass-nav` shadows use the slate near-black `rgba(15,23,42,…)` instead of pure black so they sit naturally on the cool slate field.
 - Always ship `-webkit-backdrop-filter` alongside `backdrop-filter` (Safari/iOS).
 
 ### Blur scale in use
@@ -193,13 +193,13 @@ Glass never has sharp corners.
 
 ## 7. Text colors
 
-Warm near-blacks — never `#000` on light, never `#fff` on dark.
+Slate near-blacks — never `#000` on light, never `#fff` on dark.
 
 | Token              | Light     | Dark      | Use                                       |
 | ------------------ | --------- | --------- | ----------------------------------------- |
-| `--text-primary`   | `#16281A` | `#E9F3EA` | Headings, values, main copy               |
-| `--text-secondary` | `#3A4F3D` | `#B6C9B8` | Body, modal content, subtitles            |
-| `--text-muted`     | `#7A8C7C` | `#7E9481` | Labels, inactive nav, placeholders, icons |
+| `--text-primary`   | `#111827` | `#E5E7EB` | Headings, values, main copy               |
+| `--text-secondary` | `#374151` | `#AEB6C4` | Body, modal content, subtitles            |
+| `--text-muted`     | `#6B7280` | `#7C8596` | Labels, inactive nav, placeholders, icons |
 
 Dividers and hairlines: `border-black/[0.06]` or `bg-black/5` in light, `border-white/10` or `bg-white/5` in dark.
 
@@ -226,10 +226,10 @@ Status colors: warning/offline uses amber (`bg-amber-500/10`, `border-amber-500/
 
 | Token          | Light                   | Dark                     | Use                                                     |
 | -------------- | ----------------------- | ------------------------ | ------------------------------------------------------- |
-| `--brand`      | `#2F7D52`               | `#5FBF86`                | Primary button, active nav, focus rings, wordmark, commands in logs |
-| `--brand-soft` | `rgba(47,125,82,0.14)`  | `rgba(95,191,134,0.18)`  | Ambient orbs, subtle fills                              |
+| `--brand`      | `#0284C7`               | `#38BDF8`                | Primary button, active nav, focus rings, wordmark, commands in logs |
+| `--brand-soft` | `rgba(2,132,199,0.14)`  | `rgba(56,189,248,0.18)`  | Ambient orbs, subtle fills                              |
 
-Primary buttons use white text in light mode and `#0B140F` text in dark mode for contrast.
+Primary buttons use white text in light mode and `#0B0D11` text in dark mode for contrast.
 
 **Status mapping** (pills per §15): deploying/running/queued = brand + pulse · online/success/healthy = teal · stopped/cancelled = amber · failed/errored/unhealthy = rose · anything else = neutral.
 
@@ -347,11 +347,11 @@ Rendered in a portal on `document.body`, `z-[9999]`.
 
 - **Scrim:** `bg-black/40 dark:bg-black/60 backdrop-blur-sm`, fades in 0.2s
 - **Sheet surface:**
-  - Light: vertical gradient `white/95 → #F8FAF8/92 → #EEF5EF/95`
-  - Dark: `#112017/95 → #0E1A13/95 → #0A140F/95`
+  - Light: vertical gradient `white/95 → #F8F9FB/92 → #EEF1F6/95`
+  - Dark: `#161A23/95 → #11151C/95 → #0C0F14/95`
   - `backdrop-blur-2xl`, `border border-white/80`
   - `rounded-t-[28px]` on mobile (bottom sheet), `sm:rounded-3xl` centered dialog on desktop
-  - Shadow: `0 25px 60px -15px rgba(20,50,30,0.2)` plus a soft outer glow
+  - Shadow: `0 25px 60px -15px rgba(15,23,42,0.2)` plus a soft outer glow
   - `max-h-[90dvh]` mobile / `sm:max-h-[85vh]` desktop
 - **Ambient orbs:** two `w-56 h-56 blur-3xl` circles at top-right and bottom-left corners, clipped inside
 - **Drag handle (mobile only):** `w-12 h-1.5 rounded-full bg-neutral-300/80 dark:bg-neutral-600/60`
@@ -455,21 +455,21 @@ Cards lift with `translateY`, never `scale` on hover — scaling glass causes bl
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(122, 140, 124, 0.25);
+  background: rgba(107, 114, 128, 0.25);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(122, 140, 124, 0.45);
+  background: rgba(107, 114, 128, 0.45);
 }
 
 .custom-scrollbar {
   /* opt-in for scroll areas inside cards */
   scrollbar-width: thin;
-  scrollbar-color: rgba(122, 140, 124, 0.25) transparent;
+  scrollbar-color: rgba(107, 114, 128, 0.25) transparent;
 }
 ```
 
-Thumb uses the muted sage text color at low opacity so it disappears into the glass.
+Thumb uses the muted slate text color at low opacity so it disappears into the glass.
 
 ---
 
