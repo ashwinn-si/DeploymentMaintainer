@@ -59,7 +59,7 @@ export function createApp(config) {
   return app;
 }
 
-async function main() {
+export async function main() {
   let config;
   try {
     config = loadConfig();

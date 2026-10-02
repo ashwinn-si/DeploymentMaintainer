@@ -11,7 +11,7 @@ module.exports = {
   apps: [
     {
       name: 'deployment-control',
-      script: 'src/index.js',
+      script: 'src/start.js',
       cwd: path.join(__dirname, '..', 'control'),
       exec_mode: 'fork',
       instances: 1,

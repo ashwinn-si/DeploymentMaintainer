@@ -12,7 +12,7 @@ module.exports = {
   apps: [
     {
       name: 'deployment-maintainer',
-      script: 'src/index.js',
+      script: 'src/start.js',
       cwd: path.join(__dirname, '..', 'server'),
       exec_mode: 'fork',
       instances: 1,
