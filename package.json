@@ -4,15 +4,19 @@
   "private": true,
   "workspaces": [
     "server",
+    "control",
     "web"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=server",
+    "dev:control": "npm run dev --workspace=control",
     "dev:web": "npm run dev --workspace=web",
     "start": "npm run start --workspace=server",
-    "seed": "npm run seed --workspace=server",
+    "start:control": "npm run start --workspace=control",
+    "seed": "npm run seed --workspace=control",
     "clear-db": "npm run clear-db --workspace=server",
-    "test": "npm run test --workspace=server",
+    "clear-db:control": "npm run clear-db --workspace=control",
+    "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspace=web"
   }
 }
