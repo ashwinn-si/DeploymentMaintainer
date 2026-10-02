@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Search, RefreshCw, Lock, Github } from 'lucide-react';
 import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
-import { reposApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime } from '../lib/format.js';
 
 export function RepoPicker({ value, onChange }) {
+  const { api } = useServer();
   const [query, setQuery] = useState('');
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +17,7 @@ export function RepoPicker({ value, onChange }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await reposApi.list(query, refresh);
+      const data = await api.repos.list(query, refresh);
       setRepos(data.repos);
     } catch (err) {
       setError(err instanceof ApiError ? err : new Error('Failed to load repos'));

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu, Rocket } from 'lucide-react';
+import { useOptionalServer } from '../../context/ServerContext.jsx';
 import { SidebarContent } from './Sidebar.jsx';
 
 export function Navbar({ deploying = false }) {
   const [open, setOpen] = useState(false);
+  const ctx = useOptionalServer();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -33,6 +35,11 @@ export function Navbar({ deploying = false }) {
           <span className="text-[var(--text-primary)]">Deploy</span>
           <span className="font-light text-[var(--brand)]">Maintainer</span>
         </div>
+        {ctx ? (
+          <span className="ml-auto min-w-0 max-w-[40%] truncate rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand)]">
+            {ctx.server.name}
+          </span>
+        ) : null}
       </header>
 
       <AnimatePresence>

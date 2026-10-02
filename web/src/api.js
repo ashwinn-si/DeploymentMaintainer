@@ -69,58 +69,76 @@ export const auth = {
   logout: () => request('/auth/logout', { method: 'POST' }),
 };
 
-export const reposApi = {
-  list: (q, refresh) => api.get(`/repos${toQuery({ q, refresh: refresh ? 1 : undefined })}`),
-  branches: (owner, repo) => api.get(`/repos/${owner}/${repo}/branches`),
-  nodeVersion: (owner, repo, ref) => api.get(`/repos/${owner}/${repo}/node-version${toQuery({ ref })}`),
+export const serversApi = {
+  list: () => api.get('/servers'),
+  get: (id) => api.get(`/servers/${id}`),
+  create: (body) => api.post('/servers', body),
+  update: (id, body) => api.patch(`/servers/${id}`, body),
+  rotateSecret: (id, secret) => api.post(`/servers/${id}/secret`, { secret }),
+  remove: (id) => api.delete(`/servers/${id}`),
 };
 
-export const appsApi = {
-  list: () => api.get('/apps'),
-  defaults: (name) => api.get(`/apps/defaults${toQuery({ name })}`),
-  create: (body) => api.post('/apps', body),
-  get: (id) => api.get(`/apps/${id}`),
-  update: (id, body) => api.patch(`/apps/${id}`, body),
-  remove: (id, confirmName) => api.delete(`/apps/${id}`, { confirmName }),
-  duplicate: (id, body) => api.post(`/apps/${id}/duplicate`, body),
-  deploy: (id, body) => api.post(`/apps/${id}/deploy`, body),
-  restart: (id) => api.post(`/apps/${id}/restart`),
-  stop: (id) => api.post(`/apps/${id}/stop`),
-  logs: (id, lines = 200) => api.get(`/apps/${id}/logs${toQuery({ lines })}`),
-  deployments: (id, { limit, before } = {}) => api.get(`/apps/${id}/deployments${toQuery({ limit, before })}`),
-};
-
-export const deploymentsApi = {
-  list: (params = {}) => api.get(`/deployments${toQuery(params)}`),
-  active: () => api.get('/deployments/active'),
-  get: (id) => api.get(`/deployments/${id}`),
-  entries: (id, after = -1, limit = 2000) => api.get(`/deployments/${id}/entries${toQuery({ after, limit })}`),
-  streamUrl: (id, after = -1) => `/api/deployments/${id}/stream${toQuery({ after })}`,
-  downloadUrl: (id) => `/api/deployments/${id}/download`,
-  cancel: (id) => api.post(`/deployments/${id}/cancel`),
-  rollback: (id) => api.post(`/deployments/${id}/rollback`),
-};
-
-export const portsApi = {
-  list: () => api.get('/ports'),
-};
-
-export const nodeApi = {
-  versions: () => api.get('/node/versions'),
-};
-
-export const systemApi = {
-  get: () => api.get('/system'),
-};
-
-export const settingsApi = {
-  info: () => api.get('/settings/info'),
+export const accountApi = {
   changePassword: (body) => api.post('/settings/password', body),
 };
 
-export const configApi = {
-  // No exportConfig helper here on purpose: POST /config/export returns a file
-  // attachment, not JSON, so callers use fetch() + blob() directly (see Settings.jsx).
-  importPreview: (body) => api.post('/config/import/preview', body),
-  importApply: (body) => api.post('/config/import', body),
-};
+// `serverId` is the control plane's Server record id (not SERVER_ID); the control
+// plane proxies everything under this prefix to that server's agent.
+export function serverApi(serverId) {
+  const base = `/servers/${serverId}/api`;
+  const get = (path) => api.get(`${base}${path}`);
+  const post = (path, body) => api.post(`${base}${path}`, body);
+  const patch = (path, body) => api.patch(`${base}${path}`, body);
+  const del = (path, body) => api.delete(`${base}${path}`, body);
+
+  return {
+    repos: {
+      list: (q, refresh) => get(`/repos${toQuery({ q, refresh: refresh ? 1 : undefined })}`),
+      branches: (owner, repo) => get(`/repos/${owner}/${repo}/branches`),
+      nodeVersion: (owner, repo, ref) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref })}`),
+    },
+    apps: {
+      list: () => get('/apps'),
+      defaults: (name) => get(`/apps/defaults${toQuery({ name })}`),
+      create: (body) => post('/apps', body),
+      get: (id) => get(`/apps/${id}`),
+      update: (id, body) => patch(`/apps/${id}`, body),
+      remove: (id, confirmName) => del(`/apps/${id}`, { confirmName }),
+      duplicate: (id, body) => post(`/apps/${id}/duplicate`, body),
+      deploy: (id, body) => post(`/apps/${id}/deploy`, body),
+      restart: (id) => post(`/apps/${id}/restart`),
+      stop: (id) => post(`/apps/${id}/stop`),
+      logs: (id, lines = 200) => get(`/apps/${id}/logs${toQuery({ lines })}`),
+      deployments: (id, { limit, before } = {}) => get(`/apps/${id}/deployments${toQuery({ limit, before })}`),
+    },
+    deployments: {
+      list: (params = {}) => get(`/deployments${toQuery(params)}`),
+      active: () => get('/deployments/active'),
+      get: (id) => get(`/deployments/${id}`),
+      entries: (id, after = -1, limit = 2000) => get(`/deployments/${id}/entries${toQuery({ after, limit })}`),
+      streamUrl: (id, after = -1) => `/api${base}/deployments/${id}/stream${toQuery({ after })}`,
+      downloadUrl: (id) => `/api${base}/deployments/${id}/download`,
+      cancel: (id) => post(`/deployments/${id}/cancel`),
+      rollback: (id) => post(`/deployments/${id}/rollback`),
+    },
+    ports: {
+      list: () => get('/ports'),
+    },
+    node: {
+      versions: () => get('/node/versions'),
+    },
+    system: {
+      get: () => get('/system'),
+    },
+    settings: {
+      info: () => get('/settings/info'),
+    },
+    config: {
+      // POST /config/export returns a file attachment, not JSON, so callers use
+      // fetch() + blob() with exportUrl (see ServerSettings.jsx).
+      exportUrl: `/api${base}/config/export`,
+      importPreview: (body) => post('/config/import/preview', body),
+      importApply: (body) => post('/config/import', body),
+    },
+  };
+}

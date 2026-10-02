@@ -7,6 +7,7 @@ import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Ring, Meter } from '../components/ui/Meter.jsx';
 import { Sparkline } from '../components/ui/Sparkline.jsx';
 import { StatusPill } from '../components/ui/StatusPill.jsx';
+import { useServer } from '../context/ServerContext.jsx';
 import { useSystemStats } from '../hooks/useSystemStats.js';
 import { formatBytes, formatUptime, formatUptimeMs } from '../lib/format.js';
 
@@ -36,9 +37,10 @@ function RingCard({ label, value, sublabel, data, color }) {
 }
 
 function AppDesktopRow({ app }) {
+  const { serverPath } = useServer();
   return (
     <Link
-      to={`/apps/${app.appId}`}
+      to={serverPath(`/apps/${app.appId}`)}
       className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-black/[0.06] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5`}
     >
       <span className="truncate font-medium text-[var(--text-primary)]">{app.appName}</span>
@@ -54,8 +56,9 @@ function AppDesktopRow({ app }) {
 }
 
 function AppMobileCard({ app }) {
+  const { serverPath } = useServer();
   return (
-    <Link to={`/apps/${app.appId}`} className="glass-light block space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10 sm:hidden">
+    <Link to={serverPath(`/apps/${app.appId}`)} className="glass-light block space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10 sm:hidden">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-[var(--text-primary)]">{app.appName}</p>
         <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill>
@@ -73,7 +76,8 @@ function AppMobileCard({ app }) {
 }
 
 export function Server() {
-  const { system } = useSystemStats();
+  const { server } = useServer();
+  const { system } = useSystemStats(server.id);
   const [sortKey, setSortKey] = useState('memory');
   const [sortDir, setSortDir] = useState('desc');
 

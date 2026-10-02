@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { SelectSheet } from './ui/SelectSheet.jsx';
-import { reposApi } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 export function BranchPicker({ repoFullName, value, onChange, label = 'Branch' }) {
+  const { api } = useServer();
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -14,7 +15,7 @@ export function BranchPicker({ repoFullName, value, onChange, label = 'Branch' }
     let cancelled = false;
     setLoading(true);
     const [owner, repo] = repoFullName.split('/');
-    reposApi
+    api.repos
       .branches(owner, repo)
       .then((data) => {
         if (cancelled) return;

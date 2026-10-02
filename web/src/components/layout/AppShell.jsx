@@ -3,7 +3,7 @@ import { Sidebar } from './Sidebar.jsx';
 import { Navbar } from './Navbar.jsx';
 import { DiskBanner } from '../DiskBanner.jsx';
 
-export function AppShell({ deploying = false }) {
+export function AppShell({ deploying = false, outletContext }) {
   return (
     <div className="min-h-dvh">
       <Sidebar deploying={deploying} />
@@ -14,7 +14,7 @@ export function AppShell({ deploying = false }) {
           <DiskBanner />
         </div>
         <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <Outlet />
+          <Outlet context={outletContext} />
         </main>
       </div>
     </div>

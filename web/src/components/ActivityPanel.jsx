@@ -4,7 +4,7 @@ import { Activity, Rocket } from 'lucide-react';
 import { GlassCard } from './ui/GlassCard.jsx';
 import { StatusPill, statusTone } from './ui/StatusPill.jsx';
 import { EmptyState } from './ui/EmptyState.jsx';
-import { deploymentsApi } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime } from '../lib/format.js';
 
 function currentStepLabel(deployment) {
@@ -15,13 +15,14 @@ function currentStepLabel(deployment) {
 }
 
 function LiveDeployRow({ deployment }) {
+  const { api, serverPath } = useServer();
   const [lines, setLines] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     async function poll() {
       try {
-        const data = await deploymentsApi.entries(deployment.id, -1, 500);
+        const data = await api.deployments.entries(deployment.id, -1, 500);
         if (!cancelled) setLines(data.entries.slice(-8));
       } catch {
         // keep last known lines on a transient error
@@ -33,11 +34,12 @@ function LiveDeployRow({ deployment }) {
       cancelled = true;
       clearInterval(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployment.id]);
 
   return (
     <Link
-      to={`/deployments/${deployment.id}`}
+      to={serverPath(`/deployments/${deployment.id}`)}
       className="block rounded-2xl border border-white/60 bg-white/40 p-3 transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/30"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -59,10 +61,11 @@ function LiveDeployRow({ deployment }) {
 }
 
 function FinishedRow({ deployment }) {
+  const { serverPath } = useServer();
   const { tone } = statusTone(deployment.status);
   return (
     <Link
-      to={`/deployments/${deployment.id}`}
+      to={serverPath(`/deployments/${deployment.id}`)}
       className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-black/[0.03] dark:hover:bg-white/5"
     >
       <span className="flex items-center gap-2 truncate">
@@ -76,6 +79,7 @@ function FinishedRow({ deployment }) {
 }
 
 export function ActivityPanel({ active = [] }) {
+  const { api } = useServer();
   const [finished, setFinished] = useState([]);
   const activeCountRef = useRef(active.length);
 
@@ -83,7 +87,7 @@ export function ActivityPanel({ active = [] }) {
     let cancelled = false;
     async function load() {
       try {
-        const data = await deploymentsApi.list({ limit: 10 });
+        const data = await api.deployments.list({ limit: 10 });
         if (!cancelled) {
           setFinished(data.deployments.filter((d) => d.status !== 'running' && d.status !== 'queued').slice(0, 10));
         }

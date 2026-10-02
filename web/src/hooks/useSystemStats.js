@@ -1,65 +1,78 @@
 import { useEffect, useState } from 'react';
-import { systemApi } from '../api.js';
+import { serverApi } from '../api.js';
 
 const POLL_MS = 10000;
+const EMPTY = { system: null, error: null };
 
-// Module-level singleton: every component that calls useSystemStats() shares
-// one GET /system poll instead of each mounting its own interval. The poll
-// starts when the first subscriber mounts and stops when the last unmounts.
-let cache = { system: null, error: null };
-const subscribers = new Set();
-let timer = null;
-let inFlight = null;
+// One entry per server: every component that calls useSystemStats(serverId)
+// shares a single GET /system poll. The poll starts when the first subscriber
+// mounts and stops when the last unmounts.
+const entries = new Map();
 
-function notify() {
-  for (const fn of subscribers) fn(cache);
+function getEntry(serverId) {
+  let entry = entries.get(serverId);
+  if (!entry) {
+    entry = { cache: EMPTY, subscribers: new Set(), timer: null, inFlight: null };
+    entries.set(serverId, entry);
+  }
+  return entry;
 }
 
-function poll() {
-  if (inFlight) return inFlight;
-  inFlight = systemApi
-    .get()
+function notify(entry) {
+  for (const fn of entry.subscribers) fn(entry.cache);
+}
+
+function poll(serverId, entry) {
+  if (entry.inFlight) return entry.inFlight;
+  entry.inFlight = serverApi(serverId)
+    .system.get()
     .then((data) => {
-      cache = { system: data, error: null };
+      entry.cache = { system: data, error: null };
     })
     .catch((err) => {
-      cache = { ...cache, error: err };
+      entry.cache = { ...entry.cache, error: err };
     })
     .finally(() => {
-      inFlight = null;
-      notify();
+      entry.inFlight = null;
+      notify(entry);
     });
-  return inFlight;
+  return entry.inFlight;
 }
 
-function ensurePolling() {
-  if (timer) return;
-  poll();
-  timer = setInterval(() => {
-    if (document.visibilityState === 'visible') poll();
+function ensurePolling(serverId, entry) {
+  if (entry.timer) return;
+  poll(serverId, entry);
+  entry.timer = setInterval(() => {
+    if (document.visibilityState === 'visible') poll(serverId, entry);
   }, POLL_MS);
 }
 
-function stopPollingIfIdle() {
-  if (subscribers.size === 0 && timer) {
-    clearInterval(timer);
-    timer = null;
+function stopPollingIfIdle(serverId, entry) {
+  if (entry.subscribers.size === 0 && entry.timer) {
+    clearInterval(entry.timer);
+    entry.timer = null;
+    entries.delete(serverId);
   }
 }
 
-export function useSystemStats() {
-  const [state, setState] = useState(cache);
+export function useSystemStats(serverId) {
+  const [state, setState] = useState(() => (serverId ? getEntry(serverId).cache : EMPTY));
 
   useEffect(() => {
-    subscribers.add(setState);
-    ensurePolling();
-    // Resync in case the cache changed between render and effect (e.g. StrictMode double-invoke).
-    setState(cache);
+    if (!serverId) {
+      setState(EMPTY);
+      return undefined;
+    }
+    const entry = getEntry(serverId);
+    entry.subscribers.add(setState);
+    ensurePolling(serverId, entry);
+    // Resync: the cache may have changed between render and effect, or serverId just changed.
+    setState(entry.cache);
     return () => {
-      subscribers.delete(setState);
-      stopPollingIfIdle();
+      entry.subscribers.delete(setState);
+      stopPollingIfIdle(serverId, entry);
     };
-  }, []);
+  }, [serverId]);
 
   return state;
 }

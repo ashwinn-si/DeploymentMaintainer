@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Server } from 'lucide-react';
 import { GlassCard } from './ui/GlassCard.jsx';
 import { Meter } from './ui/Meter.jsx';
+import { useServer } from '../context/ServerContext.jsx';
 import { useSystemStats } from '../hooks/useSystemStats.js';
 import { formatUptime } from '../lib/format.js';
 
@@ -9,7 +10,8 @@ import { formatUptime } from '../lib/format.js';
 // /system data as the Server page and the disk banner. Renders nothing if
 // the endpoint isn't available (or hasn't resolved yet).
 export function ServerHealthCard() {
-  const { system } = useSystemStats();
+  const { server, serverPath } = useServer();
+  const { system } = useSystemStats(server.id);
 
   if (!system) return null;
 
@@ -19,7 +21,7 @@ export function ServerHealthCard() {
   const memPct = (current.memUsed / current.memTotal) * 100;
 
   return (
-    <Link to="/server" className="block">
+    <Link to={serverPath('/server')} className="block">
       <GlassCard variant="mid" interactive>
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">

@@ -7,7 +7,7 @@ import { SelectSheet } from '../components/ui/SelectSheet.jsx';
 import { Input } from '../components/ui/Input.jsx';
 import { Modal } from '../components/ui/Modal.jsx';
 import { DeploymentRow } from '../components/DeploymentRow.jsx';
-import { appsApi, deploymentsApi } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -42,6 +42,7 @@ function FilterFields({ apps, filters, setFilter }) {
 }
 
 export function Deployments() {
+  const { api } = useServer();
   const [apps, setApps] = useState([]);
   const [filters, setFilters] = useState({ app: '', status: '', branch: '', mode: '' });
   const [deployments, setDeployments] = useState([]);
@@ -51,12 +52,12 @@ export function Deployments() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
-    appsApi.list().then((data) => setApps(data.apps)).catch(() => {});
-  }, []);
+    api.apps.list().then((data) => setApps(data.apps)).catch(() => {});
+  }, [api]);
 
   useEffect(() => {
     setLoading(true);
-    deploymentsApi
+    api.deployments
       .list({ app: filters.app, status: filters.status, branch: filters.branch, mode: filters.mode, limit: 25 })
       .then((data) => {
         setDeployments(data.deployments);
@@ -64,14 +65,14 @@ export function Deployments() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [filters]);
+  }, [api, filters]);
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }));
 
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const data = await deploymentsApi.list({ ...filters, before: nextBefore, limit: 25 });
+      const data = await api.deployments.list({ ...filters, before: nextBefore, limit: 25 });
       setDeployments((prev) => [...prev, ...data.deployments]);
       setNextBefore(data.nextBefore);
     } finally {

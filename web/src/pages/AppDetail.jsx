@@ -14,7 +14,8 @@ import { StepsEditor } from '../components/StepsEditor.jsx';
 import { DeployDialog } from '../components/DeployDialog.jsx';
 import { DuplicateDialog } from '../components/DuplicateDialog.jsx';
 import { DeploymentRow } from '../components/DeploymentRow.jsx';
-import { appsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatBytes, formatDuration, formatRelativeTime, shortSha, githubCommitUrl } from '../lib/format.js';
 
 const TABS = [
@@ -71,6 +72,7 @@ function OverviewTab({ app }) {
 export function AppDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { api, serverPath } = useServer();
   const [searchParams, setSearchParams] = useSearchParams();
   const [app, setApp] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -87,12 +89,12 @@ export function AppDetail() {
 
   const load = useCallback(async () => {
     try {
-      const data = await appsApi.get(id);
+      const data = await api.apps.get(id);
       setApp(data.app);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) setNotFound(true);
     }
-  }, [id]);
+  }, [api, id]);
 
   useEffect(() => {
     load();
@@ -100,21 +102,21 @@ export function AppDetail() {
 
   useEffect(() => {
     if (tab === 'deployments') {
-      appsApi
+      api.apps
         .deployments(id)
         .then((data) => setDeployments(data.deployments))
         .catch(() => {});
     }
-  }, [tab, id]);
+  }, [api, tab, id]);
 
   const loadLogs = useCallback(() => {
     setLogsLoading(true);
-    appsApi
+    api.apps
       .logs(id)
       .then((data) => setRuntimeLogs(data.text))
       .catch(() => setRuntimeLogs('Could not load runtime logs.'))
       .finally(() => setLogsLoading(false));
-  }, [id]);
+  }, [api, id]);
 
   useEffect(() => {
     if (tab === 'logs') loadLogs();
@@ -133,21 +135,21 @@ export function AppDetail() {
   };
 
   const handleSaveEnv = (env) => runAction('env', async () => {
-    await appsApi.update(id, { env });
+    await api.apps.update(id, { env });
     toast.success('Environment saved — takes effect on the next deploy');
   });
 
   const handleSaveSteps = (steps) => runAction('steps', async () => {
-    await appsApi.update(id, { steps });
+    await api.apps.update(id, { steps });
     toast.success('Steps saved — takes effect on the next deploy');
   });
 
   const handleDelete = async () => {
     setBusy('delete');
     try {
-      await appsApi.remove(id, app.name);
+      await api.apps.remove(id, app.name);
       toast.success(`${app.name} deleted`);
-      navigate('/');
+      navigate(serverPath('/'));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Failed to delete app');
       setBusy(null);
@@ -183,11 +185,11 @@ export function AppDetail() {
               <Rocket className="h-4 w-4" />
               Deploy
             </Button>
-            <Button size="sm" variant="ghost" loading={busy === 'restart'} onClick={() => runAction('restart', () => appsApi.restart(id))}>
+            <Button size="sm" variant="ghost" loading={busy === 'restart'} onClick={() => runAction('restart', () => api.apps.restart(id))}>
               <RotateCw className="h-4 w-4" />
               Restart
             </Button>
-            <Button size="sm" variant="ghost" loading={busy === 'stop'} onClick={() => runAction('stop', () => appsApi.stop(id))}>
+            <Button size="sm" variant="ghost" loading={busy === 'stop'} onClick={() => runAction('stop', () => api.apps.stop(id))}>
               <Square className="h-4 w-4" />
               Stop
             </Button>

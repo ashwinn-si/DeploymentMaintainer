@@ -11,7 +11,8 @@ import { BranchPicker } from '../components/BranchPicker.jsx';
 import { NodeVersionPicker } from '../components/NodeVersionPicker.jsx';
 import { EnvEditor } from '../components/EnvEditor.jsx';
 import { StepsEditor } from '../components/StepsEditor.jsx';
-import { appsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 function slugify(input) {
   return (input || '')
@@ -41,6 +42,7 @@ function Section({ step, title, description, children }) {
 
 export function NewApp() {
   const navigate = useNavigate();
+  const { api, serverPath } = useServer();
   const [repoFullName, setRepoFullName] = useState('');
   const [branch, setBranch] = useState('');
   const [name, setName] = useState('');
@@ -67,7 +69,7 @@ export function NewApp() {
     const slug = slugify(name);
     if (!slug) return;
     const timer = setTimeout(() => {
-      appsApi
+      api.apps
         .defaults(slug)
         .then((data) => {
           if (!portTouched && data.port) setPort(String(data.port));
@@ -77,7 +79,7 @@ export function NewApp() {
         .catch(() => {});
     }, 350);
     return () => clearTimeout(timer);
-  }, [name, portTouched, stepsTouched]);
+  }, [api, name, portTouched, stepsTouched]);
 
   const slug = useMemo(() => slugify(name), [name]);
   const canSubmit = Boolean(repoFullName && branch && slug && nodeVersion);
@@ -87,7 +89,7 @@ export function NewApp() {
     setFormError(null);
     setFieldErrors({});
     try {
-      const { app, deployment } = await appsApi.create({
+      const { app, deployment } = await api.apps.create({
         name: slug,
         repoFullName,
         branch,
@@ -98,7 +100,7 @@ export function NewApp() {
         deploy,
       });
       toast.success(`${app.name} created${deploy ? ' — deploying' : ''}`);
-      navigate(deploy && deployment ? `/deployments/${deployment.id}` : `/apps/${app.id}`);
+      navigate(serverPath(deploy && deployment ? `/deployments/${deployment.id}` : `/apps/${app.id}`));
     } catch (err) {
       if (err instanceof ApiError && err.issues?.length) {
         const next = {};

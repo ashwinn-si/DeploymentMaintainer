@@ -13,7 +13,7 @@ export function NotFound() {
         <h1 className="mb-2 text-2xl font-medium tracking-tight text-[var(--text-primary)]">Page not found</h1>
         <p className="mb-6 text-sm text-[var(--text-muted)]">The page you're looking for doesn't exist.</p>
         <Link to="/">
-          <Button className="w-full">Back to Apps</Button>
+          <Button className="w-full">Back to Servers</Button>
         </Link>
       </GlassCard>
     </div>

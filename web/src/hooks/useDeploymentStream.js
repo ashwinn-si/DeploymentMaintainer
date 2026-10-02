@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { deploymentsApi } from '../api.js';
+import { serverApi } from '../api.js';
 import { isMockEnabled } from '../dev/mockFlag.js';
 
 /**
@@ -8,7 +8,7 @@ import { isMockEnabled } from '../dev/mockFlag.js';
  * with the last-seen entry index on error (browser auto-reconnect can't do this
  * because it always reopens the original URL) and de-dupes entries by index.
  */
-export function useDeploymentStream(id) {
+export function useDeploymentStream(serverId, id) {
   const [deployment, setDeployment] = useState(null);
   const [entries, setEntries] = useState([]);
   const [steps, setSteps] = useState([]);
@@ -67,6 +67,7 @@ export function useDeploymentStream(id) {
 
   useEffect(() => {
     let cancelled = false;
+    const api = serverApi(serverId).deployments;
     seenRef.current = new Set();
     lastIndexRef.current = -1;
     doneRef.current = false;
@@ -112,16 +113,16 @@ export function useDeploymentStream(id) {
       if (cancelled || doneRef.current) return;
       if (import.meta.env.DEV && isMockEnabled()) {
         import('../dev/mockApi.js').then(({ createMockStream }) => {
-          if (!cancelled) attach(createMockStream(id, lastIndexRef.current));
+          if (!cancelled) attach(createMockStream(serverId, id, lastIndexRef.current));
         });
       } else {
-        attach(new EventSource(deploymentsApi.streamUrl(id, lastIndexRef.current)));
+        attach(new EventSource(api.streamUrl(id, lastIndexRef.current)));
       }
     }
 
     async function loadInitial() {
       try {
-        const data = await deploymentsApi.get(id);
+        const data = await api.get(id);
         if (cancelled) return;
         setDeployment(data.deployment);
         setSteps(data.deployment.steps ?? []);
@@ -140,7 +141,7 @@ export function useDeploymentStream(id) {
       frameRef.current = null;
       esRef.current?.close();
     };
-  }, [id, applyLine, applyStep, applyStatus]);
+  }, [serverId, id, applyLine, applyStep, applyStatus]);
 
   return { deployment, entries, steps, status, connected, loadError };
 }

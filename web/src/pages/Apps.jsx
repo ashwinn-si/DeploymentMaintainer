@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { LayoutGrid, PlusCircle, Rocket, ExternalLink } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
@@ -9,17 +9,19 @@ import { Button } from '../components/ui/Button.jsx';
 import { StatusPill, statusTone } from '../components/ui/StatusPill.jsx';
 import { ActivityPanel } from '../components/ActivityPanel.jsx';
 import { ServerHealthCard } from '../components/ServerHealthCard.jsx';
-import { appsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime } from '../lib/format.js';
 
 function AppCard({ app, onDeploy }) {
+  const { serverPath } = useServer();
   const { tone, pulse } = statusTone(app.status);
   const healthTone = app.health?.ok ? 'teal' : app.status === 'not_deployed' ? 'neutral' : 'rose';
   const deploying = Boolean(app.activeDeploymentId);
 
   return (
     <GlassCard variant="mid" interactive className="relative flex flex-col gap-4">
-      <Link to={`/apps/${app.id}`} className="absolute inset-0" aria-label={`Open ${app.name}`} />
+      <Link to={serverPath(`/apps/${app.id}`)} className="absolute inset-0" aria-label={`Open ${app.name}`} />
       <div className="relative z-10 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">{app.name}</h3>
@@ -72,21 +74,23 @@ function AppCard({ app, onDeploy }) {
   );
 }
 
-export function Apps({ activeDeployments = [] }) {
+export function Apps() {
+  const { activeDeployments = [] } = useOutletContext() ?? {};
   const navigate = useNavigate();
+  const { api, serverPath } = useServer();
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const data = await appsApi.list();
+      const data = await api.apps.list();
       setApps(data.apps);
     } catch {
       // keep previous list; page still renders with what it has
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     load();
@@ -94,11 +98,11 @@ export function Apps({ activeDeployments = [] }) {
 
   const handleDeploy = async (app) => {
     try {
-      const { deployment } = await appsApi.deploy(app.id, { mode: 'update' });
+      const { deployment } = await api.apps.deploy(app.id, { mode: 'update' });
       toast.success(
         <span className="flex items-center gap-2">
           <span>Deploy started · {app.name}</span>
-          <button type="button" onClick={() => navigate(`/deployments/${deployment.id}`)} className="font-semibold text-[var(--brand)] hover:underline">
+          <button type="button" onClick={() => navigate(serverPath(`/deployments/${deployment.id}`))} className="font-semibold text-[var(--brand)] hover:underline">
             View log
           </button>
         </span>
@@ -112,7 +116,7 @@ export function Apps({ activeDeployments = [] }) {
   return (
     <div className="space-y-6">
       <PageHeader icon={LayoutGrid} eyebrow="Dashboard" title="Apps" actions={
-        <Link to="/new">
+        <Link to={serverPath('/new')}>
           <Button size="md">
             <PlusCircle className="h-4 w-4" />
             New App
@@ -133,7 +137,7 @@ export function Apps({ activeDeployments = [] }) {
           title="No apps yet"
           description="Deploy your first app from a GitHub repo."
           action={
-            <Link to="/new">
+            <Link to={serverPath('/new')}>
               <Button>
                 <PlusCircle className="h-4 w-4" />
                 New App

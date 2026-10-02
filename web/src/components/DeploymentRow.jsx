@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { StatusPill, statusTone } from './ui/StatusPill.jsx';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime, formatDuration, shortSha } from '../lib/format.js';
 
 const MODE_LABEL = { update: 'Update', fresh: 'Fresh', rollback: 'Rollback' };
 
 export function DeploymentRow({ deployment, showApp = false }) {
+  const { serverPath } = useServer();
   const { tone, pulse } = statusTone(deployment.status);
   return (
     <Link
-      to={`/deployments/${deployment.id}`}
+      to={serverPath(`/deployments/${deployment.id}`)}
       className="glass-light flex flex-col gap-2 rounded-2xl border border-white/60 p-4 transition-colors hover:bg-white/70 dark:border-white/10 dark:hover:bg-black/30 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-center gap-3">

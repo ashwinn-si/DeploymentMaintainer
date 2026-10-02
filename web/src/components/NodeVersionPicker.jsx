@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Input } from './ui/Input.jsx';
-import { nodeApi, reposApi } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 export function NodeVersionPicker({ repoFullName, branch, value, onChange }) {
+  const { api } = useServer();
   const [installed, setInstalled] = useState([]);
   const [detected, setDetected] = useState(null);
 
   useEffect(() => {
-    nodeApi
+    api.node
       .versions()
       .then((data) => {
         setInstalled(data.installed ?? []);
@@ -24,7 +25,7 @@ export function NodeVersionPicker({ repoFullName, branch, value, onChange }) {
     }
     let cancelled = false;
     const [owner, repo] = repoFullName.split('/');
-    reposApi
+    api.repos
       .nodeVersion(owner, repo, branch)
       .then((data) => {
         if (cancelled) return;

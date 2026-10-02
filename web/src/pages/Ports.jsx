@@ -5,7 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { EmptyState } from '../components/ui/EmptyState.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { StatusPill } from '../components/ui/StatusPill.jsx';
-import { portsApi } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime } from '../lib/format.js';
 
 const POLL_MS = 10000;
@@ -33,9 +33,10 @@ function HealthCell({ health }) {
 }
 
 function DesktopRow({ row }) {
+  const { serverPath } = useServer();
   return (
     <Link
-      to={`/apps/${row.appId}`}
+      to={serverPath(`/apps/${row.appId}`)}
       className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-black/[0.06] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5`}
     >
       <div>
@@ -58,9 +59,10 @@ function DesktopRow({ row }) {
 }
 
 function MobileCard({ row }) {
+  const { serverPath } = useServer();
   return (
     <Link
-      to={`/apps/${row.appId}`}
+      to={serverPath(`/apps/${row.appId}`)}
       className="glass-light block space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10 sm:hidden"
     >
       <div className="flex items-center justify-between">
@@ -83,6 +85,7 @@ function MobileCard({ row }) {
 }
 
 export function Ports() {
+  const { api } = useServer();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -90,7 +93,7 @@ export function Ports() {
     let cancelled = false;
     async function load() {
       try {
-        const result = await portsApi.list();
+        const result = await api.ports.list();
         if (!cancelled) setData(result);
       } catch {
         // keep whatever we last had on a transient error
@@ -106,7 +109,7 @@ export function Ports() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [api]);
 
   const rows = data?.rows ?? [];
 

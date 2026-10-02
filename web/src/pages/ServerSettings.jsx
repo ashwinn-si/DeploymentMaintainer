@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Settings as SettingsIcon, Github, KeyRound, DownloadCloud, UploadCloud, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Settings as SettingsIcon, Github, DownloadCloud, UploadCloud, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Input } from '../components/ui/Input.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { Toggle } from '../components/ui/Toggle.jsx';
 import { StatusPill } from '../components/ui/StatusPill.jsx';
-import { settingsApi, appsApi, configApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 function SectionCard({ icon: Icon, title, description, children }) {
   return (
@@ -27,83 +28,17 @@ function SectionCard({ icon: Icon, title, description, children }) {
   );
 }
 
-function AccountCard() {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;
-  const canSubmit = currentPassword && newPassword.length >= 12 && newPassword === confirmPassword;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      await settingsApi.changePassword({ currentPassword, newPassword });
-      toast.success('Password changed — you stay signed in on this device.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to change password');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <SectionCard icon={KeyRound} title="Account" description="Change your dashboard password.">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Current password"
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-        />
-        <Input
-          label="New password"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          hint="At least 12 characters"
-          autoComplete="new-password"
-          required
-        />
-        <Input
-          label="Confirm new password"
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          error={mismatch ? "Passwords don't match" : undefined}
-          autoComplete="new-password"
-          required
-        />
-        {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-        <div className="flex justify-end">
-          <Button type="submit" size="sm" loading={loading} disabled={!canSubmit}>
-            Change password
-          </Button>
-        </div>
-      </form>
-    </SectionCard>
-  );
-}
-
 function GithubInfoCard() {
+  const { api } = useServer();
   const [info, setInfo] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    settingsApi
+    api.settings
       .info()
       .then(setInfo)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Failed to load server info'));
-  }, []);
+  }, [api]);
 
   return (
     <SectionCard icon={Github} title="GitHub & server info" description="Read-only — configured in the server's .env.">
@@ -168,6 +103,7 @@ function GithubInfoCard() {
 }
 
 function ExportPanel() {
+  const { api } = useServer();
   const [apps, setApps] = useState([]);
   const [selected, setSelected] = useState(new Set());
   const [passphrase, setPassphrase] = useState('');
@@ -175,14 +111,14 @@ function ExportPanel() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    appsApi
+    api.apps
       .list()
       .then((data) => {
         setApps(data.apps);
         setSelected(new Set(data.apps.map((a) => a.id)));
       })
       .catch(() => {});
-  }, []);
+  }, [api]);
 
   const toggleApp = (id) =>
     setSelected((prev) => {
@@ -197,7 +133,7 @@ function ExportPanel() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch('/api/config/export', {
+      const res = await fetch(api.config.exportUrl, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -264,6 +200,7 @@ function ExportPanel() {
 }
 
 function ImportPanel() {
+  const { api, serverPath } = useServer();
   const [fileName, setFileName] = useState('');
   const [file, setFile] = useState(null);
   const [passphrase, setPassphrase] = useState('');
@@ -299,7 +236,7 @@ function ImportPanel() {
     }
     setPreviewing(true);
     try {
-      const data = await configApi.importPreview({ file, passphrase });
+      const data = await api.config.importPreview({ file, passphrase });
       setPreviewRows(data.rows);
       setResult(null);
       const actions = {};
@@ -324,7 +261,7 @@ function ImportPanel() {
         action: rowActions[row.name]?.action ?? 'skip',
         newName: rowActions[row.name]?.newName || undefined,
       }));
-      const data = await configApi.importApply({ file, passphrase, rows, deploy: deployAfter });
+      const data = await api.config.importApply({ file, passphrase, rows, deploy: deployAfter });
       setResult(data);
       toast.success(`${data.created.length} app${data.created.length === 1 ? '' : 's'} imported`);
     } catch (err) {
@@ -417,7 +354,7 @@ function ImportPanel() {
             <p>{result.created.length} app(s) created{deployAfter ? ', deploying now' : ''}.</p>
             <div className="flex flex-wrap gap-2">
               {result.created.map((app) => (
-                <Link key={app.id} to={`/apps/${app.id}`} className="font-medium text-[var(--brand)] hover:underline">
+                <Link key={app.id} to={serverPath(`/apps/${app.id}`)} className="font-medium text-[var(--brand)] hover:underline">
                   {app.name}
                 </Link>
               ))}
@@ -447,13 +384,12 @@ function BackupCard() {
   );
 }
 
-export function Settings() {
+export function ServerSettings() {
   return (
     <div className="space-y-6">
-      <PageHeader icon={SettingsIcon} eyebrow="Account" title="Settings">
-        Password, config export/import and read-only server info.
+      <PageHeader icon={SettingsIcon} eyebrow="Server" title="Settings">
+        Config export/import and read-only server info.
       </PageHeader>
-      <AccountCard />
       <GithubInfoCard />
       <BackupCard />
     </div>

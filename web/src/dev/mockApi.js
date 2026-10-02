@@ -2,6 +2,8 @@
 // `import.meta.env.DEV`, so bundlers drop it entirely from production builds.
 // Intercepts every `/api/*` call except `/api/auth/*` and `/api/settings/password`
 // (real auth already works, so those stay pointed at the real backend).
+// Implements the control plane's `/api/servers` registry, plus the per-server agent API
+// under `/api/servers/:serverId/api/*`. Each server has its own apps and deployments.
 
 const RESERVED_NAMES = ['api', 'assets', 'login', 'ports', 'apps', 'new', 'deployments', 'server', 'settings'];
 
@@ -162,11 +164,15 @@ const NODE_VERSION_HINTS = {
   'acme/worker': { version: '22', source: 'package.json engines.node' },
 };
 
+// `apps` / `deployments` / `deploySeqByApp` / `hostname` always belong to the server
+// activated by the request being handled (see activateWorld). Deployment ids are globally
+// unique, so entries and live runners can stay shared across servers.
 let apps = [];
 let deployments = [];
+let hostname = 'mock-ec2';
+let deploySeqByApp = new Map();
 const entriesByDeployment = new Map();
 const runners = new Map();
-const deploySeqByApp = new Map();
 
 function nextDeployNumber(appId) {
   const n = (deploySeqByApp.get(appId) ?? 0) + 1;
@@ -281,7 +287,7 @@ function seedEntriesFor(dep) {
   return lines;
 }
 
-function seedFixtures() {
+function seedFullFixtures() {
   const apiMain = makeApp({
     id: 'app_api_main',
     name: 'api-main',
@@ -368,7 +374,62 @@ function seedFixtures() {
   ensureRunnerStarted(running.id);
 }
 
-seedFixtures();
+function seedLiteFixtures() {
+  const web = makeApp({
+    id: 'app_web_frontend',
+    name: 'web-frontend',
+    repoFullName: 'acme/web',
+    branch: 'main',
+    port: 5001,
+    nodeVersion: '22.11.0',
+    nginxPath: '/web-frontend',
+    status: 'online',
+    healthy: true,
+  });
+  const cron = makeApp({
+    id: 'app_cron_jobs',
+    name: 'cron-jobs',
+    repoFullName: 'acme/worker',
+    branch: 'main',
+    port: 5002,
+    nodeVersion: '20.11.1',
+    nginxPath: null,
+    status: 'stopped',
+    healthy: false,
+  });
+  apps = [web, cron];
+  makeDeployment({ app: web, status: 'success', mode: 'update', ageMinutes: 180 });
+  makeDeployment({ app: web, status: 'success', mode: 'update', ageMinutes: 25 });
+  makeDeployment({ app: cron, status: 'failed', mode: 'update', ageMinutes: 600 });
+  for (const dep of deployments) seedEntriesFor(dep);
+}
+
+// ------------------------------------------------------------------ per-server worlds
+
+const worlds = new Map();
+
+function saveWorld(serverId) {
+  const world = worlds.get(serverId);
+  if (world) Object.assign(world, { apps, deployments, deploySeqByApp, hostname });
+}
+
+function activateWorld(serverId) {
+  let world = worlds.get(serverId);
+  if (!world) {
+    apps = [];
+    deployments = [];
+    deploySeqByApp = new Map();
+    const full = serverId === 'srv_demo_prod';
+    hostname = full ? 'prod-ec2' : `host-${serverId.slice(-6)}`;
+    if (full) seedFullFixtures();
+    else seedLiteFixtures();
+    world = {};
+    worlds.set(serverId, world);
+    saveWorld(serverId);
+    return;
+  }
+  ({ apps, deployments, deploySeqByApp, hostname } = world);
+}
 
 // ------------------------------------------------------------------ live-deploy simulation
 
@@ -478,7 +539,7 @@ async function runSimulation(dep, state) {
   runners.delete(dep.id);
 }
 
-export function createMockStream(depId, after = -1) {
+export function createMockStream(serverId, depId, after = -1) {
   const listeners = { line: new Set(), step: new Set(), status: new Set(), done: new Set() };
   let closed = false;
   let unsubscribe = () => {};
@@ -510,6 +571,7 @@ export function createMockStream(depId, after = -1) {
     }
     if (closed) return;
 
+    activateWorld(serverId);
     const dep = deployments.find((d) => d.id === depId);
     if (!dep) {
       emit('done', { status: 'failed' });
@@ -682,9 +744,17 @@ function applyImport(body) {
   return { created, deployments };
 }
 
-async function route(pathname, method, body, query) {
+async function route(serverId, pathname, method, body, query) {
   await sleep(120 + Math.random() * 180);
+  activateWorld(serverId);
+  try {
+    return await agentRoute(pathname, method, body, query);
+  } finally {
+    saveWorld(serverId);
+  }
+}
 
+function agentRoute(pathname, method, body, query) {
   if (pathname === '/api/repos' && method === 'GET') {
     const q = (query.get('q') || '').toLowerCase();
     const repos = q ? REPOS.filter((r) => r.fullName.toLowerCase().includes(q)) : REPOS;
@@ -930,7 +1000,7 @@ async function route(pathname, method, body, query) {
     return {
       current: systemSampleAt(now),
       history,
-      info: { hostname: 'mock-ec2', platform: 'linux', uptimeSec: 86400 * 3, nodeVersion: '20.11.1', pm2Version: '5.4.2', nginxVersion: '1.24.0', cpuCount: CPU_COUNT },
+      info: { hostname, platform: 'linux', uptimeSec: 86400 * 3, nodeVersion: '20.11.1', pm2Version: '5.4.2', nginxVersion: '1.24.0', cpuCount: CPU_COUNT },
       disks: diskListAt(now),
       apps: apps.map((app) => ({
         appId: app.id,
@@ -970,6 +1040,151 @@ function jsonResponse(status, body) {
   return new Response(JSON.stringify(body ?? null), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+// ------------------------------------------------------------------ control plane: server registry
+
+const SERVER_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const ROTATE_MESSAGE = 'The server rejected the stored secret — rotate it in Servers';
+
+function seedServers() {
+  const now = Date.now();
+  return [
+    {
+      id: 'srv_demo_prod',
+      name: 'Production',
+      url: 'https://api.example.com',
+      serverId: 'demo-prod-0001',
+      secret: 'x'.repeat(43),
+      version: '0.1.0',
+      hostname: 'prod-ec2',
+      status: 'online',
+      lastSeenAt: new Date(now - 4_000).toISOString(),
+      createdAt: new Date(now - 86_400_000 * 20).toISOString(),
+    },
+    {
+      id: 'srv_demo_staging',
+      name: 'Staging',
+      url: 'https://api2.example.com',
+      serverId: 'demo-staging-02',
+      secret: 'y'.repeat(43),
+      version: '0.1.0',
+      hostname: 'staging-ec2',
+      status: 'offline',
+      lastSeenAt: new Date(now - 3_600_000 * 5).toISOString(),
+      createdAt: new Date(now - 86_400_000 * 6).toISOString(),
+    },
+  ];
+}
+
+let servers = null;
+
+function serverList() {
+  if (!servers) servers = seedServers();
+  return servers;
+}
+
+function serializeServer(server) {
+  const { secret, ...rest } = server;
+  void secret;
+  return rest;
+}
+
+function findServer(id) {
+  const server = serverList().find((s) => s.id === id);
+  if (!server) throw new MockHttpError(404, 'Server not found');
+  return server;
+}
+
+function normalizeUrl(input) {
+  let parsed;
+  try {
+    parsed = new URL(String(input).trim());
+  } catch {
+    throw new MockHttpError(400, 'Invalid server URL');
+  }
+  const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local)) throw new MockHttpError(400, 'Invalid server URL');
+  return parsed.origin;
+}
+
+// Fake handshake: a URL containing "unreachable" fails to connect, a serverId starting with
+// "mismatch" reports a different id, and a secret starting with "bad" is rejected.
+function mockVerify({ url, serverId, secret }) {
+  if (url.includes('unreachable')) throw new MockHttpError(502, `Could not reach the server at ${url}`);
+  if (serverId.startsWith('mismatch')) {
+    throw new MockHttpError(400, 'Server ID mismatch: the server reports "other-server-id" — check SERVER_ID in its .env');
+  }
+  if (secret.startsWith('bad')) {
+    throw new MockHttpError(400, 'The server rejected the secret — check SERVER_SECRET in its .env and reload it');
+  }
+  return { version: '0.1.0', hostname: `host-${serverId.slice(-6)}` };
+}
+
+function markOnline(server, info) {
+  Object.assign(server, { ...info, status: 'online', lastSeenAt: new Date().toISOString() });
+}
+
+async function serversRoute(pathname, method, body) {
+  await sleep(150 + Math.random() * 200);
+  const list = serverList();
+
+  if (pathname === '/api/servers' && method === 'GET') {
+    return { servers: list.map(serializeServer) };
+  }
+
+  if (pathname === '/api/servers' && method === 'POST') {
+    const name = String(body?.name ?? '').trim();
+    if (!name || name.length > 60) throw new MockHttpError(400, 'Invalid request body', [{ path: ['name'], message: 'Name must be 1-60 characters' }]);
+    if (!SERVER_ID_RE.test(body?.serverId ?? '')) throw new MockHttpError(400, 'serverId must be 8-64 characters: letters, digits, - or _');
+    if (typeof body?.secret !== 'string' || body.secret.length < 32) throw new MockHttpError(400, 'secret must be at least 32 characters');
+    const url = normalizeUrl(body.url);
+    if (list.some((s) => s.serverId === body.serverId)) throw new MockHttpError(409, 'A server with that ID is already registered');
+    if (list.some((s) => s.url === url)) throw new MockHttpError(409, 'A server with that URL is already registered');
+    const info = mockVerify({ url, serverId: body.serverId, secret: body.secret });
+    const server = { id: uid('srv'), name, url, serverId: body.serverId, secret: body.secret, createdAt: new Date().toISOString() };
+    markOnline(server, info);
+    list.push(server);
+    return { server: serializeServer(server) };
+  }
+
+  const idMatch = pathname.match(/^\/api\/servers\/([^/]+)$/);
+  if (idMatch) {
+    const server = findServer(idMatch[1]);
+    if (method === 'GET') return { server: serializeServer(server) };
+    if (method === 'PATCH') {
+      if (body?.name !== undefined) {
+        const name = String(body.name).trim();
+        if (!name || name.length > 60) throw new MockHttpError(400, 'Name must be 1-60 characters');
+        server.name = name;
+      }
+      if (body?.url !== undefined) {
+        const url = normalizeUrl(body.url);
+        if (url !== server.url) {
+          if (list.some((s) => s.id !== server.id && s.url === url)) throw new MockHttpError(409, 'A server with that URL is already registered');
+          markOnline(server, mockVerify({ url, serverId: server.serverId, secret: server.secret }));
+          server.url = url;
+        }
+      }
+      return { server: serializeServer(server) };
+    }
+    if (method === 'DELETE') {
+      servers = list.filter((s) => s.id !== server.id);
+      worlds.delete(server.id);
+      return { ok: true };
+    }
+  }
+
+  const secretMatch = pathname.match(/^\/api\/servers\/([^/]+)\/secret$/);
+  if (secretMatch && method === 'POST') {
+    const server = findServer(secretMatch[1]);
+    if (typeof body?.secret !== 'string' || body.secret.length < 32) throw new MockHttpError(400, 'secret must be at least 32 characters');
+    markOnline(server, mockVerify({ url: server.url, serverId: server.serverId, secret: body.secret }));
+    server.secret = body.secret;
+    return { server: serializeServer(server) };
+  }
+
+  throw new MockHttpError(404, 'Not found (mock)');
+}
+
 function shouldMock(pathname) {
   if (!pathname.startsWith('/api/')) return false;
   if (pathname.startsWith('/api/auth/')) return false;
@@ -998,10 +1213,27 @@ export function installMockFetch() {
     }
 
     try {
+      const proxied = url.pathname.match(/^\/api\/servers\/([^/]+)(\/api\/.*)$/);
+      if (!proxied) {
+        return jsonResponse(200, await serversRoute(url.pathname, method, body));
+      }
+
+      const [, serverId, agentPath] = proxied;
+      const server = findServer(serverId);
+      if (server.status === 'offline') {
+        await sleep(300);
+        throw new MockHttpError(502, 'Server unreachable');
+      }
+      if (server.status === 'unauthorized') {
+        await sleep(300);
+        throw new MockHttpError(502, ROTATE_MESSAGE);
+      }
+
       // Export returns a file attachment, not a JSON API envelope — handled
       // separately so it can set Content-Disposition and a blob body.
-      if (url.pathname === '/api/config/export' && method === 'POST') {
+      if (agentPath === '/api/config/export' && method === 'POST') {
         await sleep(200);
+        activateWorld(serverId);
         const file = buildExportFile(body);
         const filename = `deployer-config-${new Date().toISOString().slice(0, 10)}.json`;
         return new Response(JSON.stringify(file, null, 2), {
@@ -1013,7 +1245,7 @@ export function installMockFetch() {
         });
       }
 
-      const result = await route(url.pathname, method, body, url.searchParams);
+      const result = await route(serverId, agentPath, method, body, url.searchParams);
       return jsonResponse(200, result);
     } catch (err) {
       if (err instanceof MockHttpError) return jsonResponse(err.status, { error: err.message, issues: err.issues });

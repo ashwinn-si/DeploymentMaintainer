@@ -11,13 +11,15 @@ import { Loader } from '../components/ui/Loader.jsx';
 import { StepTimeline } from '../components/StepTimeline.jsx';
 import { LogViewer } from '../components/LogViewer.jsx';
 import { useDeploymentStream } from '../hooks/useDeploymentStream.js';
-import { deploymentsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 import { formatDuration, formatRelativeTime, shortSha, githubCommitUrl } from '../lib/format.js';
 
 export function DeploymentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { deployment, entries, steps, status, loadError } = useDeploymentStream(id);
+  const { server, api, serverPath } = useServer();
+  const { deployment, entries, steps, status, loadError } = useDeploymentStream(server.id, id);
   const [stepFilter, setStepFilter] = useState('all');
   const [cancelling, setCancelling] = useState(false);
   const [rollbackOpen, setRollbackOpen] = useState(false);
@@ -26,14 +28,14 @@ export function DeploymentDetail() {
 
   useEffect(() => {
     if (!deployment) return;
-    deploymentsApi
+    api.deployments
       .list({ app: deployment.appId, limit: 50 })
       .then((data) => {
         const match = data.deployments.find((d) => d.autoRollbackOf === deployment.id);
         setAutoRollbackDeployment(match ?? null);
       })
       .catch(() => {});
-  }, [deployment?.id, deployment?.appId]);
+  }, [api, deployment?.id, deployment?.appId]);
 
   if (loadError) {
     return (
@@ -55,7 +57,7 @@ export function DeploymentDetail() {
   const handleCancel = async () => {
     setCancelling(true);
     try {
-      await deploymentsApi.cancel(id);
+      await api.deployments.cancel(id);
       toast.success('Cancel requested');
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Failed to cancel');
@@ -67,10 +69,10 @@ export function DeploymentDetail() {
   const handleRollback = async () => {
     setRollingBack(true);
     try {
-      const { deployment: newDeployment } = await deploymentsApi.rollback(id);
+      const { deployment: newDeployment } = await api.deployments.rollback(id);
       setRollbackOpen(false);
       toast.success('Rollback started');
-      navigate(`/deployments/${newDeployment.id}`);
+      navigate(serverPath(`/deployments/${newDeployment.id}`));
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Failed to start rollback');
     } finally {
@@ -98,7 +100,7 @@ export function DeploymentDetail() {
                 Rollback to this
               </Button>
             ) : null}
-            <Link to={`/apps/${deployment.appId}`}>
+            <Link to={serverPath(`/apps/${deployment.appId}`)}>
               <Button size="sm" variant="ghost">
                 View app
               </Button>
@@ -121,7 +123,7 @@ export function DeploymentDetail() {
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-sm text-[var(--text-secondary)]">
             This failure triggered an auto-rollback.{' '}
-            <Link to={`/deployments/${autoRollbackDeployment.id}`} className="font-medium text-[var(--brand)] hover:underline">
+            <Link to={serverPath(`/deployments/${autoRollbackDeployment.id}`)} className="font-medium text-[var(--brand)] hover:underline">
               View deployment #{autoRollbackDeployment.number}
             </Link>
           </p>
@@ -182,7 +184,7 @@ export function DeploymentDetail() {
             steps={steps}
             stepFilter={stepFilter}
             onStepFilterChange={setStepFilter}
-            downloadUrl={deploymentsApi.downloadUrl(id)}
+            downloadUrl={api.deployments.downloadUrl(id)}
             filename={`${deployment.appName}-${deployment.number}.log`}
           />
         </GlassCard>

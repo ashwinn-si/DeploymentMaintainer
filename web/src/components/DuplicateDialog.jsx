@@ -7,7 +7,8 @@ import { Input } from './ui/Input.jsx';
 import { Toggle } from './ui/Toggle.jsx';
 import { BranchPicker } from './BranchPicker.jsx';
 import { NodeVersionPicker } from './NodeVersionPicker.jsx';
-import { appsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 function slugify(name) {
   return name
@@ -20,6 +21,7 @@ function slugify(name) {
 
 export function DuplicateDialog({ open, onClose, app }) {
   const navigate = useNavigate();
+  const { api, serverPath } = useServer();
   const [name, setName] = useState('');
   const [branch, setBranch] = useState('');
   const [port, setPort] = useState('');
@@ -47,7 +49,7 @@ export function DuplicateDialog({ open, onClose, app }) {
     setLoading(true);
     setError(null);
     try {
-      const { app: created, deployment } = await appsApi.duplicate(app.id, {
+      const { app: created, deployment } = await api.apps.duplicate(app.id, {
         name: slugify(name),
         branch,
         port: port ? Number(port) : undefined,
@@ -57,7 +59,7 @@ export function DuplicateDialog({ open, onClose, app }) {
       });
       onClose();
       toast.success(`${created.name} created`);
-      navigate(deployNow && deployment ? `/deployments/${deployment.id}` : `/apps/${created.id}`);
+      navigate(serverPath(deployNow && deployment ? `/deployments/${deployment.id}` : `/apps/${created.id}`));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to duplicate app');
     } finally {

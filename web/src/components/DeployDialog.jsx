@@ -4,7 +4,8 @@ import toast from 'react-hot-toast';
 import { Modal } from './ui/Modal.jsx';
 import { Button } from './ui/Button.jsx';
 import { BranchPicker } from './BranchPicker.jsx';
-import { appsApi, ApiError } from '../api.js';
+import { ApiError } from '../api.js';
+import { useServer } from '../context/ServerContext.jsx';
 
 const MODES = [
   { value: 'update', label: 'Update', description: 'Fetch the latest commit and reset in place. Fast — reuses the existing folder.' },
@@ -13,6 +14,7 @@ const MODES = [
 
 export function DeployDialog({ open, onClose, app }) {
   const navigate = useNavigate();
+  const { api, serverPath } = useServer();
   const [branch, setBranch] = useState(app?.branch ?? '');
   const [mode, setMode] = useState('update');
   const [loading, setLoading] = useState(false);
@@ -35,10 +37,10 @@ export function DeployDialog({ open, onClose, app }) {
     setLoading(true);
     setError(null);
     try {
-      const { deployment } = await appsApi.deploy(app.id, { branch, mode });
+      const { deployment } = await api.apps.deploy(app.id, { branch, mode });
       onClose();
       toast.success(`Deploy started for ${app.name}`);
-      navigate(`/deployments/${deployment.id}`);
+      navigate(serverPath(`/deployments/${deployment.id}`));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to start deployment');
     } finally {
@@ -90,7 +92,7 @@ export function DeployDialog({ open, onClose, app }) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Steps that will run</span>
-            <Link to={`/apps/${app.id}?tab=steps`} onClick={onClose} className="text-xs font-medium text-[var(--brand)] hover:underline">
+            <Link to={serverPath(`/apps/${app.id}?tab=steps`)} onClick={onClose} className="text-xs font-medium text-[var(--brand)] hover:underline">
               Edit steps
             </Link>
           </div>
