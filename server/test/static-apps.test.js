@@ -266,3 +266,56 @@ test('findDirNginxCannotTraverse flags a directory that is not world-executable'
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('two apps cannot share an Nginx path; duplicates get their own', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const body = (name, steps) => ({
+      name, repoFullName: fixture.repoFullName, branch: 'main', nodeVersion: '20', env: [], steps,
+      port: config.APP_PORT_START + 80 + Math.floor(Math.random() * 1000),
+    });
+    const withPath = (name, p) => defaultSteps(name).map((s) => (s.type === 'nginx' ? { ...s, config: { ...s.config, path: p } } : s));
+
+    const first = await agent.post('/api/apps').send(body('route-a', withPath('route-a', '/shared')));
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+
+    const clash = await agent.post('/api/apps').send(body('route-b', withPath('route-b', '/shared')));
+    assert.equal(clash.status, 409);
+    assert.match(clash.body.error, /already used by app "route-a"/);
+
+    const other = await agent.post('/api/apps').send(body('route-c', withPath('route-c', '/route-c')));
+    assert.equal(other.status, 201);
+    const patch = await agent.patch(`/api/apps/${other.body.app.id}`).send({ steps: withPath('route-c', '/shared') });
+    assert.equal(patch.status, 409, 'editing steps onto a taken path must fail');
+    const selfPatch = await agent.patch(`/api/apps/${first.body.app.id}`).send({ steps: withPath('route-a', '/shared') });
+    assert.equal(selfPatch.status, 200, 'an app may keep its own path');
+
+    const dup = await agent.post(`/api/apps/${first.body.app.id}/duplicate`).send({ name: 'route-a-copy', branch: 'main', copyEnv: false });
+    assert.equal(dup.status, 201, JSON.stringify(dup.body));
+    assert.equal(dup.body.app.path, '/route-a-copy', 'a duplicate must not inherit the original path');
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('duplicating a static app needs no port and gets its own path', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture } = server;
+    const created = await agent.post('/api/apps').send({
+      name: 'site-one', kind: 'static', repoFullName: fixture.repoFullName, branch: 'main',
+      nodeVersion: '20', env: [], steps: defaultSteps('site-one', 'static'),
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const dup = await agent.post(`/api/apps/${created.body.app.id}/duplicate`).send({ name: 'site-two', branch: 'main', copyEnv: false });
+    assert.equal(dup.status, 201, JSON.stringify(dup.body));
+    assert.equal(dup.body.app.kind, 'static');
+    assert.equal(dup.body.app.port, null);
+    assert.equal(dup.body.app.path, '/site-two');
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});

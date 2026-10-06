@@ -16,6 +16,7 @@ import {
 } from '../lib/validate.js';
 import { serializeAppSummary, serializeDeploymentSummary } from '../lib/serializers.js';
 import { normalizeSteps } from '../steps/index.js';
+import { assertRoutePathFree, routePathFor } from '../services/routePaths.js';
 import { isPortFree } from '../services/ports.js';
 import { encryptJSON, decryptAppEnv, encryptWithPassphrase, decryptWithPassphrase } from '../services/crypto.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
@@ -163,6 +164,7 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
 
   const namesInBatch = new Set();
   const portsInBatch = new Set();
+  const pathsInBatch = new Set();
   const specs = [];
 
   for (const row of rows) {
@@ -213,6 +215,10 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
         }
       }
     }
+
+    await assertRoutePathFree(finalName, steps, { alsoTaken: pathsInBatch });
+    const importedPath = routePathFor(finalName, steps);
+    if (importedPath) pathsInBatch.add(importedPath);
 
     specs.push({
       finalName,

@@ -297,9 +297,11 @@ export function NewApp() {
         </Section>
       ) : null}
 
+      {preset === 'html' ? null : (
       <Section step={6} title="Environment variables" description={isStatic ? 'Baked into the build (VITE_*, REACT_APP_*...), so changing them needs a redeploy.' : undefined}>
         <EnvEditor value={env} onChange={setEnv} />
       </Section>
+      )}
 
       <Section step={7} title="Deploy steps" description="What runs, in order, on every deploy.">
         {steps.length ? <StepsEditor value={steps} kind={kind} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (

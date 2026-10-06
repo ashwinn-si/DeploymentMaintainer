@@ -44,6 +44,7 @@ export function DuplicateDialog({ open, onClose, app }) {
   }, [open, app]);
 
   if (!app) return null;
+  const isStatic = app.kind === 'static';
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -52,7 +53,7 @@ export function DuplicateDialog({ open, onClose, app }) {
       const { app: created, deployment } = await api.apps.duplicate(app.id, {
         name: slugify(name),
         branch,
-        port: port ? Number(port) : undefined,
+        port: !isStatic && port ? Number(port) : undefined,
         nodeVersion,
         copyEnv,
         deploy: deployNow,
@@ -85,8 +86,12 @@ export function DuplicateDialog({ open, onClose, app }) {
     >
       <Input label="New app name" value={name} onChange={(e) => setName(e.target.value)} hint={slugify(name) ? `Slug: ${slugify(name)}` : undefined} />
       <BranchPicker repoFullName={app.repoFullName} value={branch} onChange={setBranch} />
-      <Input label="Port" type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="Auto-assigned" />
-      <NodeVersionPicker repoFullName={app.repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
+      {isStatic ? null : (
+        <>
+          <Input label="Port" type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="Auto-assigned" />
+          <NodeVersionPicker repoFullName={app.repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
+        </>
+      )}
       <Toggle checked={copyEnv} onChange={setCopyEnv} label="Copy environment variables" />
       <Toggle checked={deployNow} onChange={setDeployNow} label="Deploy immediately" />
       {error ? <p className="text-sm text-rose-500">{error}</p> : null}

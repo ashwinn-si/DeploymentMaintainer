@@ -34,6 +34,7 @@ deployed apps through its own Nginx. Adding a server in the dashboard generates 
 - GitHub repo/branch picker, per-app Node version (via [fnm](https://github.com/Schniz/fnm))
 - Configurable deploy pipeline: git sync, install, build, PM2 start, health check, Nginx routing,
   plus arbitrary custom steps
+- Three app types, auto-detected from the repo: Node servers (PM2), frontend apps (Vite, React, Astro... built then served by Nginx) and plain static HTML. Static types need no process or port and are served from `PUBLISHED_DIR`
 - Deploy any branch on demand (update in place or fresh re-clone); duplicate an app to run another branch side by side
 - Live streaming deploy logs (SSE) on the home page, a global Deployments page and a per-deploy detail view, with step timeline, cancel, copy and download; secrets are masked
 - Auto-rollback on a failed health check, one-click manual rollback to any past successful deploy

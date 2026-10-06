@@ -77,12 +77,19 @@ app, writes a Deployment, kicks off `runPipeline` in the background → UI opens
 - **Rollbacks use today's env and steps**, only the code is old.
 - **The lock lives in memory.** Never run these programs in PM2 cluster mode.
 - **Empty step configs vanish in MongoDB** (Mongoose drops `{}`), so the API now returns `config: {}` explicitly. That was the cause of the blank Steps tab bug.
+- **Publishing is defensive.** `publish` skips symlinks (a repo link could otherwise expose files like the agent's `.env`) and refuses to go live if a parent folder is not world-executable, because Nginx would answer 403 while the deploy looked fine; the error says to set `PUBLISHED_DIR`.
 - **Static apps behave differently.** No port, no PM2, no restart/stop/runtime logs. `publish` copies the site (never `.git`, `.env*` or `node_modules`) into a release folder and swaps a symlink; the health check just confirms `index.html` is in the live release. `PUBLISHED_DIR` must be readable by Nginx (not under a 750 home dir).
 - **Frontend apps are served under `/<name>/`**, so the build gets that base path: `--base=/<name>/` for Vite and Astro, `PUBLIC_URL` for Create React App, and `BASE_PATH`/`PUBLIC_URL` env vars for everything. Vue CLI, Angular and unknown builds need manual config (the deploy log says so). Your client router must also use the base URL, or deep links break.
 - **Auto-detection is a suggestion.** On New App the agent reads `package.json` and `index.html` from GitHub and pre-selects Node server, Frontend app or Static HTML. SSR frameworks (Next, Nuxt, SvelteKit, Remix) are classed as Node servers. You can always override it.
-- **Two apps must not share an Nginx path.** The app card now shows the full public URL so you can spot this.
+- **Two apps cannot share an Nginx path.** Creating, editing or importing an app onto a taken path fails with a 409 naming the other app, and duplicating an app gives the copy its own `/<new-name>` path. The app card shows the full public URL.
 - **Secrets are only best-effort masked in logs**, and the app's `.env` is plaintext (mode 600) on disk.
 - **The control plane shares server 1's box**: if server 1 is down, the dashboard is down even though other servers keep running their apps.
+
+## Known trade-offs of static sites
+
+- The static health check confirms `index.html` is in the live release; it does not make an HTTP request through Nginx (the agent does not know its own domain).
+- The SPA fallback means a missing asset such as `/<name>/missing.js` returns `index.html` with a 200 instead of a 404.
+- An app's type (node or static) is fixed when it is created; to change it, create a new app.
 
 ## Known limitations (from the project's own README)
 

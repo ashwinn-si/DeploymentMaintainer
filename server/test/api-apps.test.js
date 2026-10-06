@@ -93,7 +93,7 @@ test('create, get, patch, list an app', async () => {
     assert.equal(patchRes.status, 200);
     assert.deepEqual(patchRes.body.app.env, [{ key: 'GREETING', value: 'updated' }]);
 
-    const patchPortConflict = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'second-app', port: config.APP_PORT_START + 61 }));
+    const patchPortConflict = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'second-app', port: config.APP_PORT_START + 61, steps: stepsFor('second-app') }));
     assert.equal(patchPortConflict.status, 201);
     const conflictPatch = await agent.patch(`/api/apps/${app.id}`).send({ port: config.APP_PORT_START + 61 });
     assert.equal(conflictPatch.status, 400);

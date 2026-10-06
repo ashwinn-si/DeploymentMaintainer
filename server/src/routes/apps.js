@@ -19,6 +19,7 @@ import { allocatePort, assertPortAvailable } from '../services/ports.js';
 import { encryptJSON, decryptAppEnv } from '../services/crypto.js';
 import { safeRemoveAppDir } from '../services/git.js';
 import { removePublishedApp } from '../steps/publish.js';
+import { assertRoutePathFree } from '../services/routePaths.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
@@ -178,6 +179,7 @@ export function createAppsRouter(config) {
     validateNodeVersion(body.nodeVersion);
     const envObj = envArrayToObject(body.env ?? []);
     const steps = normalizeSteps(body.steps?.length ? body.steps : defaultSteps(body.name, kind), { kind });
+    await assertRoutePathFree(body.name, steps);
 
     const app = await App.create({
       name: body.name,
@@ -226,7 +228,9 @@ export function createAppsRouter(config) {
       app.envEncrypted = encryptJSON(config, envArrayToObject(body.env));
     }
     if (body.steps !== undefined) {
-      app.steps = normalizeSteps(body.steps, { kind: app.kind });
+      const steps = normalizeSteps(body.steps, { kind: app.kind });
+      await assertRoutePathFree(app.name, steps, { excludeId: app._id });
+      app.steps = steps;
     }
 
     await app.save();
@@ -286,6 +290,11 @@ export function createAppsRouter(config) {
 
     const envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
     const steps = normalizeSteps(JSON.parse(JSON.stringify(source.steps)), { kind });
+    // A copy must not inherit the original's URL path, or Nginx would serve only one of them.
+    for (const step of steps) {
+      if (step.type === 'nginx') step.config = { ...step.config, path: `/${body.name}` };
+    }
+    await assertRoutePathFree(body.name, steps);
 
     const app = await App.create({
       name: body.name,
