@@ -28,7 +28,7 @@ is just the remote control for the control plane.
 | **App** | One deployable thing: a repo + branch + port + Node version + env + pipeline. The same repo can be several apps. |
 | **Deployment** | One run of an app's pipeline, numbered #1, #2… per app |
 | **Step** | One stage of the pipeline (git, install, pm2, health check, nginx…) |
-| **Kind** | An app is either `node` (PM2 process on a port) or `static` (files published and served by Nginx, no process) |
+| **Kind / preset** | An app is `node` (PM2 process on a port) or `static` (files served by Nginx, no process). Static has two presets: `html` (as-is) and `frontend` (install + build first). The UI shows three choices: Node server, Frontend app, Static HTML. |
 | **Mode** | `update` (pull in place), `fresh` (delete folder and re-clone), `rollback` (pin to an old commit) |
 | **SERVER_ID / SERVER_SECRET** | The agent's name and its shared password with the control plane |
 | **ENCRYPTION_KEY** | A 64-hex key that encrypts stored secrets (one per program, not shared) |
@@ -78,7 +78,8 @@ app, writes a Deployment, kicks off `runPipeline` in the background → UI opens
 - **The lock lives in memory.** Never run these programs in PM2 cluster mode.
 - **Empty step configs vanish in MongoDB** (Mongoose drops `{}`), so the API now returns `config: {}` explicitly. That was the cause of the blank Steps tab bug.
 - **Static apps behave differently.** No port, no PM2, no restart/stop/runtime logs. `publish` copies the site (never `.git`, `.env*` or `node_modules`) into a release folder and swaps a symlink; the health check just confirms `index.html` is in the live release. `PUBLISHED_DIR` must be readable by Nginx (not under a 750 home dir).
-- **Static sites that need a build** (Vite/React) are not done yet: they need a base path like `/<name>/` injected into the build, otherwise asset URLs 404. Only plain HTML/CSS/JS works today.
+- **Frontend apps are served under `/<name>/`**, so the build gets that base path: `--base=/<name>/` for Vite and Astro, `PUBLIC_URL` for Create React App, and `BASE_PATH`/`PUBLIC_URL` env vars for everything. Vue CLI, Angular and unknown builds need manual config (the deploy log says so). Your client router must also use the base URL, or deep links break.
+- **Auto-detection is a suggestion.** On New App the agent reads `package.json` and `index.html` from GitHub and pre-selects Node server, Frontend app or Static HTML. SSR frameworks (Next, Nuxt, SvelteKit, Remix) are classed as Node servers. You can always override it.
 - **Two apps must not share an Nginx path.** The app card now shows the full public URL so you can spot this.
 - **Secrets are only best-effort masked in logs**, and the app's `.env` is plaintext (mode 600) on disk.
 - **The control plane shares server 1's box**: if server 1 is down, the dashboard is down even though other servers keep running their apps.

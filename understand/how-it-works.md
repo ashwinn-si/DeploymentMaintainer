@@ -159,7 +159,7 @@ flowchart TD
 | `healthCheck` | Polls `http://127.0.0.1:<port><path>` until a 200–399 response, up to a timeout (default 60s, every 2s). Fails fast if PM2 reports `errored`, or the restart count rises by 3 (a crash loop). |
 | `nginx` | Renders the `location` block, writes `<NGINX_APPS_DIR>/<name>.conf`, runs `sudo nginx -t` then `sudo systemctl reload nginx`; on failure it restores the previous file. Skipped if `NGINX_ENABLED=false`. |
 
-**Node vs static pipelines**
+**The three pipelines**
 
 ```mermaid
 flowchart LR
@@ -167,11 +167,20 @@ flowchart LR
         direction LR
         n1["gitSync"] --> n2["nodeSetup"] --> n3["writeEnv"] --> n4["install"] --> n5["build (off)"] --> n6["pm2"] --> n7["healthCheck"] --> n8["nginx proxy_pass"]
     end
-    subgraph Static["Static site"]
+    subgraph Frontend["Frontend app"]
+        direction LR
+        f1["gitSync"] --> f2["nodeSetup"] --> f3["writeEnv"] --> f4["install"] --> f5["build with base path"] --> f6["publish (auto dir)"] --> f7["nginx alias"] --> f8["healthCheck"]
+    end
+    subgraph Static["Static HTML"]
         direction LR
         s1["gitSync"] --> s2["publish"] --> s3["nginx alias"] --> s4["healthCheck"]
     end
 ```
+
+For a frontend app the build step knows the app lives at `/<name>/`. It exports `BASE_PATH` and `PUBLIC_URL`, adds
+`--base=/<name>/` to the default build command for Vite and Astro, and notes in the log what it did (or what you
+must configure yourself for other tools). Your app env is available to the build, which is when `VITE_*` and
+`REACT_APP_*` values get baked in.
 
 For a static app the `publish` step is where the new version goes live (the symlink swap), the same way
 `pm2` is for a Node app. The health check then confirms `index.html` is in the live release.

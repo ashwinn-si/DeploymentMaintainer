@@ -101,9 +101,26 @@ flowchart LR
     V["Visitor GET /name/"] --> NX["Nginx"] --> SW
 ```
 
+```mermaid
+flowchart TD
+    R["Repo + branch picked on New App"] --> F["GET /repos/:owner/:repo/detect-project"]
+    F --> G["agent reads package.json and index.html via the GitHub API"]
+    G --> C{"classifyProject"}
+    C -- "SSR dep: next, nuxt, sveltekit, remix" --> N["Node server"]
+    C -- "server dep: express, fastify, nest ..." --> N
+    C -- "vite, astro, react-scripts, vue-cli, build script only" --> FE["Frontend app<br/>install, build, publish"]
+    C -- "index.html, no package.json" --> H["Static HTML<br/>publish only"]
+    C -- "nothing recognizable" --> U["unknown: user picks"]
+    N --> UI["Banner + preselected card, user can override"]
+    FE --> UI
+    H --> UI
+    U --> UI
+```
+
 - Releases live in `PUBLISHED_DIR/<app>/releases/<deployment>`; the last 5 are kept.
 - `PUBLISHED_DIR` must be readable by the nginx user. On Ubuntu `/home/ubuntu` is mode 750, so use a path like
   `/var/www/deployer` in production.
+- The `publish` step's `staticDir` can be `auto`: after a build it picks the first of `dist`, `build`, `out` that contains `index.html`; without a build it uses the repo root. If none has a page, the deploy fails with a message saying where it looked.
 - Static apps have no port, no PM2 process, no restart/stop and no runtime logs.
 
 ## 3. Data model
