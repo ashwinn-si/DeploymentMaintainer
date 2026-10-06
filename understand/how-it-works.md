@@ -2,7 +2,43 @@
 
 Concrete flows, each tied to the code that does it.
 
+## 0. The whole thing on one page
+
+```mermaid
+sequenceDiagram
+    actor You
+    participant W as web/ (browser)
+    participant C as control/
+    participant A as server/ agent
+    participant X as PM2, Nginx, git
+    You->>W: log in
+    W->>C: POST /api/auth/login
+    C-->>W: dm_session cookie
+    You->>W: click Deploy
+    W->>C: POST /api/servers/:id/api/apps/:app/deploy
+    C->>A: same request + Bearer SERVER_SECRET
+    A->>X: run the pipeline (git, install, pm2, nginx)
+    A-->>W: live log over SSE, relayed by control/
+```
+
 ## 1. Logging in
+
+```mermaid
+sequenceDiagram
+    participant W as Login.jsx
+    participant C as control/ auth route
+    participant DB as MongoDB
+    W->>C: POST /api/auth/login (email, password)
+    C->>DB: find User by email
+    C->>C: bcrypt.compare (dummy hash if unknown email)
+    alt valid
+        C-->>W: Set-Cookie dm_session (JWT, 7 days) + user
+    else invalid
+        C-->>W: 401 Invalid email or password
+    end
+    W->>C: later requests carry the cookie
+    C->>DB: verify JWT, load user, check tokenVersion
+```
 
 1. `web/src/pages/Login.jsx` → `POST /api/auth/login` `{ email, password }` on the control plane.
 2. `control/src/routes/auth.js` finds the `User`, runs `bcrypt.compare` (even for unknown emails, against a dummy hash, so timing is similar), and on success `issueSessionCookie` sets `dm_session`.
@@ -17,7 +53,36 @@ Concrete flows, each tied to the code that does it.
 4. Only after both checks pass is the `Server` saved, with the secret encrypted.
 5. Rotating a secret works the same way: verify the new one against the agent first, then replace.
 
+```mermaid
+sequenceDiagram
+    participant W as Dashboard
+    participant C as control/
+    participant A as Agent
+    W->>C: POST /api/servers (name, url, serverId, secret)
+    C->>A: GET /deployment-manager (public)
+    A-->>C: service + serverId
+    C->>C: serverId must match
+    C->>A: GET /api/auth/check with Bearer secret
+    A-->>C: ok
+    C->>C: encrypt secret, save Server
+    C-->>W: ServerSummary
+```
+
 ## 3. A request through the proxy
+
+```mermaid
+flowchart TD
+    R["Browser: GET /api/servers/ID/api/apps"] --> AU{"valid session cookie?"}
+    AU -- no --> E401["401 Not authenticated"]
+    AU -- yes --> LK["find Server, decrypt secret"]
+    LK --> UP["request agent /api/apps<br/>Authorization: Bearer secret"]
+    UP --> ST{"agent answer"}
+    ST -- 401 --> E502["502 rotate the secret<br/>server marked unauthorized"]
+    ST -- unreachable --> E502B["502 Server unreachable"]
+    ST -- slow over 60s --> E504["504 timeout, not for SSE"]
+    ST -- other --> OK["stream status and body back"]
+```
+
 
 Browser asks for `GET /api/servers/<id>/api/apps`:
 
@@ -54,6 +119,26 @@ Entry point: `POST /api/apps/:id/deploy` → `startDeployment` in `server/src/se
 5. Build the redaction list (GitHub token + env values) and a `deployLog`.
 6. Run the pipeline in the background, and return the deployment immediately so the UI can start streaming.
 
+```mermaid
+flowchart TD
+    S([POST deploy]) --> L{"lock free for this app?"}
+    L -- no --> C409["409 already running"]
+    L -- yes --> D["decrypt env, bump deploySeq,<br/>status = deploying, create Deployment"]
+    D --> RUN["run pipeline in background<br/>return deployment immediately"]
+    RUN --> LOOP{"next step"}
+    LOOP --> EN{"enabled?"}
+    EN -- no --> SK["mark skipped"] --> LOOP
+    EN -- yes --> EX["run step"]
+    EX --> OKQ{"ok?"}
+    OKQ -- yes --> LOOP
+    OKQ -- no --> FAIL["deployment failed<br/>last 20 stderr lines logged"]
+    FAIL --> HF{"health check failure<br/>and autoRollback on?"}
+    HF -- yes --> RB["start rollback deployment<br/>at last good commit"]
+    HF -- no --> DONE
+    LOOP -- "no more steps" --> OK["success: app online,<br/>commit recorded"] --> DONE([release lock, prune old deploys])
+    RB --> DONE
+```
+
 **The pipeline** (`runPipeline`): for each step in order,
 - If the step is disabled, mark it `skipped` and log `– <label> · disabled` (the nginx step is still invoked so it can remove a stale route).
 - Otherwise mark `running`, emit events, call `REGISTRY[type].run(ctx)`, then mark `success` or `failed`.
@@ -74,6 +159,23 @@ Entry point: `POST /api/apps/:id/deploy` → `startDeployment` in `server/src/se
 | `healthCheck` | Polls `http://127.0.0.1:<port><path>` until a 200–399 response, up to a timeout (default 60s, every 2s). Fails fast if PM2 reports `errored`, or the restart count rises by 3 (a crash loop). |
 | `nginx` | Renders the `location` block, writes `<NGINX_APPS_DIR>/<name>.conf`, runs `sudo nginx -t` then `sudo systemctl reload nginx`; on failure it restores the previous file. Skipped if `NGINX_ENABLED=false`. |
 
+**Node vs static pipelines**
+
+```mermaid
+flowchart LR
+    subgraph Node["Node server"]
+        direction LR
+        n1["gitSync"] --> n2["nodeSetup"] --> n3["writeEnv"] --> n4["install"] --> n5["build (off)"] --> n6["pm2"] --> n7["healthCheck"] --> n8["nginx proxy_pass"]
+    end
+    subgraph Static["Static site"]
+        direction LR
+        s1["gitSync"] --> s2["publish"] --> s3["nginx alias"] --> s4["healthCheck"]
+    end
+```
+
+For a static app the `publish` step is where the new version goes live (the symlink swap), the same way
+`pm2` is for a Node app. The health check then confirms `index.html` is in the live release.
+
 **Finishing**
 - Success: deployment `success`, app `online`, `currentCommitSha` and `lastDeployedAt` set.
 - Failure: deployment `failed` with the error, app `failed` (if PM2 already ran) or its previous status (if the old version is still serving). The last 20 stderr lines are appended to the log.
@@ -83,9 +185,42 @@ Entry point: `POST /api/apps/:id/deploy` → `startDeployment` in `server/src/se
 
 - **Auto**: if the failure came from the health check, and the step's `autoRollback` isn't `false`, and an earlier successful deployment exists with a different SHA, the deployer starts a new deployment in `rollback` mode at that SHA, and notes `auto-rollback started: deployment #N` on the failed one. It never chains a rollback off a failed rollback.
 - **Manual**: `POST /api/deployments/:id/rollback` on a successful deployment with a recorded SHA.
+```mermaid
+sequenceDiagram
+    participant D as Deployer
+    participant H as healthCheck step
+    D->>H: run after pm2 and nginx
+    H-->>D: failed (timeout, crash loop, errored)
+    D->>D: mark deployment failed
+    D->>D: find latest successful deployment with a different SHA
+    alt found and autoRollback not false
+        D->>D: start new deployment mode=rollback at that SHA
+        D->>D: note "auto-rollback started #N" on the failed one
+    else none or already a rollback
+        D->>D: leave as is, never chain rollbacks
+    end
+```
+
 - A rollback runs the **whole pipeline** (reinstall, restart…) pinned to that commit, using the **current** env and steps, not the old ones.
 
 ## 7. Live logs (Server-Sent Events)
+
+```mermaid
+sequenceDiagram
+    participant B as Browser useDeploymentStream
+    participant R as Agent SSE route
+    participant E as deployEvents
+    participant M as MongoDB
+    B->>R: GET /deployments/:id/stream?after=N
+    R->>E: subscribe, buffer incoming events
+    R->>M: replay stored entries after N
+    R->>B: replay (plus unflushed lines), de-duplicated by index
+    loop while the deploy runs
+        E-->>R: line, step, status events
+        R-->>B: event stream
+    end
+    R-->>B: done, then close
+```
 
 1. The step runners write through `deployLog` (`log.info`, `log.cmd`, `log.onLine(stepId)`): redact secrets, cap at ~1 MB, buffer, and flush to Mongo every 500 ms, while emitting `line`, `step`, `status`, `done` events on an in-process `EventEmitter`.
 2. `GET /api/deployments/:id/stream?after=<i>` (`routes/deployments.js`):
@@ -98,6 +233,17 @@ Entry point: `POST /api/apps/:id/deploy` → `startDeployment` in `server/src/se
 `server/src/services/monitor.js`, started at boot:
 - Every **30s**: a system sample (CPU, memory, swap, load, disk) kept in a 120-sample ring buffer (1 hour).
 - Every **60s**: for each app that is `online` **and** has an enabled health-check step, a GET on its health path (5 s timeout, 5 at a time); the result is stored in `app.health` and shown as healthy/unhealthy on the cards.
+
+```mermaid
+flowchart LR
+    T30["every 30s"] --> SM["system sample<br/>CPU, mem, swap, load, disk"] --> RB[("ring buffer<br/>120 samples = 1h")]
+    T60["every 60s"] --> EL["online apps with healthCheck enabled"]
+    EL --> KN{"kind"}
+    KN -- node --> HT["GET 127.0.0.1:port/path"]
+    KN -- static --> FC["check published current/index.html"]
+    HT --> UP["store app.health"]
+    FC --> UP
+```
 
 ## 9. Everything else the agent does
 

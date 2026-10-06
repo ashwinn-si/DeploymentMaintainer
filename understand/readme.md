@@ -30,12 +30,25 @@ The repo is an npm workspace with three packages that run as separate processes:
 The browser only ever talks to `control/`. `control/` forwards requests to the right agent, adding that
 agent's secret. Agents have no users and no UI.
 
+```mermaid
+flowchart LR
+    B["Browser<br/>web/ dashboard"] -->|"HTTPS + session cookie"| C["control/ :3100<br/>login, server list, proxy"]
+    C --> CDB[("MongoDB<br/>deployment_control")]
+    C -->|"Bearer SERVER_SECRET"| A["server/ agent :3000<br/>deploy pipeline"]
+    A --> ADB[("MongoDB<br/>deployment_maintainer")]
+    A --> P["PM2 node apps<br/>:4001, :4002 ..."]
+    A --> S["Published static sites<br/>no process, no port"]
+    N["Nginx<br/>/app-name/"] --> P
+    N --> S
+    V["Visitors"] --> N
 ```
-Browser ──cookie──▶ control/ (:3100) ──Bearer SERVER_SECRET──▶ server/ agent (:3000) ──▶ PM2 apps (:4001, :4002 …)
-                       │                                          │                       ▲
-                    MongoDB                                    MongoDB              Nginx /app-name/
-              (deployment_control)                        (deployment_maintainer)
-```
+
+## App types
+
+| Type | Runs as | Port | Served by |
+|---|---|---|---|
+| **Node server** (default) | PM2 process | yes, auto-assigned from 4001 | Nginx reverse proxy to the port |
+| **Static site** (`kind: static`) | nothing: files are published to a folder | none | Nginx serves the files directly |
 
 ## Repo map
 

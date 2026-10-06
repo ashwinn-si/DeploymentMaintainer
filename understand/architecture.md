@@ -2,16 +2,24 @@
 
 ## 1. The big picture
 
-```
-                         ┌────────────────────────────────────────────────┐
-                         │  Server 1 (EC2)                                │
-Browser ──HTTPS──▶ Nginx │  control/  :3100  ── MongoDB "deployment_control"
- (cookie login)     │    │  server/   :3000  ── MongoDB "deployment_maintainer"
-                    │    │  app-a :4001   app-b :4002   …  (PM2 processes)
-                    │    └────────────────────────────────────────────────┘
-                    │
-   control plane ───┼──Bearer SERVER_SECRET──▶ Server 2 (EC2): server/ :3000 + its own apps + its own Nginx
-   proxies /api/servers/:id/api/*   ───────▶ Server N …
+```mermaid
+flowchart TB
+    U["Browser<br/>cookie login"] -->|HTTPS| NX1
+    subgraph S1["Server 1 (EC2)"]
+        NX1["Nginx"] --> CP["control/ :3100"]
+        NX1 --> AG1["server/ agent :3000"]
+        NX1 --> AP1["PM2 apps<br/>:4001, :4002"]
+        NX1 --> ST1["Published static sites"]
+        CP --- DB1[("deployment_control")]
+        AG1 --- DB2[("deployment_maintainer")]
+    end
+    subgraph S2["Server 2 (EC2)"]
+        NX2["Nginx"] --> AG2["server/ agent :3000"]
+        NX2 --> AP2["its own apps"]
+        AG2 --- DB3[("its own MongoDB")]
+    end
+    CP -->|"proxy /api/servers/:id/api/*<br/>Bearer SERVER_SECRET"| AG1
+    CP -->|"Bearer SERVER_SECRET"| AG2
 ```
 
 - **One control plane**, many agents. Each managed server runs its own agent, its own MongoDB data,
@@ -78,19 +86,106 @@ Two kinds of site:
   so `/<app>/` beats the catch-all. With `stripPrefix` (default) the app sees `/x`, not `/<app>/x`.
   Reloads go through a narrow sudoers rule (only `nginx -t` and `systemctl reload nginx`).
 
+### 2.5 Static sites (no process)
+
+A Node app is proxied to a port. A **static** app has no process: the `publish` step copies the folder
+containing `index.html` into a new release directory, atomically swaps a `current` symlink, and Nginx serves
+that folder with `alias`.
+
+```mermaid
+flowchart LR
+    G["gitSync<br/>APPS_DIR/name"] --> PUB["publish<br/>copy to releases/ID<br/>skip .git, .env, node_modules"]
+    PUB --> SW["swap symlink<br/>published/name/current"]
+    SW --> NG["nginx step<br/>location /name/ with alias + try_files"]
+    NG --> HC["healthCheck<br/>current/index.html exists"]
+    V["Visitor GET /name/"] --> NX["Nginx"] --> SW
+```
+
+- Releases live in `PUBLISHED_DIR/<app>/releases/<deployment>`; the last 5 are kept.
+- `PUBLISHED_DIR` must be readable by the nginx user. On Ubuntu `/home/ubuntu` is mode 750, so use a path like
+  `/var/www/deployer` in production.
+- Static apps have no port, no PM2 process, no restart/stop and no runtime logs.
+
 ## 3. Data model
+
+```mermaid
+erDiagram
+    USER {
+        string email
+        string passwordHash
+        int tokenVersion
+    }
+    SERVER {
+        string name
+        string url
+        string serverId
+        blob secretEncrypted
+        string lastStatus
+    }
+    APP {
+        string name
+        string repoFullName
+        string branch
+        string kind "node or static"
+        int port "null for static"
+        string nodeVersion
+        blob envEncrypted
+        array steps
+        string status
+        int deploySeq
+    }
+    DEPLOYMENT {
+        int number
+        string mode "update, fresh, rollback"
+        string status
+        string commitSha
+        array steps
+        array entries "log lines"
+    }
+    APP ||--o{ DEPLOYMENT : "has"
+```
+
+`USER` and `SERVER` live in the control plane database. `APP` and `DEPLOYMENT` live in each agent's database.
+
+Details:
 
 **Control plane DB**
 - `User { email, passwordHash, tokenVersion }`
 - `Server { name, url, serverId, secretEncrypted, version, hostname, lastSeenAt, lastStatus }`
 
 **Agent DB**
-- `App { name, repoFullName, branch, port, nodeVersion, envEncrypted, steps[], status, health, currentCommitSha, lastDeployedAt, deploySeq }`
+- `App { name, repoFullName, branch, kind, port, nodeVersion, envEncrypted, steps[], status, health, currentCommitSha, lastDeployedAt, deploySeq }`
   - `steps[]` is the ordered pipeline: `{ type, enabled, config }`
   - `status`: `not_deployed | deploying | online | stopped | failed`
 - `Deployment { appId, number, branch, commitSha, previousSha, mode, status, steps[], entries[], error, finishedAt }`
   - `mode`: `update | fresh | rollback`; `status`: `queued | running | success | failed | cancelled`
   - `entries[]` is the log (capped around 1 MB); only the newest 50 deployments per app are kept.
+
+### App and deployment states
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_deployed
+    not_deployed --> deploying: deploy
+    deploying --> online: pipeline succeeded
+    deploying --> failed: pipeline failed after pm2 or publish
+    deploying --> not_deployed: failed before anything went live
+    online --> deploying: redeploy
+    online --> stopped: stop
+    stopped --> online: restart
+    failed --> deploying: redeploy or auto-rollback
+```
+
+```mermaid
+stateDiagram-v2
+    [*] --> running
+    running --> success: all steps ok
+    running --> failed: a step failed
+    running --> cancelled: user cancelled
+    failed --> [*]
+    success --> [*]
+    cancelled --> [*]
+```
 
 ## 4. Security design
 

@@ -35,6 +35,7 @@ Set at least:
 | `NGINX_ENABLED` | `false` (the nginx step then logs "skipped") |
 | `APPS_DIR`, `NGINX_APPS_DIR` | folders under `./.data`, e.g. `/abs/path/.data/apps`, `/abs/path/.data/nginx` |
 | `GITHUB_TOKEN` | optional until you want to list or clone real private repos |
+| `PUBLISHED_DIR` | optional; where static sites are published (defaults beside `APPS_DIR`) |
 
 Other defaults: `PORT=3000`, `APP_PORT_START=4001`, `DEFAULT_NODE_VERSION=20`, `MONGO_URI=mongodb://127.0.0.1:27017/deployment_maintainer`.
 
@@ -76,17 +77,32 @@ npm run clear-db:control
 
 Detailed commands are in DEPLOYMENT.md. The shape of it:
 
+```mermaid
+flowchart TD
+    A["AWS: EC2, Elastic IP,<br/>security group 22/80/443"] --> B["DNS A records"]
+    B --> C["Server tools:<br/>fnm, pm2, MongoDB, Nginx"]
+    C --> D["clone repo, npm ci"]
+    D --> E["server/.env"]
+    E --> F["Nginx site + sudoers rule"]
+    F --> G["certbot HTTPS"]
+    G --> H["pm2 start ecosystem.server.config.cjs"]
+    H --> I["curl /deployment-manager"]
+    I --> J["Server 1 only: control/.env, build UI, seed admin,<br/>nginx-control, certbot, pm2 start control"]
+    J --> K["Dashboard: Add Server, then New App"]
+```
+
 ### Per server (the agent)
 1. **AWS**: Ubuntu 24.04 EC2 (t3.small+), 30 GB disk, Elastic IP, security group with only 22 (your IP), 80 and 443. Never open 3000, 3100, 4001+ or 27017.
 2. **DNS**: an A record per agent domain (e.g. `api.example.com`); plus one for the dashboard on server 1.
 3. **GitHub token**: fine-grained, Contents + Metadata read-only.
 4. **Install**: packages + swap, `fnm`, `pm2` (+ logrotate), MongoDB (or Atlas), clone this repo.
 5. **`server/.env`**: `SERVER_ID`, `SERVER_SECRET`, `ENCRYPTION_KEY`, `GITHUB_TOKEN`, `APPS_DIR=/home/ubuntu/apps`, `NGINX_APPS_DIR=/etc/nginx/deployer-apps`, `NGINX_ENABLED=true`, `NODE_ENV=production`.
-6. **Nginx**: install `deploy/nginx-server.conf` (replace `YOUR_SERVER_DOMAIN`), create `/etc/nginx/deployer-apps`.
-7. **sudoers**: install `deploy/sudoers-deployer` so `ubuntu` can run `nginx -t` and `systemctl reload nginx`.
-8. **HTTPS**: `sudo certbot --nginx -d YOUR_SERVER_DOMAIN`.
-9. **Start**: `pm2 start deploy/ecosystem.server.config.cjs`, then `pm2 save` and `pm2 startup` to survive reboots.
-10. **Check**: `curl https://YOUR_SERVER_DOMAIN/deployment-manager` returns `{ service, serverId, version }`.
+6. **Static site folder** (only if you deploy static sites): `sudo mkdir -p /var/www/deployer && sudo chown ubuntu:ubuntu /var/www/deployer`, then set `PUBLISHED_DIR=/var/www/deployer` in `server/.env`. Nginx cannot read under `/home/ubuntu` (mode 750).
+7. **Nginx**: install `deploy/nginx-server.conf` (replace `YOUR_SERVER_DOMAIN`), create `/etc/nginx/deployer-apps`.
+8. **sudoers**: install `deploy/sudoers-deployer` so `ubuntu` can run `nginx -t` and `systemctl reload nginx`.
+9. **HTTPS**: `sudo certbot --nginx -d YOUR_SERVER_DOMAIN`.
+10. **Start**: `pm2 start deploy/ecosystem.server.config.cjs`, then `pm2 save` and `pm2 startup` to survive reboots.
+11. **Check**: `curl https://YOUR_SERVER_DOMAIN/deployment-manager` returns `{ service, serverId, version }`.
 
 ### Once (the control plane, on server 1)
 1. `control/.env`: `JWT_SECRET`, `ENCRYPTION_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `NODE_ENV=production` (cookie becomes `Secure`, so HTTPS is required).

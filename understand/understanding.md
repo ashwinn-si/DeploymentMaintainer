@@ -28,6 +28,7 @@ is just the remote control for the control plane.
 | **App** | One deployable thing: a repo + branch + port + Node version + env + pipeline. The same repo can be several apps. |
 | **Deployment** | One run of an app's pipeline, numbered #1, #2… per app |
 | **Step** | One stage of the pipeline (git, install, pm2, health check, nginx…) |
+| **Kind** | An app is either `node` (PM2 process on a port) or `static` (files published and served by Nginx, no process) |
 | **Mode** | `update` (pull in place), `fresh` (delete folder and re-clone), `rollback` (pin to an old commit) |
 | **SERVER_ID / SERVER_SECRET** | The agent's name and its shared password with the control plane |
 | **ENCRYPTION_KEY** | A 64-hex key that encrypts stored secrets (one per program, not shared) |
@@ -41,6 +42,15 @@ is just the remote control for the control plane.
 2. **There are two databases.** The control plane keeps users and the server list; each agent keeps its own
    apps and deployments. Losing the control plane doesn't lose your apps (you re-add the servers), but
    changing a program's `ENCRYPTION_KEY` makes its stored secrets unreadable.
+
+```mermaid
+flowchart LR
+    CP["Control plane<br/>head office switchboard"] -->|"tells"| AG["Agent<br/>branch office worker"]
+    AG --> PM["PM2<br/>keeps apps alive"]
+    AG --> NG["Nginx<br/>receptionist by URL path"]
+    NG --> PM
+    NG --> ST["static files"]
+```
 
 ## Life of a button click ("Deploy")
 
@@ -67,6 +77,8 @@ app, writes a Deployment, kicks off `runPipeline` in the background → UI opens
 - **Rollbacks use today's env and steps**, only the code is old.
 - **The lock lives in memory.** Never run these programs in PM2 cluster mode.
 - **Empty step configs vanish in MongoDB** (Mongoose drops `{}`), so the API now returns `config: {}` explicitly. That was the cause of the blank Steps tab bug.
+- **Static apps behave differently.** No port, no PM2, no restart/stop/runtime logs. `publish` copies the site (never `.git`, `.env*` or `node_modules`) into a release folder and swaps a symlink; the health check just confirms `index.html` is in the live release. `PUBLISHED_DIR` must be readable by Nginx (not under a 750 home dir).
+- **Static sites that need a build** (Vite/React) are not done yet: they need a base path like `/<name>/` injected into the build, otherwise asset URLs 404. Only plain HTML/CSS/JS works today.
 - **Two apps must not share an Nginx path.** The app card now shows the full public URL so you can spot this.
 - **Secrets are only best-effort masked in logs**, and the app's `.env` is plaintext (mode 600) on disk.
 - **The control plane shares server 1's box**: if server 1 is down, the dashboard is down even though other servers keep running their apps.
