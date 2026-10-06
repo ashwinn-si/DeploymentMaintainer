@@ -40,7 +40,11 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
     };
   }, [open, api]);
 
-  const occupiedPorts = data?.ports ?? [];
+  // /ports returns { dashboard: { port }, rows }; the dashboard's own port is occupied too.
+  const occupiedPorts = [
+    ...(data?.dashboard?.port ? [{ port: data.dashboard.port, appName: 'Deployment Maintainer', conflict: null }] : []),
+    ...(data?.rows ?? []),
+  ];
   const occupiedNumbers = new Set(occupiedPorts.map((p) => Number(p.port)));
   const suggestedAvailable = COMMON_PORTS.filter((p) => !occupiedNumbers.has(p)).slice(0, 8);
 

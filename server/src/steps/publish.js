@@ -50,11 +50,26 @@ export async function removePublishedApp(config, appName) {
 // Never publish VCS data, dependencies or env files, even when staticDir is the repo root.
 const EXCLUDED_NAMES = new Set(['.git', 'node_modules', '.github']);
 
-function shouldCopy(src) {
+async function shouldCopy(src) {
   const name = path.basename(src);
   if (EXCLUDED_NAMES.has(name)) return false;
   if (name === '.env' || name.startsWith('.env.')) return false;
+  // A repo symlink (e.g. -> /home/ubuntu/server/.env) would otherwise be served by Nginx as a file.
+  if ((await fs.lstat(src)).isSymbolicLink()) return false;
   return true;
+}
+
+// Nginx runs as another user, so every directory above the site needs the "other: execute" bit.
+// On Ubuntu /home/ubuntu is 750, which makes Nginx answer 403 for a deploy that otherwise looked fine.
+export async function findDirNginxCannotTraverse(dir) {
+  let current = await fs.realpath(dir);
+  for (;;) {
+    const mode = (await fs.stat(current)).mode;
+    if ((mode & 0o001) === 0) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
 }
 
 export async function pruneOldReleases(releasesDir, keepCount = 5) {
@@ -139,6 +154,17 @@ export async function run(ctx) {
 
   await fs.mkdir(targetReleaseDir, { recursive: true, mode: 0o755 });
   await fs.cp(sourceDir, targetReleaseDir, { recursive: true, filter: shouldCopy });
+
+  if (config.NGINX_ENABLED) {
+    const blocked = await findDirNginxCannotTraverse(targetReleaseDir);
+    if (blocked) {
+      await fs.rm(targetReleaseDir, { recursive: true, force: true });
+      throw new Error(
+        `Nginx could not read the published site: ${blocked} is not world-executable. ` +
+          'Set PUBLISHED_DIR to a folder Nginx can reach, e.g. /var/www/deployer (sudo mkdir -p /var/www/deployer && sudo chown ubuntu:ubuntu /var/www/deployer).',
+      );
+    }
+  }
 
   const currentSymlink = path.join(appPublishedDir, 'current');
   const tmpSymlink = path.join(appPublishedDir, `.current.tmp-${Date.now()}`);

@@ -215,3 +215,54 @@ test('GET /repos/:owner/:repo/detect-project requires a ref and a token', async 
     await clearTestDB();
   }
 });
+
+test('publish never copies symlinks out of the repo', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    fixture.createBranchFrom('link-site', 'main', { filename: 'index.html', content: '<h1>x</h1>' });
+    const linkTarget = path.join(server.publishedDir, 'outside-secret.txt');
+    fs.writeFileSync(linkTarget, 'SECRET');
+    // The fixture can't hold absolute links portably, so plant one in the cloned checkout after gitSync.
+    const created = await agent.post('/api/apps').send({
+      name: 'link-site', kind: 'static', repoFullName: fixture.repoFullName, branch: 'link-site',
+      nodeVersion: '20', env: [], steps: defaultSteps('link-site', 'static'),
+    });
+    const appDir = path.join(config.APPS_DIR, 'link-site');
+    // Deploy once to clone, then add the link and republish.
+    const first = await agent.post(`/api/apps/${created.body.app.id}/deploy`).send({ mode: 'update' });
+    assert.equal((await waitForDeployment(agent, first.body.deployment.id)).status, 'success');
+    fs.symlinkSync(linkTarget, path.join(appDir, 'leak.txt'));
+    fs.writeFileSync(path.join(appDir, 'untracked-note.txt'), 'kept');
+    const { run } = await import('../src/steps/publish.js');
+    const logs = [];
+    await run({
+      app: { name: 'link-site', steps: [] }, deployment: { _id: 'manual-release' }, config,
+      log: { info: (t) => logs.push(t) }, step: { config: { staticDir: '.' } }, stepId: 'x',
+    });
+    const current = getPublishedAppCurrentDir(config, 'link-site');
+    assert.equal(fs.existsSync(path.join(current, 'leak.txt')), false, 'symlink must not be published');
+    assert.equal(fs.readFileSync(path.join(current, 'untracked-note.txt'), 'utf8'), 'kept');
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('findDirNginxCannotTraverse flags a directory that is not world-executable', async () => {
+  const { findDirNginxCannotTraverse } = await import('../src/steps/publish.js');
+  const os = await import('node:os');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-perm-'));
+  const inner = path.join(root, 'private', 'site');
+  fs.mkdirSync(inner, { recursive: true });
+  try {
+    fs.chmodSync(path.join(root, 'private'), 0o750);
+    const blocked = await findDirNginxCannotTraverse(inner);
+    assert.equal(blocked, fs.realpathSync(path.join(root, 'private')));
+    fs.chmodSync(path.join(root, 'private'), 0o755);
+    // mkdtemp roots are 0700 on most systems, so only assert the 750 dir stopped being the culprit.
+    assert.notEqual(await findDirNginxCannotTraverse(inner), fs.realpathSync(path.join(root, 'private')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
