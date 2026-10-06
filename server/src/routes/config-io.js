@@ -234,7 +234,7 @@ export function createConfigIoRouter(config) {
       branch: app.branch,
       port: app.port,
       nodeVersion: app.nodeVersion,
-      steps: (app.steps || []).map((s) => ({ type: s.type, enabled: s.enabled, config: s.config })),
+      steps: (app.steps || []).map((s) => ({ type: s.type, enabled: s.enabled, config: s.config ?? {} })),
       env: encryptWithPassphrase(decryptAppEnv(config, app.envEncrypted), body.passphrase),
     }));
 

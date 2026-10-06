@@ -48,7 +48,9 @@ function StepRow({ step, index, onToggle, onConfigChange, children }) {
   );
 }
 
-export function StepsEditor({ value = [], onChange }) {
+export function StepsEditor({ value: rawValue = [], onChange }) {
+  // Empty config objects can be dropped by the DB layer; always hand rows a config object.
+  const value = rawValue.map((s) => (s.config ? s : { ...s, config: {} }));
   const setAt = (index, patch) => onChange(value.map((s, i) => (i === index ? { ...s, ...patch } : s)));
   const setConfigAt = (index, patch) => setAt(index, { config: { ...value[index].config, ...patch } });
   const toggleAt = (index, enabled) => setAt(index, { enabled });
@@ -175,16 +177,16 @@ export function StepsEditor({ value = [], onChange }) {
                   <Input label="Path" value={config.path ?? '/'} onChange={(e) => patch({ path: e.target.value })} className="font-mono" />
                   <div className="grid grid-cols-2 gap-3">
                     <Input
-                      label="Timeout (ms)"
+                      label="Timeout (sec)"
                       type="number"
-                      value={config.timeoutMs ?? 60000}
-                      onChange={(e) => patch({ timeoutMs: Number(e.target.value) })}
+                      value={config.timeoutSec ?? 60}
+                      onChange={(e) => patch({ timeoutSec: Number(e.target.value) })}
                     />
                     <Input
-                      label="Interval (ms)"
+                      label="Interval (sec)"
                       type="number"
-                      value={config.intervalMs ?? 2000}
-                      onChange={(e) => patch({ intervalMs: Number(e.target.value) })}
+                      value={config.intervalSec ?? 2}
+                      onChange={(e) => patch({ intervalSec: Number(e.target.value) })}
                     />
                   </div>
                   <Toggle checked={config.autoRollback !== false} onChange={(v) => patch({ autoRollback: v })} label="Auto-rollback on failure" />

@@ -39,7 +39,7 @@ export function serializeAppDetail(app, { pm2, activeDeploymentId, env = [], dis
   return {
     ...serializeAppSummary(app, { pm2, activeDeploymentId }),
     env,
-    steps: (app.steps || []).map((s) => ({ type: s.type, enabled: s.enabled, config: s.config })),
+    steps: (app.steps || []).map((s) => ({ type: s.type, enabled: s.enabled, config: s.config ?? {} })),
     diskBytes,
   };
 }
