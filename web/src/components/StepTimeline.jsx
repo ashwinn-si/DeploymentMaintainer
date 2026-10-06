@@ -2,8 +2,8 @@ import { Check, X, Minus, Loader2 } from 'lucide-react';
 
 const DOT_CLASS = {
   pending: 'bg-black/10 dark:bg-white/10 text-[var(--text-muted)]',
-  running: 'bg-[var(--brand)] text-white',
-  success: 'bg-teal-500 text-white',
+  running: 'bg-[var(--brand)] text-white dark:text-[#0B0D11]',
+  success: 'bg-teal-500 text-white dark:text-[#0B0D11]',
   failed: 'bg-rose-500 text-white',
   skipped: 'bg-black/10 dark:bg-white/10 text-[var(--text-muted)]',
 };
@@ -19,7 +19,7 @@ function formatDuration(step) {
 
 export function StepTimeline({ steps = [], activeStepId = 'all', onSelect, className = '' }) {
   return (
-    <ol className={['space-y-1', className].join(' ')}>
+    <ol className={['custom-scrollbar max-h-[520px] overflow-y-auto pr-1 space-y-1', className].join(' ')}>
       {steps.map((step, idx) => {
         const Icon = ICON[step.status];
         const isLast = idx === steps.length - 1;

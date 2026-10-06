@@ -37,7 +37,9 @@ export function LogViewer({
   const hiddenCount = filtered.length - visible.length;
 
   useEffect(() => {
-    if (autoScroll) bottomRef.current?.scrollIntoView({ block: 'end' });
+    if (autoScroll && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [visible.length, autoScroll]);
 
   const handleScroll = () => {
@@ -75,7 +77,7 @@ export function LogViewer({
               onClick={() => setStepFilter('all')}
               className={[
                 'min-h-[38px] rounded-full px-3 text-xs font-medium transition-colors',
-                stepFilter === 'all' ? 'bg-[var(--brand)] text-white' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                stepFilter === 'all' ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11] font-semibold' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
               ].join(' ')}
             >
               All
@@ -87,7 +89,7 @@ export function LogViewer({
                 onClick={() => setStepFilter(s.id)}
                 className={[
                   'min-h-[38px] rounded-full px-3 text-xs font-medium transition-colors',
-                  stepFilter === s.id ? 'bg-[var(--brand)] text-white' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                  stepFilter === s.id ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11] font-semibold' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
                 ].join(' ')}
               >
                 {s.label ?? s.type}
@@ -105,7 +107,7 @@ export function LogViewer({
             title={autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
             className={[
               'flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg transition-colors',
-              autoScroll ? 'text-[var(--brand)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+              autoScroll ? 'text-[var(--brand)] font-bold' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
             ].join(' ')}
           >
             {autoScroll ? <ArrowDownToLine className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
@@ -134,7 +136,7 @@ export function LogViewer({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-black/[0.06] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed dark:border-white/10 dark:bg-black/40"
+        className="custom-scrollbar h-[520px] min-h-[380px] max-h-[65vh] overflow-y-auto rounded-2xl border border-black/[0.06] bg-black/[0.03] p-4 font-mono text-[12px] leading-relaxed dark:border-white/10 dark:bg-black/40"
       >
         {hiddenCount > 0 ? (
           <p className="mb-2 text-[11px] text-[var(--text-muted)]">Showing last {MAX_RENDERED.toLocaleString()} of {filtered.length.toLocaleString()} lines</p>

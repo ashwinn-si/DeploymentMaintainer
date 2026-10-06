@@ -29,9 +29,16 @@ function InfoChip({ label, value }) {
 
 function RingCard({ label, value, sublabel, data, color }) {
   return (
-    <GlassCard variant="mid" className="flex flex-col items-center gap-3 text-center">
-      <Ring value={value} size={140} stroke={10} label={label} sublabel={sublabel} />
-      <Sparkline data={data} width={160} height={36} color={color} />
+    <GlassCard variant="mid" className="flex flex-col items-center justify-between gap-3 text-center p-5">
+      <Ring value={value} size={135} stroke={10} label={label} />
+      {sublabel ? (
+        <span className="rounded-full bg-black/5 dark:bg-white/5 px-3 py-1 text-xs font-mono text-[var(--text-muted)]">
+          {sublabel}
+        </span>
+      ) : null}
+      <div className="w-full pt-1 flex justify-center">
+        <Sparkline data={data} width={160} height={32} color={color} />
+      </div>
     </GlassCard>
   );
 }

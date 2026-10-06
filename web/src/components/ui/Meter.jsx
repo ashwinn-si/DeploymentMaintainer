@@ -42,7 +42,7 @@ export function Meter({ label, value, unit = '%', className = '' }) {
   );
 }
 
-export function Ring({ value, size = 180, stroke = 10, label, sublabel }) {
+export function Ring({ value, size = 160, stroke = 10, label, sublabel }) {
   const clamped = Math.min(100, Math.max(0, value ?? 0));
   const tone = thresholdColor(clamped);
   const radius = (size - stroke) / 2;
@@ -68,11 +68,17 @@ export function Ring({ value, size = 180, stroke = 10, label, sublabel }) {
           transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1], delay: 0.15 }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-medium tracking-tight text-[var(--text-primary)] sm:text-4xl">{Math.round(clamped)}%</span>
-        {label ? <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</span> : null}
-        {sublabel ? <span className="text-xs text-[var(--text-muted)]">{sublabel}</span> : null}
+      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-2 text-center">
+        <span className="text-2xl font-bold tracking-tight text-[var(--text-primary)] sm:text-3xl leading-none">
+          {Math.round(clamped)}%
+        </span>
+        {label ? (
+          <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            {label}
+          </span>
+        ) : null}
       </div>
     </div>
   );
 }
+

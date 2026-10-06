@@ -66,14 +66,24 @@ function FinishedRow({ deployment }) {
   return (
     <Link
       to={serverPath(`/deployments/${deployment.id}`)}
-      className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-black/[0.03] dark:hover:bg-white/5"
+      className="group flex items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 p-3 text-sm transition-all hover:border-[var(--brand)]/40 hover:bg-white/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/40"
     >
-      <span className="flex items-center gap-2 truncate">
-        <StatusPill tone={tone}>{deployment.status}</StatusPill>
-        <span className="truncate text-[var(--text-primary)]">{deployment.appName}</span>
-        <span className="shrink-0 text-[var(--text-muted)]">#{deployment.number}</span>
+      <div className="flex items-center gap-3 min-w-0">
+        <StatusPill tone={tone} className="shrink-0 font-medium">
+          {deployment.status}
+        </StatusPill>
+        <div className="min-w-0 flex items-center gap-1.5">
+          <span className="truncate font-semibold text-[var(--text-primary)] group-hover:text-[var(--brand)] transition-colors">
+            {deployment.appName}
+          </span>
+          <span className="shrink-0 font-mono text-xs text-[var(--text-muted)]">
+            #{deployment.number}
+          </span>
+        </div>
+      </div>
+      <span className="shrink-0 font-mono text-xs text-[var(--text-muted)]">
+        {formatRelativeTime(deployment.finishedAt ?? deployment.createdAt)}
       </span>
-      <span className="shrink-0 text-xs text-[var(--text-muted)]">{formatRelativeTime(deployment.finishedAt ?? deployment.createdAt)}</span>
     </Link>
   );
 }
@@ -95,7 +105,6 @@ export function ActivityPanel({ active = [] }) {
         // leave previous list on error
       }
     }
-    // Reload whenever an active deployment appears to have finished.
     if (active.length !== activeCountRef.current || finished.length === 0) {
       load();
     }
@@ -110,13 +119,21 @@ export function ActivityPanel({ active = [] }) {
 
   return (
     <GlassCard variant="mid">
-      <div className="mb-4 flex items-center gap-2">
-        <Activity className="h-4 w-4 text-[var(--brand)]" />
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Activity</h2>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Activity className="h-4 w-4 text-[var(--brand)]" />
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Activity</h2>
+        </div>
+        {active.length > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-soft)] px-2.5 py-0.5 text-xs font-semibold text-[var(--brand)]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand)]" />
+            {active.length} active
+          </span>
+        ) : null}
       </div>
 
       {active.length > 0 ? (
-        <div className="mb-4 space-y-2">
+        <div className="mb-3 space-y-2">
           {active.map((d) => (
             <LiveDeployRow key={d.id} deployment={d} />
           ))}
@@ -124,7 +141,7 @@ export function ActivityPanel({ active = [] }) {
       ) : null}
 
       {finished.length > 0 ? (
-        <div className="space-y-0.5">{finished.map((d) => <FinishedRow key={d.id} deployment={d} />)}</div>
+        <div className="space-y-2">{finished.map((d) => <FinishedRow key={d.id} deployment={d} />)}</div>
       ) : active.length === 0 ? (
         <EmptyState icon={Rocket} title="No activity yet" description="Deployments will show up here as they happen." />
       ) : null}

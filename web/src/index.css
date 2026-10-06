@@ -40,8 +40,8 @@
   --data-teal: #14b8a6;
 
   /* Brand */
-  --brand: #0284c7;
-  --brand-soft: rgba(2, 132, 199, 0.14);
+  --brand: #0369a1;
+  --brand-soft: rgba(3, 105, 161, 0.14);
 }
 
 :root[data-theme='dark'] {

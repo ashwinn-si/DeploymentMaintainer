@@ -75,7 +75,7 @@ export function EnvEditor({ value = [], onChange }) {
 
       {value.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No environment variables yet.</p> : null}
 
-      <div className="space-y-2">
+      <div className="custom-scrollbar max-h-[420px] overflow-y-auto pr-1 space-y-2">
         {value.map((row, idx) => {
           const keyError = row.key && !KEY_RE.test(row.key) ? 'Must match ^[A-Z_][A-Z0-9_]*$' : null;
           const dupError = !keyError && row.key && keyCounts[row.key] > 1 ? 'Duplicate key' : null;
