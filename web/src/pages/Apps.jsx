@@ -13,8 +13,14 @@ import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
 import { formatRelativeTime } from '../lib/format.js';
 
+function publicUrl(serverUrl, path) {
+  if (!path) return null;
+  return `${String(serverUrl ?? '').replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 function AppCard({ app, onDeploy }) {
-  const { serverPath } = useServer();
+  const { server, serverPath } = useServer();
+  const fullUrl = publicUrl(server.url, app.path);
   const { tone, pulse } = statusTone(app.status);
   const healthTone = app.health?.ok ? 'teal' : app.status === 'not_deployed' ? 'neutral' : 'rose';
   const deploying = Boolean(app.activeDeploymentId);
@@ -25,7 +31,7 @@ function AppCard({ app, onDeploy }) {
       <div className="relative z-10 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-[var(--text-primary)]">{app.name}</h3>
-          <p className="truncate text-xs text-[var(--text-muted)]">{app.path ?? 'localhost only'}</p>
+          <p className="truncate text-xs text-[var(--text-muted)]">{fullUrl ?? 'localhost only'}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <StatusPill tone={tone} pulse={pulse}>
@@ -40,7 +46,7 @@ function AppCard({ app, onDeploy }) {
           {app.repoFullName} <span className="text-[var(--text-muted)]">@ {app.branch}</span>
         </p>
         <p className="text-xs text-[var(--text-muted)]">
-          Node {app.nodeVersion} · port {app.port} · deployed {formatRelativeTime(app.lastDeployedAt)}
+          {app.kind === 'static' ? 'Static site' : `Node ${app.nodeVersion} · port ${app.port}`} · deployed {formatRelativeTime(app.lastDeployedAt)}
         </p>
       </div>
 
@@ -57,9 +63,9 @@ function AppCard({ app, onDeploy }) {
           <Rocket className="h-4 w-4" />
           {deploying ? 'Deploying' : 'Deploy'}
         </Button>
-        {app.path ? (
+        {fullUrl ? (
           <a
-            href={app.path}
+            href={fullUrl}
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}

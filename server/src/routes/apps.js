@@ -18,6 +18,7 @@ import { defaultSteps, normalizeSteps } from '../steps/index.js';
 import { allocatePort, assertPortAvailable } from '../services/ports.js';
 import { encryptJSON, decryptAppEnv } from '../services/crypto.js';
 import { safeRemoveAppDir } from '../services/git.js';
+import { removePublishedApp } from '../steps/publish.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
@@ -32,6 +33,7 @@ const stepInputSchema = z.object({
 
 const createAppSchema = z.object({
   name: z.string(),
+  kind: z.enum(['node', 'static']).optional(),
   repoFullName: z.string().min(1),
   branch: z.string().min(1),
   port: z.number().int().optional(),
@@ -113,6 +115,28 @@ async function buildAppDetail(appDoc, config) {
   });
 }
 
+// Static apps have no process, so they get no port; node apps get the requested or next free one.
+async function resolvePort(config, kind, requested) {
+  if (kind === 'static') {
+    if (requested !== undefined && requested !== null) {
+      throw new HttpError(400, 'Static apps do not use a port');
+    }
+    return null;
+  }
+  if (requested !== undefined) {
+    validatePort(requested);
+    await assertPortAvailable(requested);
+    return requested;
+  }
+  return allocatePort(config);
+}
+
+function assertNodeApp(app, action) {
+  if (app.kind === 'static') {
+    throw new HttpError(409, `Static apps have no process to ${action}; redeploy to republish`);
+  }
+}
+
 async function findAppOr404(id) {
   if (!mongoose.isValidObjectId(id)) throw new HttpError(404, 'App not found');
   const app = await App.findById(id);
@@ -135,8 +159,9 @@ export function createAppsRouter(config) {
 
   router.get('/defaults', async (req, res) => {
     const name = typeof req.query.name === 'string' && req.query.name.length > 0 ? req.query.name : 'my-app';
-    const port = await allocatePort(config);
-    res.json({ steps: defaultSteps(name), port, nodeVersion: config.DEFAULT_NODE_VERSION });
+    const kind = req.query.kind === 'static' ? 'static' : 'node';
+    const port = kind === 'static' ? null : await allocatePort(config);
+    res.json({ kind, steps: defaultSteps(name, kind), port, nodeVersion: config.DEFAULT_NODE_VERSION });
   });
 
   router.post('/', async (req, res) => {
@@ -146,22 +171,18 @@ export function createAppsRouter(config) {
     const existing = await App.findOne({ name: body.name });
     if (existing) throw new HttpError(409, `An app named "${body.name}" already exists`);
 
-    let port = body.port;
-    if (port !== undefined) {
-      validatePort(port);
-      await assertPortAvailable(port);
-    } else {
-      port = await allocatePort(config);
-    }
+    const kind = body.kind ?? 'node';
+    const port = await resolvePort(config, kind, body.port);
 
     validateNodeVersion(body.nodeVersion);
     const envObj = envArrayToObject(body.env ?? []);
-    const steps = normalizeSteps(body.steps?.length ? body.steps : defaultSteps(body.name));
+    const steps = normalizeSteps(body.steps?.length ? body.steps : defaultSteps(body.name, kind), { kind });
 
     const app = await App.create({
       name: body.name,
       repoFullName: body.repoFullName,
       branch: body.branch,
+      kind,
       port,
       nodeVersion: body.nodeVersion,
       envEncrypted: encryptJSON(config, envObj),
@@ -191,6 +212,7 @@ export function createAppsRouter(config) {
       app.branch = body.branch;
     }
     if (body.port !== undefined) {
+      if (app.kind === 'static') throw new HttpError(400, 'Static apps do not use a port');
       validatePort(body.port);
       if (body.port !== app.port) await assertPortAvailable(body.port, app._id);
       app.port = body.port;
@@ -203,7 +225,7 @@ export function createAppsRouter(config) {
       app.envEncrypted = encryptJSON(config, envArrayToObject(body.env));
     }
     if (body.steps !== undefined) {
-      app.steps = normalizeSteps(body.steps);
+      app.steps = normalizeSteps(body.steps, { kind: app.kind });
     }
 
     await app.save();
@@ -220,11 +242,13 @@ export function createAppsRouter(config) {
       throw new HttpError(409, 'Cannot delete while a deployment is running');
     }
 
-    try {
-      await pm2Service.remove(pm2Service.pm2Name(app.name));
-    } catch (err) {
-      if (!/not (found|exist)/i.test(err.message)) {
-        console.error(`apps: pm2 delete failed for ${app.name}: ${err.message}`);
+    if (app.kind !== 'static') {
+      try {
+        await pm2Service.remove(pm2Service.pm2Name(app.name));
+      } catch (err) {
+        if (!/not (found|exist)/i.test(err.message)) {
+          console.error(`apps: pm2 delete failed for ${app.name}: ${err.message}`);
+        }
       }
     }
     try {
@@ -234,6 +258,7 @@ export function createAppsRouter(config) {
     }
     try {
       await safeRemoveAppDir(config, app.name);
+      await removePublishedApp(config, app.name);
     } catch (err) {
       console.error(`apps: safeRemoveAppDir failed for ${app.name}: ${err.message}`);
     }
@@ -252,24 +277,20 @@ export function createAppsRouter(config) {
     const existing = await App.findOne({ name: body.name });
     if (existing) throw new HttpError(409, `An app named "${body.name}" already exists`);
 
-    let port = body.port;
-    if (port !== undefined) {
-      validatePort(port);
-      await assertPortAvailable(port);
-    } else {
-      port = await allocatePort(config);
-    }
+    const kind = source.kind ?? 'node';
+    const port = await resolvePort(config, kind, body.port);
 
     const nodeVersion = body.nodeVersion ?? source.nodeVersion;
     validateNodeVersion(nodeVersion);
 
     const envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
-    const steps = normalizeSteps(JSON.parse(JSON.stringify(source.steps)));
+    const steps = normalizeSteps(JSON.parse(JSON.stringify(source.steps)), { kind });
 
     const app = await App.create({
       name: body.name,
       repoFullName: source.repoFullName,
       branch: body.branch,
+      kind,
       port,
       nodeVersion,
       envEncrypted,
@@ -294,6 +315,7 @@ export function createAppsRouter(config) {
 
   router.post('/:id/restart', async (req, res) => {
     const app = await findAppOr404(req.params.id);
+    assertNodeApp(app, 'restart');
     await pm2Service.restart(pm2Service.pm2Name(app.name));
     app.status = 'online';
     await app.save();
@@ -305,6 +327,7 @@ export function createAppsRouter(config) {
 
   router.post('/:id/stop', async (req, res) => {
     const app = await findAppOr404(req.params.id);
+    assertNodeApp(app, 'stop');
     await pm2Service.stop(pm2Service.pm2Name(app.name));
     app.status = 'stopped';
     await app.save();
@@ -317,6 +340,9 @@ export function createAppsRouter(config) {
   router.get('/:id/logs', async (req, res) => {
     const app = await findAppOr404(req.params.id);
     const lines = Number(req.query.lines) > 0 ? Number(req.query.lines) : 200;
+    if (app.kind === 'static') {
+      return res.json({ text: '(static site: no runtime process, so no runtime logs)' });
+    }
     let text = '';
     try {
       text = await pm2Service.logs(pm2Service.pm2Name(app.name), lines);

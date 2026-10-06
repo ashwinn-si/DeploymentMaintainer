@@ -4,7 +4,8 @@ import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
 
 const ORDER_BEFORE = ['gitSync', 'nodeSetup', 'writeEnv', 'install', 'build'];
-const ORDER_AFTER = ['pm2', 'healthCheck', 'nginx'];
+// Static apps route through Nginx before the health check, so the check can see the live site.
+const ORDER_AFTER = { node: ['pm2', 'healthCheck', 'nginx'], static: ['publish', 'nginx', 'healthCheck'] };
 const LOCKED_TYPES = new Set(['gitSync', 'nodeSetup']);
 
 const LABELS = {
@@ -16,13 +17,14 @@ const LABELS = {
   pm2: 'Start with PM2',
   healthCheck: 'Health check',
   nginx: 'Nginx routing',
+  publish: 'Publish static files',
 };
 
-function priority(type) {
+function priority(type, kind) {
   const before = ORDER_BEFORE.indexOf(type);
   if (before !== -1) return before;
   if (type === 'custom') return ORDER_BEFORE.length;
-  const after = ORDER_AFTER.indexOf(type);
+  const after = (ORDER_AFTER[kind] ?? ORDER_AFTER.node).indexOf(type);
   return ORDER_BEFORE.length + 1 + after;
 }
 
@@ -48,7 +50,7 @@ function StepRow({ step, index, onToggle, onConfigChange, children }) {
   );
 }
 
-export function StepsEditor({ value: rawValue = [], onChange }) {
+export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
   // Empty config objects can be dropped by the DB layer; always hand rows a config object.
   const value = rawValue.map((s) => (s.config ? s : { ...s, config: {} }));
   const setAt = (index, patch) => onChange(value.map((s, i) => (i === index ? { ...s, ...patch } : s)));
@@ -68,9 +70,9 @@ export function StepsEditor({ value: rawValue = [], onChange }) {
     onChange(next);
   };
 
-  const ordered = value.map((step, index) => ({ step, index })).sort((a, b) => priority(a.step.type) - priority(b.step.type));
-  const beforeAndCustom = ordered.filter(({ step }) => priority(step.type) <= ORDER_BEFORE.length);
-  const after = ordered.filter(({ step }) => priority(step.type) > ORDER_BEFORE.length);
+  const ordered = value.map((step, index) => ({ step, index })).sort((a, b) => priority(a.step.type, kind) - priority(b.step.type, kind));
+  const beforeAndCustom = ordered.filter(({ step }) => priority(step.type, kind) <= ORDER_BEFORE.length);
+  const after = ordered.filter(({ step }) => priority(step.type, kind) > ORDER_BEFORE.length);
 
   return (
     <div className="space-y-3">
@@ -195,13 +197,30 @@ export function StepsEditor({ value: rawValue = [], onChange }) {
             </StepRow>
           );
         }
+        if (step.type === 'publish') {
+          return (
+            <StepRow key={index} step={step} index={index} onToggle={toggleAt} onConfigChange={setConfigAt}>
+              {(config, patch) => (
+                <Input
+                  label="Static directory"
+                  value={config.staticDir ?? '.'}
+                  onChange={(e) => patch({ staticDir: e.target.value })}
+                  hint="Folder inside the repo that contains index.html (e.g. . or dist). Copied to the served location on each deploy."
+                  className="font-mono"
+                />
+              )}
+            </StepRow>
+          );
+        }
         if (step.type === 'nginx') {
           return (
             <StepRow key={index} step={step} index={index} onToggle={toggleAt} onConfigChange={setConfigAt}>
               {(config, patch) => (
                 <>
                   <Input label="Path" value={config.path ?? ''} onChange={(e) => patch({ path: e.target.value })} className="font-mono" />
-                  <Toggle checked={config.stripPrefix !== false} onChange={(v) => patch({ stripPrefix: v })} label="Strip path prefix" />
+                  {kind === 'static' ? null : (
+                    <Toggle checked={config.stripPrefix !== false} onChange={(v) => patch({ stripPrefix: v })} label="Strip path prefix" />
+                  )}
                 </>
               )}
             </StepRow>

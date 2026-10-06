@@ -36,6 +36,9 @@ const fieldSchemas = {
   ),
   APPS_DIR: z.string().min(1, 'APPS_DIR is required'),
   NGINX_APPS_DIR: z.string().min(1, 'NGINX_APPS_DIR is required'),
+  // Where static sites are published for Nginx to serve. Must be readable by the nginx user
+  // (so not under a 750 home directory); defaults to a sibling of APPS_DIR.
+  PUBLISHED_DIR: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
   APP_PORT_START: z.coerce.number().int().positive().default(4001),
   DEFAULT_NODE_VERSION: z.string().min(1).default('20'),
   NGINX_ENABLED: boolFromEnv(true),

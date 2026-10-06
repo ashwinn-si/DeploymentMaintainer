@@ -1,5 +1,6 @@
 import http from 'node:http';
 import * as pm2Service from '../services/pm2.js';
+import { checkPublished } from './publish.js';
 
 export const type = 'healthCheck';
 
@@ -37,13 +38,25 @@ function sleep(ms, signal) {
   });
 }
 
+// Surfaces the app's own output so a crash is diagnosable from the deploy log.
+async function logAppOutput(app, log, stepId) {
+  try {
+    const out = await pm2Service.logs(pm2Service.pm2Name(app.name), 30);
+    const text = out.replace(/\x1b\[[0-9;]*m/g, '').trim();
+    if (text) log.error(`app output (last 30 lines):\n${text}`, stepId);
+  } catch (err) {
+    log.warn?.(`could not read app logs: ${err.message}`, stepId);
+  }
+}
+
 // Returns a result rather than throwing: fail/auto-rollback is the 3b deployer's decision.
 export async function run(ctx) {
-  const { app, log, signal, step, stepId } = ctx;
+  const { app, config, log, signal, step, stepId } = ctx;
   const cfg = step?.config ?? {};
   const checkPath = cfg.path || '/';
   const timeoutMs = (cfg.timeoutSec ?? 60) * 1000;
   const intervalMs = (cfg.intervalSec ?? 2) * 1000;
+  const isStatic = app.kind === 'static';
 
   const startedAt = Date.now();
   let attempt = 0;
@@ -55,21 +68,31 @@ export async function run(ctx) {
     }
     attempt += 1;
 
-    const procs = await pm2Service.jlist();
-    const proc = procs[pm2Service.pm2Name(app.name)];
-    const restarts = proc?.pm2_env?.restart_time ?? 0;
-    if (baselineRestarts === null) baselineRestarts = restarts;
+    if (!isStatic) {
+      const procs = await pm2Service.jlist();
+      const proc = procs[pm2Service.pm2Name(app.name)];
+      const restarts = proc?.pm2_env?.restart_time ?? 0;
+      if (baselineRestarts === null) baselineRestarts = restarts;
 
-    if (proc?.pm2_env?.status === 'errored') {
-      log.error('pm2 process errored', stepId);
-      return { ok: false, reason: 'pm2 process errored' };
-    }
-    if (restarts - baselineRestarts >= CRASH_LOOP_RESTART_DELTA) {
-      log.error('pm2 restart count climbing (crash loop)', stepId);
-      return { ok: false, reason: 'crash loop detected' };
+      if (proc?.pm2_env?.status === 'errored') {
+        log.error('pm2 process errored', stepId);
+        await logAppOutput(app, log, stepId);
+        return { ok: false, reason: 'pm2 process errored' };
+      }
+      if (restarts - baselineRestarts >= CRASH_LOOP_RESTART_DELTA) {
+        log.error('pm2 restart count climbing (crash loop)', stepId);
+        await logAppOutput(app, log, stepId);
+        return { ok: false, reason: 'crash loop detected' };
+      }
     }
 
-    const result = await requestOnce(app.port, checkPath);
+    let result;
+    if (isStatic) {
+      result = await checkPublished(config, app.name, checkPath);
+    } else {
+      result = await requestOnce(app.port, checkPath);
+    }
+
     if (result.ok && result.statusCode >= MIN_OK_STATUS && result.statusCode <= MAX_OK_STATUS) {
       log.info(`GET ${checkPath} -> ${result.statusCode} (attempt ${attempt})`, stepId);
       return { ok: true, statusCode: result.statusCode, attempts: attempt };

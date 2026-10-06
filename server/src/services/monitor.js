@@ -1,6 +1,7 @@
 import http from 'node:http';
 import App from '../models/App.js';
 import * as system from './system.js';
+import { checkPublished } from '../steps/publish.js';
 
 const SAMPLE_INTERVAL_MS = 30 * 1000;
 const HEALTH_INTERVAL_MS = 60 * 1000;
@@ -47,11 +48,11 @@ function checkOnce(app, healthPath) {
   });
 }
 
-async function checkApp(app) {
+async function checkApp(app, config) {
   const hcStep = app.steps.find((s) => s.type === 'healthCheck');
   const healthPath = hcStep?.config?.path || '/';
   const startedAt = Date.now();
-  const result = await checkOnce(app, healthPath);
+  const result = app.kind === 'static' ? await checkPublished(config, app.name, healthPath) : await checkOnce(app, healthPath);
   const latencyMs = Date.now() - startedAt;
   await App.updateOne(
     { _id: app._id },
@@ -59,7 +60,7 @@ async function checkApp(app) {
   );
 }
 
-async function healthTick() {
+async function healthTick(config) {
   try {
     const apps = await App.find({ status: 'online' });
     const eligible = apps.filter((app) => app.steps.some((s) => s.type === 'healthCheck' && s.enabled));
@@ -71,7 +72,7 @@ async function healthTick() {
         cursor += 1;
         if (!app) return;
         try {
-          await checkApp(app);
+          await checkApp(app, config);
         } catch (err) {
           console.error(`monitor: health check failed for ${app.name}: ${err.message}`);
         }
@@ -90,7 +91,7 @@ export function startMonitor(config) {
 
   sampleTimer = setInterval(() => sampleTick(config), SAMPLE_INTERVAL_MS);
   sampleTimer.unref?.();
-  healthTimer = setInterval(() => healthTick(), HEALTH_INTERVAL_MS);
+  healthTimer = setInterval(() => healthTick(config), HEALTH_INTERVAL_MS);
   healthTimer.unref?.();
 
   // So /system has data immediately instead of waiting up to 30s for the first tick.
@@ -108,8 +109,8 @@ export function stopMonitor() {
 export async function __runSampleTick(config) {
   await sampleTick(config);
 }
-export async function __runHealthTick() {
-  await healthTick();
+export async function __runHealthTick(config) {
+  await healthTick(config);
 }
 export function __resetMonitorState() {
   history = [];

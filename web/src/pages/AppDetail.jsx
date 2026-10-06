@@ -25,6 +25,8 @@ const TABS = [
   { value: 'deployments', label: 'Deployments' },
   { value: 'logs', label: 'Runtime logs' },
 ];
+// Static sites have no process, so no runtime logs.
+const STATIC_TABS = TABS.filter((t) => t.value !== 'logs');
 
 function Field({ label, children }) {
   return (
@@ -55,14 +57,19 @@ function OverviewTab({ app }) {
           <span className="font-mono">{shortSha(app.currentCommitSha)}</span>
         )}
       </Field>
-      <Field label="Port">{app.port}</Field>
+      <Field label="Type">{app.kind === 'static' ? 'Static site' : 'Node server'}</Field>
       <Field label="Path">{app.path ?? 'localhost only'}</Field>
-      <Field label="Node version">{app.nodeVersion}</Field>
-      <Field label="PM2 status">{app.pm2?.status ?? '—'}</Field>
-      <Field label="CPU">{app.pm2?.cpu !== null ? `${app.pm2.cpu}%` : '—'}</Field>
-      <Field label="Memory">{formatBytes(app.pm2?.memory)}</Field>
-      <Field label="Restarts">{app.pm2?.restarts ?? '—'}</Field>
-      <Field label="Uptime">{formatDuration(app.pm2?.uptimeMs)}</Field>
+      {app.kind === 'static' ? null : (
+        <>
+          <Field label="Port">{app.port}</Field>
+          <Field label="Node version">{app.nodeVersion}</Field>
+          <Field label="PM2 status">{app.pm2?.status ?? '—'}</Field>
+          <Field label="CPU">{app.pm2?.cpu !== null ? `${app.pm2.cpu}%` : '—'}</Field>
+          <Field label="Memory">{formatBytes(app.pm2?.memory)}</Field>
+          <Field label="Restarts">{app.pm2?.restarts ?? '—'}</Field>
+          <Field label="Uptime">{formatDuration(app.pm2?.uptimeMs)}</Field>
+        </>
+      )}
       <Field label="Disk usage">{formatBytes(app.diskBytes)}</Field>
       <Field label="Last deployed">{formatRelativeTime(app.lastDeployedAt)}</Field>
     </div>
@@ -185,14 +192,18 @@ export function AppDetail() {
               <Rocket className="h-4 w-4" />
               Deploy
             </Button>
-            <Button size="sm" variant="ghost" loading={busy === 'restart'} onClick={() => runAction('restart', () => api.apps.restart(id))}>
-              <RotateCw className="h-4 w-4" />
-              Restart
-            </Button>
-            <Button size="sm" variant="ghost" loading={busy === 'stop'} onClick={() => runAction('stop', () => api.apps.stop(id))}>
-              <Square className="h-4 w-4" />
-              Stop
-            </Button>
+            {app.kind === 'static' ? null : (
+              <>
+                <Button size="sm" variant="ghost" loading={busy === 'restart'} onClick={() => runAction('restart', () => api.apps.restart(id))}>
+                  <RotateCw className="h-4 w-4" />
+                  Restart
+                </Button>
+                <Button size="sm" variant="ghost" loading={busy === 'stop'} onClick={() => runAction('stop', () => api.apps.stop(id))}>
+                  <Square className="h-4 w-4" />
+                  Stop
+                </Button>
+              </>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setDuplicateOpen(true)}>
               <Copy className="h-4 w-4" />
               Duplicate
@@ -215,7 +226,7 @@ export function AppDetail() {
         </span>
       </PageHeader>
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 
       <GlassCard variant="mid">
         {tab === 'overview' ? <OverviewTab app={app} /> : null}
@@ -224,7 +235,7 @@ export function AppDetail() {
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
           </div>
         ) : null}
-        {tab === 'steps' ? <StepsEditorSaveable initial={app.steps} onSave={handleSaveSteps} busy={busy === 'steps'} /> : null}
+        {tab === 'steps' ? <StepsEditorSaveable initial={app.steps} kind={app.kind} onSave={handleSaveSteps} busy={busy === 'steps'} /> : null}
         {tab === 'deployments' ? (
           <div className="space-y-2">
             {deployments.length === 0 ? (
@@ -256,7 +267,7 @@ export function AppDetail() {
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleDelete}
         title={`Delete ${app.name}`}
-        description="This stops the app, removes it from PM2 and Nginx, and deletes its folder and deployment history. This can't be undone."
+        description="This stops the app (or unpublishes the site), removes it from PM2 and Nginx, and deletes its folder and deployment history. This can't be undone."
         confirmLabel="Delete app"
         tone="danger"
         confirmText={app.name}
@@ -281,12 +292,12 @@ function EnvEditorSaveable({ initial, onSave, busy }) {
   );
 }
 
-function StepsEditorSaveable({ initial, onSave, busy }) {
+function StepsEditorSaveable({ initial, kind, onSave, busy }) {
   const [steps, setSteps] = useState(initial);
   const dirty = JSON.stringify(steps) !== JSON.stringify(initial);
   return (
     <div className="space-y-4">
-      <StepsEditor value={steps} onChange={setSteps} />
+      <StepsEditor value={steps} onChange={setSteps} kind={kind} />
       <div className="flex justify-end">
         <Button size="sm" disabled={!dirty} loading={busy} onClick={() => onSave(steps)}>
           Save steps

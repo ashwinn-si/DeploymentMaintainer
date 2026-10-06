@@ -122,6 +122,23 @@ export function validateEnvFilename(filename) {
   return filename;
 }
 
+const STATIC_DIR_RE = /^\.($|\/)|^[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/;
+
+export function validateStaticDir(staticDir) {
+  if (
+    typeof staticDir !== 'string' ||
+    staticDir.length === 0 ||
+    staticDir.length > 200 ||
+    staticDir.includes('..') ||
+    staticDir.startsWith('/') ||
+    staticDir.startsWith('-') ||
+    !STATIC_DIR_RE.test(staticDir)
+  ) {
+    throw new HttpError(400, 'Invalid static directory path');
+  }
+  return staticDir;
+}
+
 // Wraps a throwing validate* function for use in a zod .refine(); undefined
 // passes through so it composes with .optional().
 export function refinable(validator) {

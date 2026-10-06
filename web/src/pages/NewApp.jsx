@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Plug, Server, FileCode2 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Input } from '../components/ui/Input.jsx';
@@ -11,6 +11,7 @@ import { BranchPicker } from '../components/BranchPicker.jsx';
 import { NodeVersionPicker } from '../components/NodeVersionPicker.jsx';
 import { EnvEditor } from '../components/EnvEditor.jsx';
 import { StepsEditor } from '../components/StepsEditor.jsx';
+import { OccupiedPortsModal } from '../components/OccupiedPortsModal.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
 
@@ -43,12 +44,14 @@ function Section({ step, title, description, children }) {
 export function NewApp() {
   const navigate = useNavigate();
   const { api, serverPath } = useServer();
+  const [kind, setKind] = useState('node');
   const [repoFullName, setRepoFullName] = useState('');
   const [branch, setBranch] = useState('');
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [port, setPort] = useState('');
   const [portTouched, setPortTouched] = useState(false);
+  const [showPortsModal, setShowPortsModal] = useState(false);
   const [nodeVersion, setNodeVersion] = useState('');
   const [env, setEnv] = useState([{ key: 'NODE_ENV', value: 'production' }]);
   const [steps, setSteps] = useState([]);
@@ -70,7 +73,7 @@ export function NewApp() {
     if (!slug) return;
     const timer = setTimeout(() => {
       api.apps
-        .defaults(slug)
+        .defaults(slug, kind)
         .then((data) => {
           if (!portTouched && data.port) setPort(String(data.port));
           if (!stepsTouched && data.steps) setSteps(data.steps);
@@ -79,10 +82,21 @@ export function NewApp() {
         .catch(() => {});
     }, 350);
     return () => clearTimeout(timer);
-  }, [api, name, portTouched, stepsTouched]);
+  }, [api, name, kind, portTouched, stepsTouched]);
 
   const slug = useMemo(() => slugify(name), [name]);
-  const canSubmit = Boolean(repoFullName && branch && slug && nodeVersion);
+  const isStatic = kind === 'static';
+  const canSubmit = Boolean(repoFullName && branch && slug && (isStatic || nodeVersion));
+
+  // The pipeline differs per type, so switching type discards edits and reloads that type's defaults.
+  const chooseKind = (next) => {
+    if (next === kind) return;
+    setKind(next);
+    setStepsTouched(false);
+    setSteps([]);
+    if (next === 'static') setPort('');
+    setPortTouched(false);
+  };
 
   const submit = async (deploy) => {
     setSubmitting(deploy ? 'deploy' : 'create');
@@ -91,10 +105,11 @@ export function NewApp() {
     try {
       const { app, deployment } = await api.apps.create({
         name: slug,
+        kind,
         repoFullName,
         branch,
-        port: port ? Number(port) : undefined,
-        nodeVersion,
+        port: !isStatic && port ? Number(port) : undefined,
+        nodeVersion: isStatic ? nodeVersion || '20' : nodeVersion,
         env,
         steps,
         deploy,
@@ -124,15 +139,39 @@ export function NewApp() {
         Pick a repo, configure the pipeline, and deploy.
       </PageHeader>
 
-      <Section step={1} title="Repository" description="Pick the GitHub repo to deploy.">
+      <Section step={1} title="Project type" description="How this app is run and served.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[
+            { value: 'node', icon: Server, title: 'Node server', text: 'Runs under PM2 on its own port; Nginx proxies to it.' },
+            { value: 'static', icon: FileCode2, title: 'Static site', text: 'HTML/CSS/JS served directly by Nginx. No process, no port.' },
+          ].map(({ value, icon: Icon, title, text }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => chooseKind(value)}
+              className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
+                kind === value ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-white/60 dark:border-white/10'
+              }`}
+            >
+              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand)]" />
+              <span>
+                <span className="block text-sm font-medium text-[var(--text-primary)]">{title}</span>
+                <span className="block text-xs text-[var(--text-muted)]">{text}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section step={2} title="Repository" description="Pick the GitHub repo to deploy.">
         <RepoPicker value={repoFullName} onChange={(v) => { setRepoFullName(v); setBranch(''); }} />
       </Section>
 
-      <Section step={2} title="Branch" description="Which branch this app tracks.">
+      <Section step={3} title="Branch" description="Which branch this app tracks.">
         <BranchPicker repoFullName={repoFullName} value={branch} onChange={setBranch} />
       </Section>
 
-      <Section step={3} title="Name & port" description="The name becomes the folder name and, if routed, the URL path.">
+      <Section step={4} title={isStatic ? 'Name' : 'Name & port'} description="The name becomes the folder name and, if routed, the URL path.">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="App name"
@@ -144,30 +183,56 @@ export function NewApp() {
             error={fieldErrors.name}
             hint={slug && slug !== name ? `Slug: ${slug}` : undefined}
           />
-          <Input
-            label="Port"
-            type="number"
-            value={port}
-            onChange={(e) => {
-              setPortTouched(true);
-              setPort(e.target.value);
-            }}
-            error={fieldErrors.port}
-            placeholder="Auto-assigned"
-          />
+          {isStatic ? null : (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Port</span>
+              <button
+                type="button"
+                onClick={() => setShowPortsModal(true)}
+                className="flex items-center gap-1 text-xs font-semibold text-[var(--brand)] hover:underline"
+              >
+                <Plug className="h-3.5 w-3.5" />
+                View occupied ports
+              </button>
+            </div>
+            <Input
+              type="number"
+              value={port}
+              onChange={(e) => {
+                setPortTouched(true);
+                setPort(e.target.value);
+              }}
+              error={fieldErrors.port}
+              placeholder="Auto-assigned"
+            />
+          </div>
+          )}
         </div>
       </Section>
 
-      <Section step={4} title="Node version">
-        <NodeVersionPicker repoFullName={repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
-      </Section>
+      <OccupiedPortsModal
+        open={showPortsModal}
+        onClose={() => setShowPortsModal(false)}
+        onSelectPort={(p) => {
+          setPort(String(p));
+          setPortTouched(true);
+        }}
+        currentPort={port}
+      />
 
-      <Section step={5} title="Environment variables">
+      {isStatic ? null : (
+        <Section step={5} title="Node version">
+          <NodeVersionPicker repoFullName={repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
+        </Section>
+      )}
+
+      <Section step={6} title="Environment variables">
         <EnvEditor value={env} onChange={setEnv} />
       </Section>
 
-      <Section step={6} title="Deploy steps" description="What runs, in order, on every deploy.">
-        {steps.length ? <StepsEditor value={steps} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (
+      <Section step={7} title="Deploy steps" description="What runs, in order, on every deploy.">
+        {steps.length ? <StepsEditor value={steps} kind={kind} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (
           <p className="text-sm text-[var(--text-muted)]">Pick a name to load the default pipeline.</p>
         )}
       </Section>

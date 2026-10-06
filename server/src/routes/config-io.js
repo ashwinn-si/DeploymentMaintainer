@@ -42,7 +42,8 @@ const exportedAppSchema = z.object({
   name: z.string().min(1),
   repoFullName: z.string().min(1),
   branch: z.string().min(1),
-  port: z.number().int(),
+  kind: z.enum(['node', 'static']).optional(),
+  port: z.number().int().nullable().optional(),
   nodeVersion: z.string().min(1),
   steps: z.array(exportedStepSchema),
   env: encryptedBlobSchema,
@@ -85,17 +86,19 @@ function nextAvailableName(base, taken) {
 async function computeConflictRows(exportedApps) {
   const existingApps = await App.find().lean();
   const existingNames = new Set(existingApps.map((a) => a.name));
-  const existingPorts = new Set(existingApps.map((a) => a.port));
+  const existingPorts = new Set(existingApps.map((a) => a.port).filter((p) => p != null));
 
   const portCounts = new Map();
-  for (const a of exportedApps) portCounts.set(a.port, (portCounts.get(a.port) ?? 0) + 1);
+  for (const a of exportedApps) {
+    if (a.port != null) portCounts.set(a.port, (portCounts.get(a.port) ?? 0) + 1);
+  }
 
   const takenNames = new Set([...existingNames, ...exportedApps.map((a) => a.name)]);
 
   return exportedApps.map((a) => {
     let conflict = null;
     if (existingNames.has(a.name)) conflict = 'name';
-    else if (existingPorts.has(a.port) || portCounts.get(a.port) > 1) conflict = 'port';
+    else if (a.port != null && (existingPorts.has(a.port) || portCounts.get(a.port) > 1)) conflict = 'port';
 
     const suggestedName = nextAvailableName(a.name, takenNames);
     takenNames.add(suggestedName);
@@ -104,7 +107,8 @@ async function computeConflictRows(exportedApps) {
       name: a.name,
       repoFullName: a.repoFullName,
       branch: a.branch,
-      port: a.port,
+      kind: a.kind ?? 'node',
+      port: a.port ?? null,
       conflict,
       suggestedName,
     };
@@ -155,7 +159,7 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
   const fileAppsByName = new Map(file.apps.map((a) => [a.name, a]));
   const existingApps = await App.find().lean();
   const existingNames = new Set(existingApps.map((a) => a.name));
-  const existingPorts = new Set(existingApps.map((a) => a.port));
+  const existingPorts = new Set(existingApps.map((a) => a.port).filter((p) => p != null));
 
   const namesInBatch = new Set();
   const portsInBatch = new Set();
@@ -180,18 +184,22 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
     validateRepo(repo);
     validateRef(fileApp.branch);
     validateNodeVersion(fileApp.nodeVersion);
-    const steps = normalizeSteps(fileApp.steps);
+    const kind = fileApp.kind ?? 'node';
+    const steps = normalizeSteps(fileApp.steps, { kind });
 
     const env = decryptedEnvByName.get(row.name);
     validateEnvObject(env);
 
-    let port = fileApp.port;
-    validatePort(port);
-    const portTaken = existingPorts.has(port) || portsInBatch.has(port) || !(await isPortFree(port));
-    if (portTaken) {
-      port = await allocatePortExcluding(config, new Set([...existingPorts, ...portsInBatch]));
+    let port = null;
+    if (kind !== 'static') {
+      port = fileApp.port;
+      validatePort(port);
+      const portTaken = existingPorts.has(port) || portsInBatch.has(port) || !(await isPortFree(port));
+      if (portTaken) {
+        port = await allocatePortExcluding(config, new Set([...existingPorts, ...portsInBatch]));
+      }
+      portsInBatch.add(port);
     }
-    portsInBatch.add(port);
 
     // Only rewrite the nginx path if it was still the app's default (explicit
     // or implicit); a custom path is left alone even though the app was renamed.
@@ -210,6 +218,7 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
       finalName,
       repoFullName: fileApp.repoFullName,
       branch: fileApp.branch,
+      kind,
       port,
       nodeVersion: fileApp.nodeVersion,
       steps,
@@ -232,7 +241,8 @@ export function createConfigIoRouter(config) {
       name: app.name,
       repoFullName: app.repoFullName,
       branch: app.branch,
-      port: app.port,
+      kind: app.kind ?? 'node',
+      port: app.port ?? null,
       nodeVersion: app.nodeVersion,
       steps: (app.steps || []).map((s) => ({ type: s.type, enabled: s.enabled, config: s.config ?? {} })),
       env: encryptWithPassphrase(decryptAppEnv(config, app.envEncrypted), body.passphrase),
@@ -273,6 +283,7 @@ export function createConfigIoRouter(config) {
         name: spec.finalName,
         repoFullName: spec.repoFullName,
         branch: spec.branch,
+        kind: spec.kind,
         port: spec.port,
         nodeVersion: spec.nodeVersion,
         envEncrypted: encryptJSON(config, spec.env),

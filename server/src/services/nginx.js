@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { run } from './shell.js';
 import { validateNginxPath } from '../lib/validate.js';
+import { getPublishedAppCurrentDir } from '../steps/publish.js';
 
 function proxyBlock(location, proxyPass) {
   return `location ${location} {
@@ -18,8 +19,29 @@ function proxyBlock(location, proxyPass) {
 `;
 }
 
-export function renderLocation({ path: routePath, port, stripPrefix = true }) {
+function staticBlock(routePath, publishedDir) {
+  const targetPath = publishedDir.endsWith('/') ? publishedDir : `${publishedDir}/`;
+  const redirect = `location = ${routePath} {
+    return 301 ${routePath}/;
+}
+`;
+  return (
+    redirect +
+    `location ${routePath}/ {
+    alias ${targetPath};
+    index index.html index.htm;
+    try_files $uri $uri/ ${routePath}/index.html;
+}
+`
+  );
+}
+
+export function renderLocation({ path: routePath, port, stripPrefix = true, serveStatic = false, publishedDir = null }) {
   validateNginxPath(routePath);
+
+  if (serveStatic && publishedDir) {
+    return staticBlock(routePath, publishedDir);
+  }
 
   if (!stripPrefix) {
     return proxyBlock(routePath, `http://127.0.0.1:${port}`);
@@ -63,7 +85,9 @@ export async function applyAppRoute(app, { config, stepConfig = {}, onLine, sign
 
   const routePath = stepConfig.path || `/${app.name}`;
   const stripPrefix = stepConfig.stripPrefix ?? true;
-  const content = renderLocation({ path: routePath, port: app.port, stripPrefix });
+  const serveStatic = app.kind === 'static' || stepConfig.serveStatic === true;
+  const publishedDir = serveStatic ? getPublishedAppCurrentDir(config, app.name) : null;
+  const content = renderLocation({ path: routePath, port: app.port, stripPrefix, serveStatic, publishedDir });
   const filePath = routeFilePath(config, app.name);
 
   let previous = null;

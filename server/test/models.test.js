@@ -22,6 +22,11 @@ function makeApp(overrides = {}) {
   };
 }
 
+test('App.port is optional for static apps but required for node apps', async () => {
+  await assert.rejects(() => new App({ kind: 'node' }).validate(), (err) => Boolean(err.errors.port));
+  await assert.rejects(() => new App({ kind: 'static' }).validate(), (err) => !err.errors.port);
+});
+
 test('App requires name, repoFullName, branch, port, nodeVersion', async () => {
   const app = new App({});
   await assert.rejects(() => app.validate(), (err) => {

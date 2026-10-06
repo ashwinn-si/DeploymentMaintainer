@@ -13,6 +13,7 @@ import {
   validateNginxPath,
   validateHealthCheckPath,
   validateEnvFilename,
+  validateStaticDir,
   refinable,
   RESERVED_APP_NAMES,
 } from '../src/lib/validate.js';
@@ -162,3 +163,16 @@ test('refinable wraps a throwing validator into a boolean predicate, passing und
   assert.equal(predicate('/ok'), true);
   assert.equal(predicate('bad'), false);
 });
+
+test('validateStaticDir accepts valid relative paths', () => {
+  assert.equal(validateStaticDir('.'), '.');
+  assert.equal(validateStaticDir('dist'), 'dist');
+  assert.equal(validateStaticDir('build/public'), 'build/public');
+});
+
+test('validateStaticDir rejects path traversal, absolute paths and injection', () => {
+  for (const bad of ['../etc', '/var/www', 'dist; evil', 'dist\n', 'a b', '-flag', '']) {
+    assert.throws(() => validateStaticDir(bad), HttpError);
+  }
+});
+

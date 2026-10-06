@@ -243,7 +243,8 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
       });
     }
 
-    if (stepDef.type === 'pm2') pm2Reached = true;
+    // pm2 (node) / publish (static) is where the new version goes live; a later failure leaves it up.
+    if (stepDef.type === 'pm2' || stepDef.type === 'publish') pm2Reached = true;
     if (stepDef.type === 'gitSync' && result?.sha) {
       await Deployment.updateOne({ _id: deployment._id }, { commitSha: result.sha });
       deployment.commitSha = result.sha;

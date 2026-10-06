@@ -13,7 +13,8 @@ export function createPortsRouter(config) {
   router.use(requireAuth(config));
 
   router.get('/', async (req, res) => {
-    const apps = await App.find().sort({ port: 1 }).lean();
+    // Static apps hold no port, so they have no row here.
+    const apps = await App.find({ kind: { $ne: 'static' } }).sort({ port: 1 }).lean();
 
     let pm2ByName = {};
     try {

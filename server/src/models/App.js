@@ -24,7 +24,13 @@ const appSchema = new mongoose.Schema(
     name: { type: String, required: true, unique: true, trim: true },
     repoFullName: { type: String, required: true },
     branch: { type: String, required: true },
-    port: { type: Number, required: true },
+    kind: { type: String, enum: ['node', 'static'], default: 'node' },
+    // Static apps are served straight by Nginx and have no process, so no port.
+    port: {
+      type: Number,
+      default: null,
+      required: [function portRequired() { return this.kind !== 'static'; }, 'port is required for node apps'],
+    },
     nodeVersion: { type: String, required: true },
     // AES-256-GCM blob from services/crypto.js, or null before the first save.
     envEncrypted: { type: mongoose.Schema.Types.Mixed, default: null },

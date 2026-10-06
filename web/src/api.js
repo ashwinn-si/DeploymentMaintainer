@@ -106,7 +106,7 @@ export function serverApi(serverId) {
     },
     apps: {
       list: () => get('/apps'),
-      defaults: (name) => get(`/apps/defaults${toQuery({ name })}`),
+      defaults: (name, kind) => get(`/apps/defaults${toQuery({ name, kind })}`),
       create: (body) => post('/apps', body),
       get: (id) => get(`/apps/${id}`),
       update: (id, body) => patch(`/apps/${id}`, body),

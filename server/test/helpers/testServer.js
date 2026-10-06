@@ -21,6 +21,7 @@ export async function setupTestServer({ nginxEnabled = false } = {}) {
   const fixture = await createGitFixture();
   const appsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-apps-'));
   const nginxAppsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-nginx-'));
+  const publishedDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-published-'));
 
   const config = {
     PORT: 3099,
@@ -31,6 +32,7 @@ export async function setupTestServer({ nginxEnabled = false } = {}) {
     GITHUB_TOKEN: undefined,
     APPS_DIR: appsDir,
     NGINX_APPS_DIR: nginxAppsDir,
+    PUBLISHED_DIR: publishedDir,
     APP_PORT_START: PORT_BASE,
     DEFAULT_NODE_VERSION: '20',
     NGINX_ENABLED: nginxEnabled,
@@ -57,12 +59,14 @@ export async function setupTestServer({ nginxEnabled = false } = {}) {
     fixture,
     appsDir,
     nginxAppsDir,
+    publishedDir,
     async cleanup() {
       restoreEnv();
       await shims.cleanup();
       await fixture.cleanup();
       await fsp.rm(appsDir, { recursive: true, force: true });
       await fsp.rm(nginxAppsDir, { recursive: true, force: true });
+      await fsp.rm(publishedDir, { recursive: true, force: true });
     },
   };
 }
