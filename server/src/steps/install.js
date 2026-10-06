@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { run as shellRun, tokenizeCommand } from '../services/shell.js';
 import { withNode } from '../services/node.js';
+import { portEnv } from '../lib/appEnv.js';
 
 export const type = 'install';
 
@@ -21,7 +22,7 @@ export async function run(ctx) {
   const [cmd, argv] = withNode(app.nodeVersion, bin, args);
   const result = await shellRun(cmd, argv, {
     cwd: dir,
-    env: { ...process.env, ...env, PORT: String(app.port) },
+    env: { ...process.env, ...env, ...portEnv(app) },
     onLine: log.onLine(stepId),
     signal,
   });

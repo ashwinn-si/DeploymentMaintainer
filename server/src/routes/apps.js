@@ -161,7 +161,8 @@ export function createAppsRouter(config) {
     const name = typeof req.query.name === 'string' && req.query.name.length > 0 ? req.query.name : 'my-app';
     const kind = req.query.kind === 'static' ? 'static' : 'node';
     const port = kind === 'static' ? null : await allocatePort(config);
-    res.json({ kind, steps: defaultSteps(name, kind), port, nodeVersion: config.DEFAULT_NODE_VERSION });
+    const preset = req.query.preset === 'frontend' ? 'frontend' : 'html';
+    res.json({ kind, steps: defaultSteps(name, kind, preset), port, nodeVersion: config.DEFAULT_NODE_VERSION });
   });
 
   router.post('/', async (req, res) => {

@@ -82,12 +82,34 @@ export async function pruneOldReleases(releasesDir, keepCount = 5) {
   }
 }
 
+// "auto" picks the first conventional build output that has a page; without a build, the repo root.
+export async function resolveStaticDir(appDir, staticDir, { buildEnabled }) {
+  if (staticDir !== 'auto') return staticDir;
+  const candidates = buildEnabled ? ['dist', 'build', 'out'] : ['.'];
+  for (const candidate of candidates) {
+    for (const name of ['index.html', 'index.htm']) {
+      try {
+        await fs.access(path.join(appDir, candidate, name));
+        return candidate;
+      } catch {
+        // keep looking
+      }
+    }
+  }
+  throw new Error(`Static publish failed: no index.html found in ${candidates.join(', ')}. Set the Static directory in the Publish step.`);
+}
+
 export async function run(ctx) {
   const { app, deployment, config, log, step, stepId } = ctx;
-  const staticDir = step?.config?.staticDir || '.';
-  validateStaticDir(staticDir);
+  const configured = step?.config?.staticDir || '.';
+  validateStaticDir(configured);
 
-  const sourceDir = path.resolve(config.APPS_DIR, app.name, staticDir);
+  const appDir = path.resolve(config.APPS_DIR, app.name);
+  const buildEnabled = Boolean(app.steps?.some((s) => s.type === 'build' && s.enabled));
+  const staticDir = await resolveStaticDir(appDir, configured, { buildEnabled });
+  if (staticDir !== configured) log.info(`auto-detected output directory: ${staticDir}`, stepId);
+
+  const sourceDir = path.resolve(appDir, staticDir);
   log.info(`publishing from ${sourceDir}`, stepId);
 
   // Check that index.html exists

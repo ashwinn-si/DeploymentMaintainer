@@ -1,5 +1,6 @@
 import { HttpError } from '../lib/httpError.js';
 import { validateOwner, validateRepo, validateRef } from '../lib/validate.js';
+import { classifyProject } from '../lib/frontend.js';
 
 const GITHUB_API = 'https://api.github.com';
 const CACHE_TTL_MS = 60 * 1000;
@@ -208,6 +209,28 @@ export async function detectNodeVersion(config, owner, repo, ref) {
   }
 
   return { version: null, source: null };
+}
+
+export async function detectProjectType(config, owner, repo, ref) {
+  const token = requireToken(config);
+  const validOwner = validateOwner(owner);
+  const validRepo = validateRepo(repo);
+  const validRef = validateRef(ref);
+
+  const [pkgText, indexHtml] = await Promise.all([
+    fetchRawFile(token, validOwner, validRepo, 'package.json', validRef),
+    fetchRawFile(token, validOwner, validRepo, 'index.html', validRef),
+  ]);
+
+  let pkg = null;
+  if (pkgText !== null) {
+    try {
+      pkg = JSON.parse(pkgText);
+    } catch {
+      pkg = null; // malformed package.json: classify from what else we know
+    }
+  }
+  return classifyProject({ pkg, hasIndexHtml: indexHtml !== null });
 }
 
 export async function getTokenInfo(config) {

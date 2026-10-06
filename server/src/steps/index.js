@@ -70,16 +70,18 @@ const STEP_CONFIG_SCHEMAS = {
     .passthrough(),
 };
 
-export function defaultSteps(name, kind = 'node') {
+// preset (static only): 'html' = files as-is; 'frontend' = install + build (Vite, CRA, Astro...) then publish.
+export function defaultSteps(name, kind = 'node', preset = 'html') {
   if (kind === 'static') {
+    const build = preset === 'frontend';
     return [
       { type: 'gitSync', enabled: true, config: {} },
-      { type: 'nodeSetup', enabled: false, config: {} },
-      { type: 'writeEnv', enabled: false, config: { filename: '.env' } },
-      { type: 'install', enabled: false, config: {} },
-      { type: 'build', enabled: false, config: { command: 'npm run build' } },
-      { type: 'publish', enabled: true, config: { staticDir: '.' } },
-      { type: 'nginx', enabled: true, config: { path: `/${name}`, stripPrefix: true, serveStatic: true, staticDir: '.' } },
+      { type: 'nodeSetup', enabled: build, config: {} },
+      { type: 'writeEnv', enabled: build, config: { filename: '.env' } },
+      { type: 'install', enabled: build, config: {} },
+      { type: 'build', enabled: build, config: { command: 'npm run build' } },
+      { type: 'publish', enabled: true, config: { staticDir: build ? 'auto' : '.' } },
+      { type: 'nginx', enabled: true, config: { path: `/${name}`, stripPrefix: true, serveStatic: true } },
       {
         type: 'healthCheck',
         enabled: true,

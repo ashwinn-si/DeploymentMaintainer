@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
-import { listRepos, listBranches, detectNodeVersion } from '../services/github.js';
+import { listRepos, listBranches, detectNodeVersion, detectProjectType } from '../services/github.js';
 
 const nodeVersionQuerySchema = z.object({ ref: z.string().min(1) });
 
@@ -24,6 +24,12 @@ export function createReposRouter(config) {
   router.get('/:owner/:repo/node-version', async (req, res) => {
     const { ref } = nodeVersionQuerySchema.parse(req.query);
     const result = await detectNodeVersion(config, req.params.owner, req.params.repo, ref);
+    res.json(result);
+  });
+
+  router.get('/:owner/:repo/detect-project', async (req, res) => {
+    const { ref } = nodeVersionQuerySchema.parse(req.query);
+    const result = await detectProjectType(config, req.params.owner, req.params.repo, ref);
     res.json(result);
   });
 

@@ -141,6 +141,11 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
                   label="Command"
                   value={config.command ?? ''}
                   onChange={(e) => patch({ command: e.target.value })}
+                  hint={
+                    step.type === 'build' && kind === 'static'
+                      ? "BASE_PATH and PUBLIC_URL are set to this app's URL path. Vite and Astro get --base added automatically when the command is the default."
+                      : undefined
+                  }
                   className="font-mono"
                 />
               )}
@@ -205,7 +210,7 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
                   label="Static directory"
                   value={config.staticDir ?? '.'}
                   onChange={(e) => patch({ staticDir: e.target.value })}
-                  hint="Folder inside the repo that contains index.html (e.g. . or dist). Copied to the served location on each deploy."
+                  hint="Folder inside the repo that contains index.html (e.g. . or dist), or auto to pick dist, build or out after a build. Copied to the served location on each deploy."
                   className="font-mono"
                 />
               )}

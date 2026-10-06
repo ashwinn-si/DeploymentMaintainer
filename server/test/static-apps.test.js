@@ -162,3 +162,56 @@ test('a static deploy fails clearly when the site has no index.html', async () =
     await clearTestDB();
   }
 });
+
+test('a frontend (build) app builds with its base path, then publishes the auto-detected output', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    fixture.createBranchFrom('frontend-site', 'main', {
+      filename: 'package.json',
+      content: JSON.stringify({ name: 'spa', private: true, scripts: { build: 'node build.js' } }),
+    });
+    fixture.addCommit('frontend-site', {
+      filename: 'build.js',
+      content: "const fs=require('fs');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/index.html','<base href=\"'+process.env.BASE_PATH+'\">'+(process.env.VITE_GREETING||''));",
+    });
+
+    const defaults = await agent.get('/api/apps/defaults?name=spa&kind=static&preset=frontend');
+    assert.equal(defaults.body.steps.find((s) => s.type === 'build').enabled, true);
+    assert.equal(defaults.body.steps.find((s) => s.type === 'publish').config.staticDir, 'auto');
+
+    const created = await agent.post('/api/apps').send({
+      name: 'spa', kind: 'static', repoFullName: fixture.repoFullName, branch: 'frontend-site',
+      nodeVersion: '20', env: [{ key: 'VITE_GREETING', value: 'built-with-env' }], steps: defaults.body.steps,
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    const deploy = await agent.post(`/api/apps/${created.body.app.id}/deploy`).send({ mode: 'update' });
+    const finished = await waitForDeployment(agent, deploy.body.deployment.id, { timeoutMs: 40000 });
+    assert.equal(finished.status, 'success', finished.error);
+
+    const html = fs.readFileSync(path.join(getPublishedAppCurrentDir(config, 'spa'), 'index.html'), 'utf8');
+    assert.match(html, /<base href="\/spa\/">/, 'the build must see BASE_PATH=/spa/');
+    assert.match(html, /built-with-env/, 'app env must reach the build');
+
+    const entries = await agent.get(`/api/deployments/${deploy.body.deployment.id}/entries`);
+    const text = entries.body.entries.map((e) => e.text).join('\n');
+    assert.match(text, /auto-detected output directory: dist/);
+    assert.doesNotMatch(text, /PORT=null/);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('GET /repos/:owner/:repo/detect-project requires a ref and a token', async () => {
+  const server = await setupTestServer();
+  try {
+    const noRef = await server.agent.get('/api/repos/octo/site/detect-project');
+    assert.equal(noRef.status, 400);
+    const noToken = await server.agent.get('/api/repos/octo/site/detect-project?ref=main');
+    assert.equal(noToken.status, 503);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});

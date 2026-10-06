@@ -103,10 +103,11 @@ export function serverApi(serverId) {
       list: (q, refresh) => get(`/repos${toQuery({ q, refresh: refresh ? 1 : undefined })}`),
       branches: (owner, repo) => get(`/repos/${owner}/${repo}/branches`),
       nodeVersion: (owner, repo, ref) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref })}`),
+      detectProject: (owner, repo, ref) => get(`/repos/${owner}/${repo}/detect-project${toQuery({ ref })}`),
     },
     apps: {
       list: () => get('/apps'),
-      defaults: (name, kind) => get(`/apps/defaults${toQuery({ name, kind })}`),
+      defaults: (name, kind, preset) => get(`/apps/defaults${toQuery({ name, kind, preset })}`),
       create: (body) => post('/apps', body),
       get: (id) => get(`/apps/${id}`),
       update: (id, body) => patch(`/apps/${id}`, body),

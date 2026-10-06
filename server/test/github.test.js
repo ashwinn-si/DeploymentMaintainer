@@ -4,6 +4,7 @@ import {
   listRepos,
   listBranches,
   detectNodeVersion,
+  detectProjectType,
   getTokenInfo,
   GitHubError,
   setFetchImpl,
@@ -254,4 +255,31 @@ test('getTokenInfo handles an empty scopes header (fine-grained tokens)', async 
   }));
   const info = await getTokenInfo(config);
   assert.deepEqual(info.scopes, []);
+});
+
+test('detectProjectType classifies from package.json and index.html fetched at the ref', async () => {
+  const config = freshConfig();
+  const files = { 'package.json': JSON.stringify({ devDependencies: { vite: '5' }, scripts: { build: 'vite build' } }) };
+  const urls = [];
+  setFetchImpl(async (url) => {
+    urls.push(url);
+    const name = decodeURIComponent(url.split('/contents/')[1].split('?')[0]);
+    return name in files ? mockResponse({ text: files[name] }) : mockResponse({ status: 404, json: { message: 'Not Found' } });
+  });
+  const result = await detectProjectType(config, 'octo', 'site', 'main');
+  assert.equal(result.type, 'frontend');
+  assert.equal(result.framework.id, 'vite');
+  assert.ok(urls.every((u) => u.includes('ref=main')));
+
+  setFetchImpl(async (url) => (url.includes('/index.html')
+    ? mockResponse({ text: '<h1>hi</h1>' })
+    : mockResponse({ status: 404, json: { message: 'Not Found' } })));
+  assert.equal((await detectProjectType(freshConfig(), 'octo', 'plain', 'main')).type, 'static-html');
+});
+
+test('detectProjectType treats a malformed package.json as absent', async () => {
+  setFetchImpl(async (url) => (url.includes('/package.json')
+    ? mockResponse({ text: '{ not json' })
+    : mockResponse({ status: 404, json: { message: 'Not Found' } })));
+  assert.equal((await detectProjectType(freshConfig(), 'octo', 'bad', 'main')).type, 'unknown');
 });
