@@ -93,8 +93,10 @@ export function LogsMock() {
     setLines([]);
     let i = 0;
     const t = setInterval(() => {
-      setLines((prev) => [...prev, DEPLOY_LOG[i]]);
+      // Read the line now: React runs the updater later, when `i` has already moved on.
+      const next = DEPLOY_LOG[i];
       i += 1;
+      if (next) setLines((prev) => [...prev, next]);
       if (i >= DEPLOY_LOG.length) clearInterval(t);
     }, 550);
     return () => clearInterval(t);
