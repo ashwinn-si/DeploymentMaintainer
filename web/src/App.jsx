@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Routes, Route, Outlet, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { onSessionExpired } from './api.js';
@@ -37,7 +37,17 @@ function PageFallback() {
 // "/" is the public landing page for visitors and the server list for signed-in users.
 function HomeGate() {
   const { user, loading } = useAuth();
-  if (loading) return <PageFallback />;
+  const [waitedTooLong, setWaitedTooLong] = useState(false);
+
+  // Signed-in users get a brief spinner instead of a flash of the landing page. But if the backend is slow
+  // or hung, show the landing page rather than an endless spinner; it switches to the dashboard if you are signed in.
+  useEffect(() => {
+    if (!loading) return undefined;
+    const t = setTimeout(() => setWaitedTooLong(true), 1500);
+    return () => clearTimeout(t);
+  }, [loading]);
+
+  if (loading && !waitedTooLong) return <PageFallback />;
   if (!user) {
     return (
       <Lazy>

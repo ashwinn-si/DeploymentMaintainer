@@ -14,6 +14,13 @@ export class ApiError extends Error {
   }
 }
 
+const CONNECTION_MESSAGE = "Can't reach the server. Check that the backend is running and try again.";
+
+// True for network failures and gateway errors, i.e. the backend is down rather than rejecting the request.
+export function isConnectionError(err) {
+  return err instanceof ApiError && (err.status === 0 || (err.status >= 500 && err.message === CONNECTION_MESSAGE));
+}
+
 const SESSION_EXPIRED_EVENT = 'session-expired';
 
 function dispatchSessionExpired() {
@@ -38,16 +45,23 @@ export function toQuery(params = {}) {
 async function request(path, options = {}) {
   const { method = 'GET', body, headers, ...rest } = options;
 
-  const res = await fetch(apiUrl(path), {
-    method,
-    credentials: 'include',
-    headers: {
-      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    ...rest,
-  });
+  let res;
+  try {
+    res = await fetch(apiUrl(path), {
+      method,
+      credentials: 'include',
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...headers,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...rest,
+    });
+  } catch (err) {
+    // Aborted requests are the caller's doing, not an outage.
+    if (err?.name === 'AbortError') throw err;
+    throw new ApiError(0, CONNECTION_MESSAGE);
+  }
 
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await res.json().catch(() => null) : null;
@@ -57,7 +71,9 @@ async function request(path, options = {}) {
     if (res.status === 401 && !isAuthCheck) {
       dispatchSessionExpired();
     }
-    throw new ApiError(res.status, data?.error ?? res.statusText, data?.issues);
+    // A dev proxy or gateway answers 5xx with an empty or HTML body when the backend is down.
+    const gatewayDown = !data?.error && res.status >= 500;
+    throw new ApiError(res.status, gatewayDown ? CONNECTION_MESSAGE : (data?.error ?? res.statusText), data?.issues);
   }
 
   return data;
@@ -71,7 +87,8 @@ export const api = {
 };
 
 export const auth = {
-  me: () => request('/auth/me'),
+  // Bounded: a hung backend must not leave the app waiting forever to learn whether you are signed in.
+  me: () => request('/auth/me', { signal: AbortSignal.timeout(8000) }),
   login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
   logout: () => request('/auth/logout', { method: 'POST' }),
 };

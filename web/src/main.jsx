@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useLocation } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { Toaster } from 'react-hot-toast';
 import App from './App.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
@@ -8,13 +9,27 @@ import { AuthProvider } from './context/AuthContext.jsx';
 import { isMockEnabled } from './dev/mockFlag.js';
 import './index.css';
 
+// Keyed to the path so leaving a crashed page recovers without a reload.
+function RoutedBoundary() {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary resetKey={pathname}>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
 function renderApp() {
-  createRoot(document.getElementById('root')).render(
+  // main.jsx is not a hot-reload boundary, so re-running it must reuse the existing root. A second
+  // createRoot() on the same element corrupts React's DOM and crashes the page.
+  const root = import.meta.hot?.data.root ?? createRoot(document.getElementById('root'));
+  if (import.meta.hot) import.meta.hot.data.root = root;
+  root.render(
     <StrictMode>
       <ThemeProvider>
         <AuthProvider>
           <BrowserRouter>
-            <App />
+            <RoutedBoundary />
             {/* Toaster must live inside BrowserRouter: toast content can include <Link>s
                 (e.g. "View log"), which need Router context to render. */}
             <Toaster

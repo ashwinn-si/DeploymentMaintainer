@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Loader } from './ui/Loader.jsx';
+import { ConnectionLost } from './ConnectionLost.jsx';
 
 export function RequireAuth({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, backendDown, refresh } = useAuth();
+  const [retrying, setRetrying] = useState(false);
   const location = useLocation();
 
   if (loading) {
@@ -12,6 +15,16 @@ export function RequireAuth({ children }) {
         <Loader />
       </div>
     );
+  }
+
+  // Backend down: don't bounce to the login page, signing in couldn't work either.
+  if (!user && backendDown) {
+    const retry = async () => {
+      setRetrying(true);
+      await refresh();
+      setRetrying(false);
+    };
+    return <ConnectionLost onRetry={retry} retrying={retrying} />;
   }
 
   if (!user) {
