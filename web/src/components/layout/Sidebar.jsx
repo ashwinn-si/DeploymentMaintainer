@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Logo } from '../ui/Logo.jsx';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -12,6 +13,7 @@ import {
   UserCog,
   PanelLeftClose,
   PanelLeftOpen,
+  Info,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
@@ -42,6 +44,7 @@ const SERVER_NAV_GROUPS = [
 const ACCOUNT_NAV = [
   { path: '/', label: 'All servers', desc: 'Switch or add servers', icon: Layers, end: true },
   { path: '/settings', label: 'Account', desc: 'Your login and password', icon: UserCog },
+  { path: '/about', label: 'About', desc: 'The project, GitHub, developer', icon: Info },
 ];
 
 const ALL_SERVERS = '__all__';
@@ -157,9 +160,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
     <div className={`flex h-full flex-col transition-all duration-300 ${collapsed ? 'p-3' : 'p-6'}`}>
       <div className={`mb-6 flex items-center justify-between gap-2 ${collapsed ? 'px-0 flex-col gap-3' : 'px-1'}`}>
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
-            <Rocket className="h-4.5 w-4.5" />
-          </div>
+          <Logo className="h-9 w-auto shrink-0" />
           {!collapsed ? (
             <span className="font-heading text-lg leading-tight">
               <span className="text-[var(--text-primary)]">Deploy</span>{' '}

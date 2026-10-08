@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Logo } from '../ui/Logo.jsx';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Menu, Rocket, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
 import { SidebarContent } from './Sidebar.jsx';
 
@@ -29,9 +30,7 @@ export function Navbar({ deploying = false }) {
           <Menu className="h-4 w-4 text-[var(--text-muted)]" />
         </button>
         <div className="flex items-center gap-2 font-heading text-base">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
-            <Rocket className="h-3.5 w-3.5" />
-          </div>
+          <Logo className="h-7 w-auto" />
           <span className="text-[var(--text-primary)]">Deploy</span>
           <span className="font-light text-[var(--brand)]">Maintainer</span>
         </div>

@@ -3,6 +3,7 @@ import { Routes, Route, Outlet, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { onSessionExpired } from './api.js';
 import { RequireAuth } from './components/RequireAuth.jsx';
+import { useAuth } from './context/AuthContext.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { Loader } from './components/ui/Loader.jsx';
 import { ServersProvider } from './context/ServersContext.jsx';
@@ -15,6 +16,7 @@ import { NotFound } from './pages/NotFound.jsx';
 // Route-split everything past the home pages: keeps the initial bundle under
 // Vite's 500KB chunk warning and means a first paint doesn't pay for the
 // steps editor, log viewer, rings/sparklines, etc. until they're visited.
+const About = lazy(() => import('./pages/About.jsx').then((m) => ({ default: m.About })));
 const Account = lazy(() => import('./pages/Account.jsx').then((m) => ({ default: m.Account })));
 const NewApp = lazy(() => import('./pages/NewApp.jsx').then((m) => ({ default: m.NewApp })));
 const AppDetail = lazy(() => import('./pages/AppDetail.jsx').then((m) => ({ default: m.AppDetail })));
@@ -29,6 +31,24 @@ function PageFallback() {
     <div className="flex min-h-[50vh] items-center justify-center">
       <Loader />
     </div>
+  );
+}
+
+// "/" is the public landing page for visitors and the server list for signed-in users.
+function HomeGate() {
+  const { user, loading } = useAuth();
+  if (loading) return <PageFallback />;
+  if (!user) {
+    return (
+      <Lazy>
+        <About />
+      </Lazy>
+    );
+  }
+  return (
+    <ServersProvider>
+      <AppShell />
+    </ServersProvider>
   );
 }
 
@@ -51,6 +71,17 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/" element={<HomeGate />}>
+        <Route index element={<Servers />} />
+      </Route>
+      <Route
+        path="/about"
+        element={
+          <Lazy>
+            <About />
+          </Lazy>
+        }
+      />
       <Route
         element={
           <RequireAuth>
@@ -61,7 +92,6 @@ export default function App() {
         }
       >
         <Route element={<AppShell />}>
-          <Route path="/" element={<Servers />} />
           <Route
             path="/settings"
             element={

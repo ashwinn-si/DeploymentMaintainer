@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, Rocket } from 'lucide-react';
+import { Logo } from '../components/ui/Logo.jsx';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Input } from '../components/ui/Input.jsx';
@@ -35,12 +36,10 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <GlassCard variant="strong" className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]">
-            <Rocket className="h-6 w-6" />
-          </div>
+          <Logo className="h-16 w-16" />
           <div className="font-heading text-2xl">
             <span className="text-[var(--text-primary)]">Deploy</span>{' '}
             <span className="font-light text-[var(--brand)]">Maintainer</span>
@@ -75,6 +74,9 @@ export function Login() {
           </Button>
         </form>
       </GlassCard>
+      <Link to="/about" className="mt-5 block text-center text-sm font-medium text-[var(--text-muted)] hover:text-[var(--brand)]">
+        What is Deploy Maintainer?
+      </Link>
     </div>
   );
 }

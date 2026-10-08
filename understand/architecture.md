@@ -37,6 +37,7 @@ A single-page React app. Routes:
 | `/login` | Login |
 | `/` | Servers list (add, rename, rotate secret, remove) |
 | `/settings` | Account (change dashboard password) |
+| `/about` | Public landing page: features, architecture, GitHub repo and developer info (no login needed) |
 | `/s/:serverId` | Apps on that server (cards) |
 | `/s/:serverId/new` | Create app: repo, branch, Node version, env, steps |
 | `/s/:serverId/apps/:id` | App detail with tabs (overview, env, steps, deployments, logs…) |
