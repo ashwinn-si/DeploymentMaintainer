@@ -111,7 +111,7 @@ flowchart TD
 4. `pm2 start deploy/ecosystem.control.config.cjs`.
 5. Log in, **Add Server**, and paste the agent's `SERVER_ID` and `SERVER_SECRET`.
 
-Alternative (as in `handoff.md`): host `web/` on Vercel with `VITE_API_URL` pointing at the control plane,
+Alternative: host `web/` on Vercel with `VITE_API_URL` pointing at the control plane,
 and set the control plane's `CORS_ORIGINS` to the Vercel origin.
 
 ### Adding another server

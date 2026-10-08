@@ -13,13 +13,17 @@ talks to the control plane. It owns the admin login and stores each server's URL
 in its own MongoDB database, then forwards requests to the right agent with a bearer secret. Agents have
 no users and no UI, and need no CORS.
 
-```
-Browser ──cookie login──▶ control/  (deploy.ashwinsi.in → :3100, Mongo DB "deployment_control")
-                           • serves web/dist (SPA)
-                           • admin User, seed, change password
-                           • Server records: name, url, serverId, secretEncrypted, lastSeenAt, version, hostname
-                           • /api/servers/:serverId/api/*  ──Bearer SERVER_SECRET──▶  server/ agent on each box (:3000)
-                                                                                      (api.ashwinsi.in, api2.ashwinsi.in, …)
+```mermaid
+flowchart LR
+    B["Browser"] -- "cookie login" --> C
+    subgraph C["control/ (deploy.ashwinsi.in → :3100, Mongo DB deployment_control)"]
+        direction TB
+        C1["serves web/dist (SPA)"]
+        C2["admin User, seed, change password"]
+        C3["Server records: name, url, serverId, secretEncrypted, lastSeenAt, version, hostname"]
+        C4["/api/servers/:serverId/api/*"]
+    end
+    C4 -- "Bearer SERVER_SECRET" --> A["server/ agent on each box (:3000)<br/>api.ashwinsi.in, api2.ashwinsi.in, …"]
 ```
 
 Each agent keeps its own apps and deployments in its own MongoDB, runs the deploy pipeline, and serves the
