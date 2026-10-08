@@ -399,3 +399,11 @@ test('healthCheck returns ok:false (not a throw) when nothing is listening', asy
     assert.equal(result.reason, 'timed out');
   });
 });
+
+test('defaultSteps leaves the health check off for every app kind', () => {
+  for (const [kind, preset] of [['node'], ['static', 'html'], ['static', 'frontend']]) {
+    const hc = defaultSteps('x', kind, preset).find((s) => s.type === 'healthCheck');
+    assert.equal(hc.enabled, false, `${kind}/${preset}`);
+  }
+  assert.equal(defaultSteps('x').find((s) => s.type === 'healthCheck').config.path, '/health');
+});

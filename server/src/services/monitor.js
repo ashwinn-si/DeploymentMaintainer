@@ -13,6 +13,10 @@ let history = [];
 let sampleTimer = null;
 let healthTimer = null;
 
+export function isHealthMonitorRunning() {
+  return healthTimer !== null;
+}
+
 export function getHistory() {
   return history.slice();
 }
@@ -87,12 +91,14 @@ async function healthTick(config) {
 }
 
 export function startMonitor(config) {
-  if (sampleTimer || healthTimer) return;
+  if (sampleTimer) return;
 
   sampleTimer = setInterval(() => sampleTick(config), SAMPLE_INTERVAL_MS);
   sampleTimer.unref?.();
-  healthTimer = setInterval(() => healthTick(config), HEALTH_INTERVAL_MS);
-  healthTimer.unref?.();
+  if (config.HEALTH_MONITOR) {
+    healthTimer = setInterval(() => healthTick(config), HEALTH_INTERVAL_MS);
+    healthTimer.unref?.();
+  }
 
   // So /system has data immediately instead of waiting up to 30s for the first tick.
   sampleTick(config);

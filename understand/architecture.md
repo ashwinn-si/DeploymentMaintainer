@@ -73,7 +73,7 @@ Express API, Bearer-auth on everything under `/api` except `/api/health`.
 | `steps/` | One module per pipeline step, all exposing `run(ctx)` and `label(config)` |
 | `services/git.js, pm2.js, nginx.js, node.js, shell.js` | Wrappers over git, PM2, Nginx+sudo, fnm, and `spawn` |
 | `services/deployLog.js` | Buffered, redacted, capped log writer + event bus for live streaming |
-| `services/monitor.js` | Background timers: system samples (30s) and app health pings (60s) |
+| `services/monitor.js` | Background timers: system samples (30s) and, only if `HEALTH_MONITOR=true`, app health pings (60s) |
 | `models/` | `App` (config, steps, env blob, port, status) and `Deployment` (steps, log entries, status) |
 
 ### 2.4 Nginx (per server)

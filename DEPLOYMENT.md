@@ -440,7 +440,7 @@ Use the sidebar's server switcher to move between servers. Each server has its o
 ### 6.1 What your app needs
 - It must **listen on `process.env.PORT`**. The agent assigns the port and writes it into `.env` and PM2's env.
 - It needs a **start command**; the default is `npm start`. If it needs a build first, enable the Build step.
-- The **health-check path** (default `/`) must return a 2xx or 3xx status within 60s of starting. If it doesn't, the deploy fails and auto-rolls back. Point it at something like `/health` if `/` isn't cheap.
+- The **health check is off by default**. If you turn it on in the Steps tab, your app needs a `GET /health` endpoint (path is configurable) that returns 2xx/3xx on `process.env.PORT` within 60s of starting; otherwise the deploy fails and auto-rolls back. The Steps tab shows a copy-paste prompt for adding that endpoint. The background health monitor is also off; set `HEALTH_MONITOR=true` in `server/.env` to enable it.
 - **Path prefix:** at `https://YOUR_SERVER_DOMAIN/my-api/users`, the app receives just `/users` (the prefix is stripped by default). APIs work unchanged. Apps that render HTML with absolute links (`/css/app.css`) will break under a prefix; turn off "strip prefix" and make the app aware of its base path, or keep such apps API-only.
 - If it reads env vars from a `.env` file, use `dotenv`. The agent writes `.env` into the app folder. The vars are also passed directly in the process environment.
 

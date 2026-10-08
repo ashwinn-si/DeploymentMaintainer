@@ -84,7 +84,7 @@ export function defaultSteps(name, kind = 'node', preset = 'html') {
       { type: 'nginx', enabled: true, config: { path: `/${name}`, stripPrefix: true, serveStatic: true } },
       {
         type: 'healthCheck',
-        enabled: true,
+        enabled: false,
         config: { path: '/', timeoutSec: 30, intervalSec: 2, autoRollback: true },
       },
     ];
@@ -98,8 +98,8 @@ export function defaultSteps(name, kind = 'node', preset = 'html') {
     { type: 'pm2', enabled: true, config: { command: 'npm start' } },
     {
       type: 'healthCheck',
-      enabled: true,
-      config: { path: '/', timeoutSec: 60, intervalSec: 2, autoRollback: true },
+      enabled: false,
+      config: { path: '/health', timeoutSec: 60, intervalSec: 2, autoRollback: true },
     },
     { type: 'nginx', enabled: true, config: { path: `/${name}`, stripPrefix: true } },
   ];

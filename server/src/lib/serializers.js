@@ -1,3 +1,5 @@
+import { isHealthMonitorRunning } from '../services/monitor.js';
+
 function toIso(d) {
   return d ? new Date(d).toISOString() : null;
 }
@@ -6,6 +8,10 @@ function nginxPathFor(app) {
   const nginxStep = (app.steps || []).find((s) => s.type === 'nginx');
   if (!nginxStep?.enabled) return null;
   return nginxStep.config?.path || `/${app.name}`;
+}
+
+function healthCheckEnabled(app) {
+  return (app.steps || []).some((s) => s.type === 'healthCheck' && s.enabled);
 }
 
 const EMPTY_PM2 = { status: null, cpu: null, memory: null, restarts: null, uptimeMs: null };
@@ -22,6 +28,9 @@ export function serializeAppSummary(app, { pm2 = null, activeDeploymentId = null
     path: nginxPathFor(app),
     status: app.status,
     pm2: pm2 ?? EMPTY_PM2,
+    healthCheckEnabled: healthCheckEnabled(app),
+    // Only true when a background monitor is actually refreshing `health`; otherwise it is stale or empty.
+    healthMonitoring: isHealthMonitorRunning() && healthCheckEnabled(app),
     health: {
       ok: app.health?.ok ?? false,
       statusCode: app.health?.statusCode ?? null,

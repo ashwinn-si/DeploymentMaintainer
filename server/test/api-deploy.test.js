@@ -24,7 +24,7 @@ test.after(async () => {
 function stepsFor(name, { pm2Command = 'node server.js', buildEnabled = false, extra = [] } = {}) {
   const steps = defaultSteps(name).map((s) => {
     if (s.type === 'pm2') return { ...s, config: { command: pm2Command } };
-    if (s.type === 'healthCheck') return { ...s, config: { ...s.config, timeoutSec: 20, intervalSec: 1 } };
+    if (s.type === 'healthCheck') return { ...s, enabled: true, config: { ...s.config, path: '/', timeoutSec: 20, intervalSec: 1 } };
     if (s.type === 'build') return { ...s, enabled: buildEnabled };
     return s;
   });

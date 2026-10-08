@@ -9,7 +9,7 @@ import App from '../src/models/App.js';
 function stepsFor(name) {
   return defaultSteps(name).map((s) => {
     if (s.type === 'pm2') return { ...s, config: { command: 'node server.js' } };
-    if (s.type === 'healthCheck') return { ...s, config: { ...s.config, timeoutSec: 20, intervalSec: 1 } };
+    if (s.type === 'healthCheck') return { ...s, enabled: true, config: { ...s.config, path: '/', timeoutSec: 20, intervalSec: 1 } };
     return s;
   });
 }

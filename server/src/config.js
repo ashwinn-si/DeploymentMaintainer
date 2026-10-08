@@ -42,6 +42,8 @@ const fieldSchemas = {
   APP_PORT_START: z.coerce.number().int().positive().default(4001),
   DEFAULT_NODE_VERSION: z.string().min(1).default('20'),
   NGINX_ENABLED: boolFromEnv(true),
+  // Background health probing of every app. Off by default: it only helps apps that expose a health endpoint.
+  HEALTH_MONITOR: boolFromEnv(false),
   NODE_ENV: z.string().min(1).default('development'),
   GIT_REMOTE_BASE: z.string().min(1).default('https://github.com'),
 };
@@ -69,6 +71,7 @@ const ALWAYS_DEFAULTED = new Set([
   'APP_PORT_START',
   'DEFAULT_NODE_VERSION',
   'NGINX_ENABLED',
+  'HEALTH_MONITOR',
   'NODE_ENV',
   'GIT_REMOTE_BASE',
 ]);

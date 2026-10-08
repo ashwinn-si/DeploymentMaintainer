@@ -132,7 +132,9 @@ test('a static app deploys without a port or PM2, publishes a clean release and 
     assert.equal(logs.status, 200);
 
     const ports = await agent.get('/api/ports');
-    assert.equal(ports.body.rows.some((r) => r.appName === 'site'), false);
+    const siteRow = ports.body.rows.find((r) => r.appName === 'site');
+    assert.equal(siteRow?.kind, 'static');
+    assert.equal(siteRow?.port, null);
 
     const del = await agent.delete(`/api/apps/${app.id}`).send({ confirmName: 'site' });
     assert.equal(del.status, 200);

@@ -375,7 +375,7 @@ Your app must:
 
 - listen on `process.env.PORT`
 - have an `npm start` script (enable the Build step if it needs one)
-- return 2xx/3xx on its health-check path (default `/`; change it to e.g. `/health` in the Steps tab)
+- (only if you turn the health check on, it is off by default) return 2xx/3xx on its health-check path (default `/health`)
 
 Requests reach the app **without** the `/my-api` prefix.
 

@@ -34,6 +34,7 @@ async function buildApps(config) {
       restarts: proc?.pm2_env?.restart_time ?? null,
       uptimeMs: proc?.pm2_env?.pm_uptime ? Date.now() - proc.pm2_env.pm_uptime : null,
       diskBytes: system.getCachedFolderSize(app.name),
+      healthMonitoring: monitor.isHealthMonitorRunning() && app.steps.some((s) => s.type === 'healthCheck' && s.enabled),
       health: {
         ok: app.health?.ok ?? false,
         statusCode: app.health?.statusCode ?? null,

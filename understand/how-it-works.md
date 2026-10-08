@@ -101,7 +101,7 @@ Errors: unreachable → 502; slow (60s, not applied to SSE) → 504; agent says 
 2. Port: use the one given (checked for conflicts and that nothing on the machine is listening), or `allocatePort` (first free from `APP_PORT_START`, default 4001).
 3. Steps: `normalizeSteps` validates your pipeline, or `defaultSteps(name)` supplies it:
 
-   `gitSync → nodeSetup → writeEnv → install → build (off) → pm2 → healthCheck → nginx(/<name>)`
+   `gitSync → nodeSetup → writeEnv → install → build (off) → pm2 → healthCheck (off by default) → nginx(/<name>)`
 
    `gitSync` must be first and `nodeSetup` must exist; both are always enabled.
 4. Env is encrypted into `envEncrypted`. The `App` is saved as `not_deployed`.
@@ -241,7 +241,7 @@ sequenceDiagram
 
 `server/src/services/monitor.js`, started at boot:
 - Every **30s**: a system sample (CPU, memory, swap, load, disk) kept in a 120-sample ring buffer (1 hour).
-- Every **60s**: for each app that is `online` **and** has an enabled health-check step, a GET on its health path (5 s timeout, 5 at a time); the result is stored in `app.health` and shown as healthy/unhealthy on the cards.
+- Only when `HEALTH_MONITOR=true` (off by default): every **60s**, for each app that is `online` **and** has an enabled health-check step, a GET on its health path (5 s timeout, 5 at a time); the result is stored in `app.health` and shown as healthy/unhealthy on the cards.
 
 ```mermaid
 flowchart LR
