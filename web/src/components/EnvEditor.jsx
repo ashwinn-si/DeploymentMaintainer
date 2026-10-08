@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Eye, EyeOff, ClipboardPaste } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, ClipboardPaste, Search } from 'lucide-react';
 import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
 import { Modal } from './ui/Modal.jsx';
@@ -31,15 +31,22 @@ export function EnvEditor({ value = [], onChange }) {
   const [revealed, setRevealed] = useState(() => new Set());
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const [query, setQuery] = useState('');
 
   const keyCounts = value.reduce((acc, row) => {
     if (row.key) acc[row.key] = (acc[row.key] ?? 0) + 1;
     return acc;
   }, {});
 
+  const needle = query.trim().toLowerCase();
+  const visibleCount = value.filter((row) => !row.key || row.key.toLowerCase().includes(needle)).length;
+
   const updateRow = (idx, patch) => onChange(value.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
   const removeRow = (idx) => onChange(value.filter((_, i) => i !== idx));
-  const addRow = () => onChange([...value, { key: '', value: '' }]);
+  const addRow = () => {
+    setQuery('');
+    onChange([...value, { key: '', value: '' }]);
+  };
   const toggleReveal = (idx) =>
     setRevealed((prev) => {
       const next = new Set(prev);
@@ -73,10 +80,17 @@ export function EnvEditor({ value = [], onChange }) {
         </Button>
       </div>
 
+      {value.length > 4 ? (
+        <Input icon={Search} placeholder="Search variables by name…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      ) : null}
+
       {value.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No environment variables yet.</p> : null}
 
       <div className="custom-scrollbar max-h-[420px] overflow-y-auto pr-1 space-y-2">
+        {needle && visibleCount === 0 ? <p className="py-3 text-sm text-[var(--text-muted)]">No variables match “{query}”.</p> : null}
         {value.map((row, idx) => {
+          // Rows still being typed (empty key) stay visible so they don't vanish mid-edit.
+          if (needle && row.key && !row.key.toLowerCase().includes(needle)) return null;
           const keyError = row.key && !KEY_RE.test(row.key) ? 'Must match ^[A-Z_][A-Z0-9_]*$' : null;
           const dupError = !keyError && row.key && keyCounts[row.key] > 1 ? 'Duplicate key' : null;
           return (

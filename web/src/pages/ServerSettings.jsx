@@ -157,7 +157,7 @@ function ExportPanel() {
         {apps.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No apps yet.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="flex flex-col items-start gap-2.5">
             {apps.map((app) => (
               <Toggle key={app.id} checked={selected.has(app.id)} onChange={() => toggleApp(app.id)} label={app.name} />
             ))}
@@ -372,7 +372,7 @@ function BackupCard() {
 export function ServerSettings() {
   return (
     <div className="space-y-6">
-      <PageHeader icon={SettingsIcon} eyebrow="Server" title="Settings">
+      <PageHeader icon={SettingsIcon} eyebrow="This server" title="Server settings">
         Config export/import and read-only server info.
       </PageHeader>
       <GithubInfoCard />

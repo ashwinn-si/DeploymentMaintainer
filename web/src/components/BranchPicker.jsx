@@ -20,7 +20,10 @@ export function BranchPicker({ repoFullName, value, onChange, label = 'Branch' }
       .then((data) => {
         if (cancelled) return;
         setBranches(data.branches ?? []);
-        if (!value && data.branches?.[0]) onChange(data.branches[0]);
+        const list = data.branches ?? [];
+        // Prefer main, then master, then the repo's default (the API lists it first).
+        const preferred = ['main', 'master'].find((b) => list.includes(b)) ?? list[0];
+        if (!value && preferred) onChange(preferred);
       })
       .catch(() => {
         if (!cancelled) setBranches([]);

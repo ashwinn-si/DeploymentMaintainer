@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { PlusCircle, Plug, Server, FileCode2, Package, Sparkles, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Plug, Server, FileCode2, Package, Sparkles, AlertTriangle, Loader2 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Input } from '../components/ui/Input.jsx';
@@ -53,7 +53,23 @@ function detectedPreset(detected) {
 
 const DETECTED_TITLES = { 'node-server': 'Node.js server', frontend: 'Frontend app', 'static-html': 'Static HTML site' };
 
-function DetectionBanner({ detected }) {
+function DetectionBanner({ detected, status, preset }) {
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl bg-[var(--brand-soft)] px-4 py-3 text-xs text-[var(--text-secondary)]">
+        <Loader2 className="h-4 w-4 animate-spin text-[var(--brand)]" />
+        Looking at the repository to pick the right project type…
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="flex items-start gap-2 rounded-2xl bg-rose-500/10 px-4 py-3 text-xs text-rose-600 dark:text-rose-400">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Could not auto-detect the project type, so none is pre-selected. Pick one below.</span>
+      </div>
+    );
+  }
   if (!detected) return null;
   if (detected.type === 'unknown') {
     return (
@@ -72,6 +88,11 @@ function DetectionBanner({ detected }) {
         {framework}
       </p>
       {detected.reasons?.map((reason) => <p key={reason}>{reason}</p>)}
+      {detectedPreset(detected) && detectedPreset(detected) !== preset ? (
+        <p className="font-medium text-amber-700 dark:text-amber-400">
+          You picked a different type than detected. A frontend deployed as a Node server will crash with 502 errors, and a backend deployed as a frontend has no process to serve it.
+        </p>
+      ) : null}
       {detected.type === 'frontend' && detected.baseSupport === 'auto' ? (
         <p>It is served under its own path (<code>/&lt;name&gt;/</code>); the build is given that base path automatically. Your router must use the base URL too.</p>
       ) : null}
@@ -88,6 +109,7 @@ export function NewApp() {
   // node = PM2 process; frontend = build then serve static files; html = serve files as-is.
   const [preset, setPreset] = useState('node');
   const [detected, setDetected] = useState(null);
+  const [detectStatus, setDetectStatus] = useState('idle');
   const presetTouched = useRef(false);
   const [repoFullName, setRepoFullName] = useState('');
   const [branch, setBranch] = useState('');
@@ -148,7 +170,9 @@ export function NewApp() {
   // Look at the repo as soon as a branch is picked, and pre-select the matching type unless the user already chose.
   useEffect(() => {
     setDetected(null);
+    setDetectStatus('idle');
     if (!repoFullName || !branch) return undefined;
+    setDetectStatus('loading');
     const [owner, repo] = repoFullName.split('/');
     let cancelled = false;
     api.repos
@@ -156,10 +180,13 @@ export function NewApp() {
       .then((result) => {
         if (cancelled) return;
         setDetected(result);
+        setDetectStatus('done');
         const mapped = detectedPreset(result);
         if (mapped && !presetTouched.current) choosePreset(mapped, { fromUser: false });
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setDetectStatus('error');
+      });
     return () => {
       cancelled = true;
     };
@@ -217,7 +244,7 @@ export function NewApp() {
       </Section>
 
       <Section step={3} title="Project type" description="How this app is built and served.">
-        <DetectionBanner detected={detected} />
+        <DetectionBanner detected={detected} status={detectStatus} preset={preset} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {PRESETS.map(({ value, icon: Icon, title, text }) => (
             <button
@@ -304,7 +331,7 @@ export function NewApp() {
       )}
 
       <Section step={7} title="Deploy steps" description="What runs, in order, on every deploy.">
-        {steps.length ? <StepsEditor value={steps} kind={kind} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (
+        {steps.length ? <StepsEditor value={steps} kind={kind} port={port || null} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (
           <p className="text-sm text-[var(--text-muted)]">Pick a name to load the default pipeline.</p>
         )}
       </Section>

@@ -57,7 +57,7 @@ function AppDesktopRow({ app }) {
       <span className="text-[var(--text-muted)]">{app.restarts ?? '—'}</span>
       <span className="text-[var(--text-muted)]">{formatUptimeMs(app.uptimeMs)}</span>
       <span className="text-[var(--text-muted)]">{formatBytes(app.diskBytes)}</span>
-      <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill>
+      {app.healthMonitoring ? <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill> : <span className="text-[var(--text-muted)]">—</span>}
     </Link>
   );
 }
@@ -68,7 +68,7 @@ function AppMobileCard({ app }) {
     <Link to={serverPath(`/apps/${app.appId}`)} className="surface-inset block space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 sm:hidden">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-[var(--text-primary)]">{app.appName}</p>
-        <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill>
+        {app.healthMonitoring ? <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill> : null}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-[var(--text-muted)]">
         <span>PM2: {app.pm2Status ?? '—'}</span>
@@ -104,8 +104,8 @@ export function Server() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={ServerIcon} eyebrow="Health" title="Server">
-        CPU, RAM, disk and per-app resource usage.
+      <PageHeader icon={ServerIcon} eyebrow="This server" title="Resources">
+        How much CPU, memory and disk the server and each app is using.
       </PageHeader>
 
       {!system ? (

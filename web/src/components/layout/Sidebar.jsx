@@ -19,13 +19,29 @@ import { useServers } from '../../context/ServersContext.jsx';
 import { SelectSheet } from '../ui/SelectSheet.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 
-const SERVER_NAV = [
-  { path: '/', label: 'Apps', icon: LayoutGrid, end: true },
-  { path: '/new', label: 'New App', icon: PlusCircle },
-  { path: '/deployments', label: 'Deployments', icon: Rocket, dot: true },
-  { path: '/ports', label: 'Ports', icon: Plug },
-  { path: '/server', label: 'Server', icon: Server },
-  { path: '/settings', label: 'Settings', icon: Settings },
+// Grouped by what the user is doing, each with a one-line explanation so the names are self-evident.
+const SERVER_NAV_GROUPS = [
+  {
+    heading: 'Projects',
+    items: [
+      { path: '/', label: 'Apps', desc: 'Everything deployed here', icon: LayoutGrid, end: true },
+      { path: '/new', label: 'New app', desc: 'Deploy a GitHub repo', icon: PlusCircle },
+      { path: '/deployments', label: 'Deployments', desc: 'Each deploy run and its logs', icon: Rocket, dot: true },
+    ],
+  },
+  {
+    heading: 'This server',
+    items: [
+      { path: '/ports', label: 'Ports & routes', desc: 'Port and URL path per app', icon: Plug },
+      { path: '/server', label: 'Resources', desc: 'CPU, memory and disk', icon: Server },
+      { path: '/settings', label: 'Server settings', desc: 'Connection, backup, cleanup', icon: Settings },
+    ],
+  },
+];
+
+const ACCOUNT_NAV = [
+  { path: '/', label: 'All servers', desc: 'Switch or add servers', icon: Layers, end: true },
+  { path: '/settings', label: 'Account', desc: 'Your login and password', icon: UserCog },
 ];
 
 const ALL_SERVERS = '__all__';
@@ -43,6 +59,34 @@ function navClass({ isActive }) {
       ? 'bg-[var(--brand)] text-white font-semibold shadow-sm'
       : 'text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5',
   ].join(' ');
+}
+
+function NavItem({ item, to, collapsed, onNavigate, pulse = false }) {
+  const { label, desc, icon: Icon, end } = item;
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onNavigate}
+      title={collapsed ? `${label} — ${desc}` : desc}
+      className={(navState) =>
+        [navClass(navState), collapsed ? 'mx-auto h-11 w-11 justify-center p-0' : 'px-4 py-2.5'].join(' ')
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <Icon className="h-4.5 w-4.5 shrink-0" />
+          {!collapsed ? (
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold leading-tight">{label}</span>
+              <span className={['block truncate text-[11px] leading-tight', isActive ? 'text-white/80' : 'text-[var(--text-muted)]'].join(' ')}>{desc}</span>
+            </span>
+          ) : null}
+          {!collapsed && pulse ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[var(--brand)]" /> : null}
+        </>
+      )}
+    </NavLink>
+  );
 }
 
 function ServerOption({ name, status }) {
@@ -138,62 +182,28 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
 
       <ServerSwitcher onNavigate={onNavigate} collapsed={collapsed} />
 
-      <nav className="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto">
+      <nav className="custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto">
         {ctx
-          ? SERVER_NAV.map(({ path, label, icon: Icon, end, dot }) => (
-              <NavLink
-                key={path}
-                to={ctx.serverPath(path)}
-                end={end}
-                onClick={onNavigate}
-                title={collapsed ? label : undefined}
-                className={(navState) =>
-                  [
-                    navClass(navState),
-                    collapsed ? 'h-11 w-11 justify-center mx-auto p-0' : 'px-4 py-3 text-sm font-medium',
-                  ].join(' ')
-                }
-              >
-                <Icon className="h-4.5 w-4.5 shrink-0" />
-                {!collapsed ? <span className="flex-1">{label}</span> : null}
-                {!collapsed && dot && deploying ? (
-                  <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[var(--brand)]" />
-                ) : null}
-              </NavLink>
+          ? SERVER_NAV_GROUPS.map((group) => (
+              <div key={group.heading} className="space-y-1">
+                {!collapsed ? (
+                  <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{group.heading}</p>
+                ) : (
+                  <div className="mx-auto my-2 h-px w-6 bg-[var(--premium-border)]" />
+                )}
+                {group.items.map((item) => (
+                  <NavItem key={item.path} item={item} to={ctx.serverPath(item.path)} collapsed={collapsed} onNavigate={onNavigate} pulse={item.dot && deploying} />
+                ))}
+              </div>
             ))
           : null}
       </nav>
 
       <div className="mt-4 space-y-1 border-t border-[var(--premium-border)] pt-4">
-        <NavLink
-          to="/"
-          end
-          onClick={onNavigate}
-          title={collapsed ? 'Servers' : undefined}
-          className={(navState) =>
-            [
-              navClass(navState),
-              collapsed ? 'h-11 w-11 justify-center mx-auto p-0' : 'px-4 py-3 text-sm font-medium',
-            ].join(' ')
-          }
-        >
-          <Layers className="h-4.5 w-4.5 shrink-0" />
-          {!collapsed ? <span className="flex-1">Servers</span> : null}
-        </NavLink>
-        <NavLink
-          to="/settings"
-          onClick={onNavigate}
-          title={collapsed ? 'Account' : undefined}
-          className={(navState) =>
-            [
-              navClass(navState),
-              collapsed ? 'h-11 w-11 justify-center mx-auto p-0' : 'px-4 py-3 text-sm font-medium',
-            ].join(' ')
-          }
-        >
-          <UserCog className="h-4.5 w-4.5 shrink-0" />
-          {!collapsed ? <span className="flex-1">Account</span> : null}
-        </NavLink>
+        {!collapsed ? <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Workspace</p> : null}
+        {ACCOUNT_NAV.map((item) => (
+          <NavItem key={item.label} item={item} to={item.path} collapsed={collapsed} onNavigate={onNavigate} />
+        ))}
       </div>
 
       <div className="mt-4 space-y-3">

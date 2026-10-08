@@ -43,7 +43,7 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
   // /ports returns { dashboard: { port }, rows }; the dashboard's own port is occupied too.
   const occupiedPorts = [
     ...(data?.dashboard?.port ? [{ port: data.dashboard.port, appName: 'Deployment Maintainer', conflict: null }] : []),
-    ...(data?.rows ?? []),
+    ...(data?.rows ?? []).filter((r) => r.port != null),
   ];
   const occupiedNumbers = new Set(occupiedPorts.map((p) => Number(p.port)));
   const suggestedAvailable = COMMON_PORTS.filter((p) => !occupiedNumbers.has(p)).slice(0, 8);
@@ -139,7 +139,7 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          <StatusPill tone={row.health?.ok ? 'teal' : row.pm2Status === 'online' ? 'brand' : 'amber'}>
+                          <StatusPill tone={row.pm2Status === 'online' ? 'teal' : row.pm2Status === 'errored' ? 'rose' : 'amber'}>
                             {row.pm2Status || 'occupied'}
                           </StatusPill>
                           <Button

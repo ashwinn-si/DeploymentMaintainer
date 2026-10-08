@@ -85,7 +85,7 @@ export function Deployments() {
   return (
     <div className="space-y-6">
       <PageHeader icon={Rocket} eyebrow="History" title="Deployments">
-        Every deployment across every app, filterable by app, status, branch and mode.
+        A deployment is one run of the pipeline for an app: pull the code, build, start. Open one to see its commit and full log.
       </PageHeader>
 
       <div className="hidden sm:block">

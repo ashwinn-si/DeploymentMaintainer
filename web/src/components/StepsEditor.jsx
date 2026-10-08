@@ -1,4 +1,5 @@
-import { GripVertical, ChevronUp, ChevronDown, Plus, Trash2, Info } from 'lucide-react';
+import { useState } from 'react';
+import { GripVertical, ChevronUp, ChevronDown, Plus, Trash2, Info, HeartPulse, Copy, Check } from 'lucide-react';
 import { Toggle } from './ui/Toggle.jsx';
 import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
@@ -19,6 +20,47 @@ const LABELS = {
   nginx: 'Nginx routing',
   publish: 'Publish static files',
 };
+
+function healthPrompt(path, port) {
+  const portText = port ? `port ${port} (read it from process.env.PORT)` : 'the port in process.env.PORT';
+  return `Add a health endpoint to this app: GET ${path} must respond with HTTP 200 (e.g. { "status": "ok" }) without needing auth or a database. Make sure the server listens on ${portText}, so the deployer can reach http://127.0.0.1:<port>${path}.`;
+}
+
+function HealthEndpointHint({ path, port }) {
+  const [copied, setCopied] = useState(false);
+  const prompt = healthPrompt(path || '/health', port);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked: the text is still selectable
+    }
+  };
+  return (
+    <div className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-[var(--text-secondary)]">
+      <p className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+        <HeartPulse className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        Needs a health endpoint in your app
+      </p>
+      <p>
+        Many projects have no endpoint to check. If yours doesn't, the check fails and the deploy is marked failed. Add one, expose it on the app's port, then turn this step on. Paste this into your editor or AI assistant:
+      </p>
+      <div className="relative">
+        <pre className="custom-scrollbar max-h-32 overflow-y-auto whitespace-pre-wrap rounded-xl border border-[var(--premium-border)] bg-base-100 p-3 pr-12 font-mono text-[11px] leading-relaxed text-[var(--text-primary)]">{prompt}</pre>
+        <button
+          type="button"
+          onClick={copy}
+          aria-label="Copy prompt"
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--premium-border)] bg-base-100 text-[var(--text-muted)] ui-transition hover:text-[var(--text-primary)]"
+        >
+          {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function priority(type, kind) {
   const before = ORDER_BEFORE.indexOf(type);
@@ -50,7 +92,7 @@ function StepRow({ step, index, onToggle, onConfigChange, children }) {
   );
 }
 
-export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
+export function StepsEditor({ value: rawValue = [], onChange, kind = 'node', port = null }) {
   // Empty config objects can be dropped by the DB layer; always hand rows a config object.
   const value = rawValue.map((s) => (s.config ? s : { ...s, config: {} }));
   const setAt = (index, patch) => onChange(value.map((s, i) => (i === index ? { ...s, ...patch } : s)));
@@ -178,10 +220,11 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
         }
         if (step.type === 'healthCheck') {
           return (
-            <StepRow key={index} step={step} index={index} onToggle={toggleAt} onConfigChange={setConfigAt}>
+            <div key={index} className="space-y-3">
+            <StepRow step={step} index={index} onToggle={toggleAt} onConfigChange={setConfigAt}>
               {(config, patch) => (
                 <>
-                  <Input label="Path" value={config.path ?? '/'} onChange={(e) => patch({ path: e.target.value })} className="font-mono" />
+                  <Input label="Path" value={config.path ?? '/health'} onChange={(e) => patch({ path: e.target.value })} className="font-mono" />
                   <div className="grid grid-cols-2 gap-3">
                     <Input
                       label="Timeout (sec)"
@@ -200,6 +243,8 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
                 </>
               )}
             </StepRow>
+            {kind === 'node' ? <HealthEndpointHint path={step.config?.path || '/health'} port={port} /> : null}
+            </div>
           );
         }
         if (step.type === 'publish') {

@@ -219,7 +219,7 @@ export function AppDetail() {
           <StatusPill tone={tone} pulse={pulse}>
             {app.status.replace('_', ' ')}
           </StatusPill>
-          <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill>
+          {app.healthMonitoring ? <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill> : null}
           <span>
             {app.repoFullName} @ {app.branch}
           </span>
@@ -235,7 +235,7 @@ export function AppDetail() {
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
           </div>
         ) : null}
-        {tab === 'steps' ? <StepsEditorSaveable initial={app.steps} kind={app.kind} onSave={handleSaveSteps} busy={busy === 'steps'} /> : null}
+        {tab === 'steps' ? <StepsEditorSaveable initial={app.steps} kind={app.kind} port={app.port} onSave={handleSaveSteps} busy={busy === 'steps'} /> : null}
         {tab === 'deployments' ? (
           <div className="space-y-2">
             {deployments.length === 0 ? (
@@ -292,12 +292,12 @@ function EnvEditorSaveable({ initial, onSave, busy }) {
   );
 }
 
-function StepsEditorSaveable({ initial, kind, onSave, busy }) {
+function StepsEditorSaveable({ initial, kind, port, onSave, busy }) {
   const [steps, setSteps] = useState(initial);
   const dirty = JSON.stringify(steps) !== JSON.stringify(initial);
   return (
     <div className="space-y-4">
-      <StepsEditor value={steps} onChange={setSteps} kind={kind} />
+      <StepsEditor value={steps} onChange={setSteps} kind={kind} port={port} />
       <div className="flex justify-end">
         <Button size="sm" disabled={!dirty} loading={busy} onClick={() => onSave(steps)}>
           Save steps
