@@ -77,7 +77,7 @@ export function LogViewer({
               onClick={() => setStepFilter('all')}
               className={[
                 'min-h-[38px] rounded-full px-3 text-xs font-medium transition-colors',
-                stepFilter === 'all' ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11] font-semibold' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                stepFilter === 'all' ? 'bg-[var(--brand)] text-white font-semibold' : 'surface-inset text-[var(--text-muted)] hover:text-[var(--text-primary)]',
               ].join(' ')}
             >
               All
@@ -89,7 +89,7 @@ export function LogViewer({
                 onClick={() => setStepFilter(s.id)}
                 className={[
                   'min-h-[38px] rounded-full px-3 text-xs font-medium transition-colors',
-                  stepFilter === s.id ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11] font-semibold' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                  stepFilter === s.id ? 'bg-[var(--brand)] text-white font-semibold' : 'surface-inset text-[var(--text-muted)] hover:text-[var(--text-primary)]',
                 ].join(' ')}
               >
                 {s.label ?? s.type}
@@ -136,7 +136,7 @@ export function LogViewer({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="custom-scrollbar h-[520px] min-h-[380px] max-h-[65vh] overflow-y-auto rounded-2xl border border-black/[0.06] bg-black/[0.03] p-4 font-mono text-[12px] leading-relaxed dark:border-white/10 dark:bg-black/40"
+        className="custom-scrollbar h-[520px] min-h-[380px] max-h-[65vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-4 font-mono text-[12px] leading-relaxed dark:bg-black/40"
       >
         {hiddenCount > 0 ? (
           <p className="mb-2 text-[11px] text-[var(--text-muted)]">Showing last {MAX_RENDERED.toLocaleString()} of {filtered.length.toLocaleString()} lines</p>

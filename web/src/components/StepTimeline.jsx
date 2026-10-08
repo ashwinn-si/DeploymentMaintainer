@@ -2,8 +2,8 @@ import { Check, X, Minus, Loader2 } from 'lucide-react';
 
 const DOT_CLASS = {
   pending: 'bg-black/10 dark:bg-white/10 text-[var(--text-muted)]',
-  running: 'bg-[var(--brand)] text-white dark:text-[#0B0D11]',
-  success: 'bg-teal-500 text-white dark:text-[#0B0D11]',
+  running: 'bg-[var(--brand)] text-white',
+  success: 'bg-teal-500 text-white',
   failed: 'bg-rose-500 text-white',
   skipped: 'bg-black/10 dark:bg-white/10 text-[var(--text-muted)]',
 };

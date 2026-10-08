@@ -11,7 +11,7 @@ export function DeploymentRow({ deployment, showApp = false }) {
   return (
     <Link
       to={serverPath(`/deployments/${deployment.id}`)}
-      className="glass-light flex flex-col gap-2 rounded-2xl border border-white/60 p-4 transition-colors hover:bg-white/70 dark:border-white/10 dark:hover:bg-black/30 sm:flex-row sm:items-center sm:justify-between"
+      className="surface-inset flex flex-col gap-2 rounded-2xl border border-[var(--premium-border)] p-4 transition-colors hover:bg-base-300 sm:flex-row sm:items-center sm:justify-between"
     >
       <div className="flex items-center gap-3">
         <StatusPill tone={tone} pulse={pulse}>

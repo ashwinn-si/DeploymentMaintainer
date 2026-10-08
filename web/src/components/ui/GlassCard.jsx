@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
 
 const VARIANTS = {
-  strong: 'glass-strong rounded-3xl',
-  mid: 'glass-mid rounded-3xl',
-  light: 'glass-light rounded-2xl',
+  strong: 'surface-overlay rounded-2xl',
+  mid: 'surface rounded-2xl',
+  light: 'surface-inset rounded-xl',
 };
 
 export function GlassCard({
@@ -17,7 +17,7 @@ export function GlassCard({
   const classes = [
     VARIANTS[variant] ?? VARIANTS.mid,
     'p-5 sm:p-6 transition-colors duration-200',
-    interactive ? 'glass-interactive cursor-pointer' : '',
+    interactive ? 'surface-interactive cursor-pointer' : '',
     className,
   ]
     .filter(Boolean)

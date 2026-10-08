@@ -44,7 +44,7 @@ export function RepoPicker({ value, onChange }) {
       </div>
 
       {error ? (
-        <div className="glass-light rounded-2xl p-4 text-sm text-rose-500">
+        <div className="surface-inset rounded-2xl p-4 text-sm text-rose-500">
           {error.status === 503
             ? 'GitHub token is not configured on the server — ask an admin to set GITHUB_TOKEN.'
             : error.message}
@@ -62,7 +62,7 @@ export function RepoPicker({ value, onChange }) {
               'flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors',
               value === repo.fullName
                 ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-                : 'border-white/60 hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5',
+                : 'border-[var(--premium-border)] hover:bg-black/[0.03] dark:hover:bg-white/5',
             ].join(' ')}
           >
             <div className="min-w-0">

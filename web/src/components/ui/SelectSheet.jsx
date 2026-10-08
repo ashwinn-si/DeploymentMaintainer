@@ -17,7 +17,7 @@ export function SelectSheet({ label, value, onChange, options, placeholder = 'Se
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex min-h-[44px] w-full items-center justify-between rounded-2xl border border-white/60 bg-white/60 px-4 py-2.5 text-sm text-[var(--text-primary)] shadow-xs transition-colors hover:bg-white/80 dark:border-white/10 dark:bg-black/40 dark:hover:bg-black/60"
+        className="flex min-h-[44px] w-full items-center justify-between rounded-2xl field-base ui-transition hover:bg-base-300 px-4 py-2.5 text-sm text-[var(--text-primary)] shadow-xs"
       >
         <span className={selected ? '' : 'text-[var(--text-muted)]'}>{selected ? selected.label : placeholder}</span>
         <span className="select-caret" aria-hidden="true" />

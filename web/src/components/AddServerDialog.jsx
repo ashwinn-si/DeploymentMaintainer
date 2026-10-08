@@ -40,7 +40,7 @@ function StepIndicator({ labels, current }) {
             <span
               className={[
                 'flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold',
-                active || done ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11]' : 'bg-black/5 text-[var(--text-muted)] dark:bg-white/10',
+                active || done ? 'bg-[var(--brand)] text-white' : 'bg-black/5 text-[var(--text-muted)] dark:bg-white/10',
               ].join(' ')}
             >
               {i + 1}
@@ -252,7 +252,7 @@ export function AddServerDialog({ open, onClose, mode = 'add', server = null, on
                 <span className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   {rotate ? 'New SERVER_SECRET' : 'Add to the server'}
                 </span>
-                <pre className="custom-scrollbar overflow-x-auto whitespace-pre-wrap break-all rounded-2xl border border-black/[0.06] bg-black/[0.03] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)] dark:border-white/10 dark:bg-black/40">
+                <pre className="custom-scrollbar overflow-x-auto whitespace-pre-wrap break-all rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-xs leading-relaxed text-[var(--text-primary)] dark:bg-black/40">
                   {snippet}
                 </pre>
                 <div className="flex flex-wrap gap-2">

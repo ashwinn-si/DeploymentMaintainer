@@ -20,7 +20,7 @@ const COLS = 'sm:grid-cols-[1.3fr_90px_70px_100px_80px_90px_100px_100px]';
 
 function InfoChip({ label, value }) {
   return (
-    <div className="glass-light rounded-2xl border border-white/60 px-4 py-2.5 dark:border-white/10">
+    <div className="surface-inset rounded-2xl border border-[var(--premium-border)] px-4 py-2.5">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <p className="truncate text-sm font-medium text-[var(--text-primary)]">{value}</p>
     </div>
@@ -48,7 +48,7 @@ function AppDesktopRow({ app }) {
   return (
     <Link
       to={serverPath(`/apps/${app.appId}`)}
-      className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-black/[0.06] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5`}
+      className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-[var(--premium-border)] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:hover:bg-white/5`}
     >
       <span className="truncate font-medium text-[var(--text-primary)]">{app.appName}</span>
       <span className="text-[var(--text-muted)]">{app.pm2Status ?? '—'}</span>
@@ -65,7 +65,7 @@ function AppDesktopRow({ app }) {
 function AppMobileCard({ app }) {
   const { serverPath } = useServer();
   return (
-    <Link to={serverPath(`/apps/${app.appId}`)} className="glass-light block space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10 sm:hidden">
+    <Link to={serverPath(`/apps/${app.appId}`)} className="surface-inset block space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 sm:hidden">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-[var(--text-primary)]">{app.appName}</p>
         <StatusPill tone={app.health?.ok ? 'teal' : 'rose'}>{app.health?.ok ? 'healthy' : 'unhealthy'}</StatusPill>
@@ -166,7 +166,7 @@ export function Server() {
           </GlassCard>
 
           <GlassCard variant="mid" className="!p-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-2 border-b border-black/[0.06] px-5 py-3 dark:border-white/10">
+            <div className="flex items-center justify-between gap-2 border-b border-[var(--premium-border)] px-5 py-3">
               <h2 className="text-base font-semibold text-[var(--text-primary)]">Apps</h2>
               <div className="hidden items-center justify-end gap-2 sm:flex">
                 {SORT_OPTIONS.map((opt) => (

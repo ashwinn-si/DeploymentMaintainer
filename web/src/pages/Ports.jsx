@@ -37,7 +37,7 @@ function DesktopRow({ row }) {
   return (
     <Link
       to={serverPath(`/apps/${row.appId}`)}
-      className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-black/[0.06] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5`}
+      className={`hidden sm:grid ${COLS} items-center gap-3 border-b border-[var(--premium-border)] px-5 py-3 text-sm transition-colors hover:bg-black/[0.03] dark:hover:bg-white/5`}
     >
       <div>
         <span className="font-mono font-medium text-[var(--text-primary)]">{row.port}</span>
@@ -63,7 +63,7 @@ function MobileCard({ row }) {
   return (
     <Link
       to={serverPath(`/apps/${row.appId}`)}
-      className="glass-light block space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10 sm:hidden"
+      className="surface-inset block space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 sm:hidden"
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm font-semibold text-[var(--text-primary)]">Port {row.port}</span>
@@ -123,7 +123,7 @@ export function Ports() {
         <EmptyState icon={Plug} title="Couldn't load ports" description="Try refreshing the page." />
       ) : (
         <GlassCard variant="mid" className="!p-0 overflow-hidden">
-          <div className={`hidden ${COLS} gap-3 border-b border-black/[0.06] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] dark:border-white/10 sm:grid`}>
+          <div className={`hidden ${COLS} gap-3 border-b border-[var(--premium-border)] px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] sm:grid`}>
             <span>Port</span>
             <span>App</span>
             <span>Repo @ branch</span>
@@ -136,7 +136,7 @@ export function Ports() {
           </div>
 
           <div className="space-y-3 p-3 sm:space-y-0 sm:p-0">
-            <div className="glass-light rounded-2xl border border-[var(--brand)]/30 bg-[var(--brand-soft)] p-4 sm:rounded-none sm:border-0 sm:border-b sm:border-black/[0.06] sm:bg-transparent sm:p-0 sm:dark:border-white/10">
+            <div className="surface-inset rounded-2xl border border-[var(--brand)]/30 bg-[var(--brand-soft)] p-4 sm:rounded-none sm:border-0 sm:border-b sm:border-[var(--premium-border)] sm:bg-transparent sm:p-0">
               <div className={`sm:grid ${COLS} items-center gap-3 sm:px-5 sm:py-3`}>
                 <span className="font-mono text-sm font-semibold text-[var(--brand)]">{data?.dashboard?.port ?? '—'}</span>
                 <span className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">

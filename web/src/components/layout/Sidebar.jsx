@@ -40,7 +40,7 @@ function navClass({ isActive }) {
   return [
     'flex items-center gap-3 rounded-2xl transition-colors duration-200',
     isActive
-      ? 'bg-[var(--brand)] text-white dark:text-[#0B0D11] font-semibold shadow-sm'
+      ? 'bg-[var(--brand)] text-white font-semibold shadow-sm'
       : 'text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5',
   ].join(' ');
 }
@@ -84,7 +84,7 @@ function ServerSwitcher({ onNavigate, collapsed }) {
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="flex h-10 w-10 items-center justify-center rounded-xl glass-light border border-white/60 dark:border-white/10 text-[var(--brand)] hover:bg-black/5 dark:hover:bg-white/10"
+          className="flex h-10 w-10 items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] text-[var(--brand)] hover:bg-black/5 dark:hover:bg-white/10"
         >
           <Server className="h-5 w-5" />
         </button>
@@ -164,7 +164,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
           : null}
       </nav>
 
-      <div className="mt-4 space-y-1 border-t border-black/[0.06] pt-4 dark:border-white/10">
+      <div className="mt-4 space-y-1 border-t border-[var(--premium-border)] pt-4">
         <NavLink
           to="/"
           end
@@ -199,11 +199,11 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
       <div className="mt-4 space-y-3">
         {!collapsed ? (
           <>
-            <div className="glass-light flex items-center justify-between rounded-2xl border border-white/60 px-4 py-3 shadow-xs dark:border-white/10">
+            <div className="surface-inset flex items-center justify-between rounded-2xl border border-[var(--premium-border)] px-4 py-3 shadow-xs">
               <span className="text-sm font-medium text-[var(--text-secondary)]">Theme</span>
               <ThemeToggle />
             </div>
-            <div className="glass-light space-y-2 rounded-2xl border border-white/60 p-4 shadow-xs dark:border-white/10">
+            <div className="surface-inset space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 shadow-xs">
               <p className="truncate text-sm font-medium text-[var(--text-primary)]">{user?.email}</p>
               <button
                 type="button"
@@ -236,7 +236,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
 export function Sidebar({ deploying = false, collapsed = false, onToggleCollapse }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-20 hidden glass-strong border-r border-white/60 dark:border-white/10 lg:flex transition-all duration-300 ${
+      className={`fixed inset-y-0 left-0 z-20 hidden surface-overlay border-r border-[var(--premium-border)] lg:flex transition-all duration-300 ${
         collapsed ? 'w-20' : 'w-72'
       }`}
     >

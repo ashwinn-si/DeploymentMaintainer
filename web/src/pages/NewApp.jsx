@@ -225,7 +225,7 @@ export function NewApp() {
               type="button"
               onClick={() => choosePreset(value)}
               className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
-                preset === value ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-white/60 dark:border-white/10'
+                preset === value ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'border-[var(--premium-border)]'
               }`}
             >
               <Icon className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand)]" />

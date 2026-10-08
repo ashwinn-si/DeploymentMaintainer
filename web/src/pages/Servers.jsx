@@ -101,7 +101,7 @@ function KebabMenu({ server, onAction }) {
       {open ? (
         <div
           role="menu"
-          className="glass-strong absolute right-0 top-full z-30 mt-1 w-48 space-y-0.5 rounded-2xl border border-white/60 p-1.5 shadow-lg dark:border-white/10"
+          className="surface-overlay absolute right-0 top-full z-30 mt-1 w-48 space-y-0.5 rounded-2xl border border-[var(--premium-border)] p-1.5 shadow-lg"
         >
           {items.map(({ key, label, icon: Icon, danger }) => (
             <button
@@ -166,7 +166,7 @@ function ServerCard({ server, onAction }) {
       </div>
 
       {server.status === 'online' && summary ? (
-        <div className="pointer-events-none relative z-10 space-y-3 border-t border-black/[0.06] pt-4 dark:border-white/10">
+        <div className="pointer-events-none relative z-10 space-y-3 border-t border-[var(--premium-border)] pt-4">
           <p className="text-xs text-[var(--text-muted)]">
             {summary.apps ?? '—'} app{summary.apps === 1 ? '' : 's'}
             {summary.active ? <span className="text-[var(--brand)]"> · {summary.active} deploying</span> : null}

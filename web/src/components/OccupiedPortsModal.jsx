@@ -84,8 +84,8 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
                         className={[
                           'inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-mono text-xs font-semibold transition-all',
                           selected
-                            ? 'bg-teal-600 text-white dark:text-[#0B0D11] shadow-sm'
-                            : 'glass-light text-teal-700 dark:text-teal-400 border border-teal-500/30 hover:bg-teal-500/20',
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'surface-inset text-teal-700 dark:text-teal-400 border border-teal-500/30 hover:bg-teal-500/20',
                         ].join(' ')}
                       >
                         {selected ? <Check className="h-3.5 w-3.5" /> : null}
@@ -104,7 +104,7 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
               </span>
 
               {occupiedPorts.length === 0 ? (
-                <div className="rounded-2xl border border-black/[0.06] dark:border-white/10 p-4 text-center text-sm text-[var(--text-muted)]">
+                <div className="rounded-2xl border border-[var(--premium-border)] p-4 text-center text-sm text-[var(--text-muted)]">
                   No ports currently occupied.
                 </div>
               ) : (
@@ -120,7 +120,7 @@ export function OccupiedPortsModal({ open, onClose, onSelectPort, currentPort })
                             ? 'border-rose-500/30 bg-rose-500/10'
                             : isCurrent
                             ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-                            : 'border-white/60 bg-white/40 dark:border-white/10 dark:bg-black/20',
+                            : 'border-[var(--premium-border)] bg-base-200',
                         ].join(' ')}
                       >
                         <div className="flex items-center gap-3 min-w-0">

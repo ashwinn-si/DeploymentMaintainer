@@ -56,7 +56,7 @@ export function NodeVersionPicker({ repoFullName, branch, value, onChange }) {
               onClick={() => onChange(v)}
               className={[
                 'min-h-[38px] rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-                value === v ? 'bg-[var(--brand)] text-white' : 'glass-light text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+                value === v ? 'bg-[var(--brand)] text-white' : 'surface-inset text-[var(--text-muted)] hover:text-[var(--text-primary)]',
               ].join(' ')}
             >
               {v}

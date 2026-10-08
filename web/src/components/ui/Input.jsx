@@ -1,10 +1,8 @@
 import { useId } from 'react';
 
 const FIELD_BASE =
-  'w-full min-h-[44px] bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 ' +
-  'rounded-2xl py-2.5 sm:py-3 shadow-xs transition-all outline-none ' +
-  'focus:bg-white dark:focus:bg-black/40 focus:ring-3 focus:ring-[var(--brand)]/30 ' +
-  'placeholder:text-[var(--text-muted)]/50 text-[var(--text-primary)]';
+  'field-base w-full min-h-[44px] rounded-2xl py-2.5 sm:py-3 shadow-xs outline-none ' +
+  'text-[var(--text-primary)]';
 
 export function Input({ label, hint, icon: Icon, error, className = '', id, ...rest }) {
   const autoId = useId();

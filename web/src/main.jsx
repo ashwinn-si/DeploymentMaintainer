@@ -21,16 +21,16 @@ function renderApp() {
               position="bottom-center"
               toastOptions={{
                 style: {
-                  background: 'var(--glass-strong-bg)',
-                  backdropFilter: 'blur(16px)',
-                  border: '1px solid var(--glass-border)',
-                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
-                  borderRadius: '16px',
+                  background: 'var(--overlay-bg)',
+                  backdropFilter: 'blur(6px)',
+                  border: '1px solid var(--premium-border)',
+                  boxShadow: 'var(--shadow-lifted)',
+                  borderRadius: '0.9rem',
                   fontWeight: 500,
                   color: 'var(--text-primary)',
                 },
-                success: { iconTheme: { primary: 'var(--brand)', secondary: 'var(--glass-strong-bg)' } },
-                error: { iconTheme: { primary: '#EF4444', secondary: 'var(--glass-strong-bg)' } },
+                success: { iconTheme: { primary: 'var(--brand)', secondary: 'var(--surface-bg)' } },
+                error: { iconTheme: { primary: '#DC2626', secondary: 'var(--surface-bg)' } },
               }}
             />
           </BrowserRouter>

@@ -1,517 +1,228 @@
-# Glassmorphism Styling Reference
+# UI Style Contract
 
-The design system for the Deployment Maintainer dashboard: surfaces, blur, borders, highlights, shadows, radii, typography, motion and dark mode. Wherever a component uses the primary color it's called the "brand tint" (see §8a).
+The design system for the Deployment Maintainer dashboard: a **premium, white-first SaaS UI** built with TailwindCSS v4 + DaisyUI v5 and a violet/purple brand. Reuse the tokens and utility classes below; don't invent one-off styles.
 
-Source of truth: [`web/src/index.css`](web/src/index.css) (tokens + utilities), [`web/src/components/ui/`](web/src/components/ui/) (GlassCard, Button, Modal, PageHeader, SelectSheet, Meter, Loader, …), [`web/src/components/layout/`](web/src/components/layout/), [`web/src/main.jsx`](web/src/main.jsx) (toasts).
+Source of truth: [`web/src/index.css`](web/src/index.css) (DaisyUI themes, tokens, surfaces, buttons, inputs, keyframes), [`web/src/components/ui/`](web/src/components/ui/) (GlassCard, Button, Input, Modal, PageHeader, SelectSheet, Meter, Loader, …), [`web/src/components/layout/`](web/src/components/layout/) (AppShell, Sidebar, Navbar), [`web/src/main.jsx`](web/src/main.jsx) (toasts).
 
----
-
-## 1. The three-layer depth model
-
-| Layer              | What it is          | How it's built                                                                                                 |
-| ------------------ | ------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **1 · Atmosphere** | The page background | Two radial "light" blooms over a diagonal linear gradient, `background-attachment: fixed`                      |
-| **2 · Diffusion**  | What glass blurs    | `backdrop-filter: blur()` on every surface (10 / 16 / 20px utilities; Tailwind `blur-sm`…`blur-2xl` on chrome) |
-| **3 · Surface**    | The glass panels    | Translucent white fill + 1px translucent border + **inset top highlight** + soft drop shadow                   |
-
-The glass only reads as glass because layer 1 is never flat — there's always something behind the panel to diffuse.
+> `GlassCard` keeps its historical name but renders the `.surface` family (`mid` → `.surface`, `strong` → `.surface-overlay`, `light` → `.surface-inset`). There is no glassmorphism any more.
 
 ---
 
-## 2. Atmosphere — page background
+## 1. Color tokens
 
-Defined once as `--page-bg` and applied to `body`:
+### Light mode (DaisyUI theme `light`)
+
+| Token | Hex | Purpose |
+|---|---|---|
+| `primary` | `#6D28D9` | CTAs, active states, accent borders |
+| `primary-content` | `#FFFFFF` | Text on primary bg |
+| `secondary` | `#1E1B4B` | Deep indigo, secondary surfaces |
+| `accent` | `#6366F1` | Highlights, secondary accents |
+| `neutral` | `#0F172A` | Near-black text, icon fills |
+| `base-100` | `#FFFFFF` | Main page background |
+| `base-200` | `#F8FAFC` | Card/sidebar backgrounds |
+| `base-300` | `#F1F5F9` | Inset surfaces, hover states |
+| `base-content` | `#0F172A` | Default body text |
+| `info` | `#3B82F6` | Info badges/alerts |
+| `success` | `#059669` | Success states |
+| `warning` | `#D97706` | Warning states |
+| `error` | `#DC2626` | Error states |
+
+### Dark mode (DaisyUI theme `dark`)
+
+| Token | Hex | Purpose |
+|---|---|---|
+| `primary` | `#8B5CF6` | Brighter purple for WCAG contrast |
+| `secondary` | `#6366F1` | Indigo |
+| `accent` | `#A5B4FC` | Soft lavender |
+| `base-100` | `#0F172A` | Main bg — deep navy/slate |
+| `base-200` | `#1E293B` | Cards, modals |
+| `base-300` | `#334155` | Hover states, dividers |
+| `base-content` | `#F8FAFC` | Near-white text |
+| `success` | `#34D399` | |
+| `warning` | `#FBBF24` | |
+| `error` | `#FB7185` | |
+
+Dark mode is switched with the `data-theme` attribute on `<html>` (`light` / `dark`), set by `ThemeContext`. Tailwind's `dark:` variant is remapped to that attribute, not to the OS setting.
+
+### App variables (`:root`, redefined under `:root[data-theme='dark']`)
+
+| Variable | Light | Dark | Purpose |
+|---|---|---|---|
+| `--premium-ring` | `rgba(55,48,163,0.30)` | `rgba(165,180,252,0.45)` | Focus outline |
+| `--premium-border` | `rgba(109,40,217,0.20)` | `rgba(139,92,246,0.28)` | Card / input / divider borders |
+| `--premium-shadow` | `0 0 0 1px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04)` | dark equivalent | Resting elevation |
+| `--surface-bg` | `#FFFFFF` | `#1E293B` | `.surface` fill |
+| `--surface-inset-bg` | `#F8FAFC` | `#0F172A` | `.surface-inset` fill |
+| `--overlay-bg` | `rgba(255,255,255,.9)` | `rgba(30,41,59,.92)` | Modals, nav, dropdowns, toasts, inputs |
+| `--brand` / `--brand-soft` | `#6D28D9` / 10% | `#8B5CF6` / 20% | Brand tint used by components (`text-[var(--brand)]`) |
+| `--text-primary` / `-secondary` / `-muted` | `#0F172A` / `#334155` / `#64748B` | `#F8FAFC` / `#CBD5E1` / `#94A3B8` | Text |
+| `--data-*` | amber, blue, pink, purple, teal | lighter variants | Chart / meter accents |
+
+### Shadow tokens (Tailwind `@theme`)
+
+`shadow-soft` · `shadow-card` · `shadow-lifted` (`0 4px 16px rgba(15,23,42,.10)`).
+
+---
+
+## 2. Typography
+
+- **Sora** — body and headings. **JetBrains Mono** — code, logs, ports, commit hashes (`font-mono`).
+- Loaded from Google Fonts at the top of `index.css`:
+  `https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap`
+- All headings (`h1`–`h6`): `letter-spacing: -0.02em`.
+- Hierarchy: page title = bold and dominant → section title = medium-bold → body = regular.
+- Table headers: uppercase, ~`0.72rem`, `letter-spacing: 0.02em`, slate-500 (`--text-muted`).
+
+---
+
+## 3. Background
 
 ```css
-/* Light */
---page-bg:
-  radial-gradient(ellipse 70% 60% at 80% 10%, rgba(186, 220, 245, 0.55) 0%, transparent 60%),
-  /* key light, top-right  */
-  radial-gradient(ellipse 50% 70% at 15% 85%, rgba(203, 210, 225, 0.45) 0%, transparent 55%),
-  /* fill light, bottom-left */ linear-gradient(160deg, #f5f6f8 0%, #eceef2 45%, #e3e6ec 100%); /* cloud → slate */
-
 body {
-  background: var(--page-bg);
-  background-attachment: fixed; /* glass blurs a stable field while content scrolls */
-  transition:
-    background 0.3s ease,
-    color 0.3s ease;
+  background-image:
+    radial-gradient(circle at 8% 0%,  rgba(30, 27, 75, 0.08),  transparent 38%),
+    radial-gradient(circle at 96% 0%, rgba(55, 48, 163, 0.08), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #f1f5f9 100%);
 }
 ```
 
-- **Light mode:** cool cloud-white `#F5F6F8` → slate `#ECEEF2` → `#E3E6EC`, sky bloom top-right, slate bloom bottom-left.
-- **Dark mode:** deep slate near-blacks `#0B0D11` → `#11141A` → `#161A22`, with the same two bloom positions reduced to a faint sky-blue glow (10%) and slate glow (6%).
-
-Background atmosphere tokens:
-
-| Token             | Light     | Dark      |
-| ----------------- | --------- | --------- |
-| `--bg-base`       | `#F5F6F8` | `#0B0D11` |
-| `--bg-mid`        | `#ECEEF2` | `#11141A` |
-| `--bg-deep`       | `#E3E6EC` | `#161A22` |
-
----
-
-## 3. Glass surface tokens
-
-| Token               | Light                    | Dark                      | Used for                                     |
-| ------------------- | ------------------------ | ------------------------- | -------------------------------------------- |
-| `--glass-strong-bg` | `rgba(255,255,255,0.86)` | `rgba(255,255,255,0.08)`  | Nav, drawers, hero cards, toasts             |
-| `--glass-mid-bg`    | `rgba(255,255,255,0.74)` | `rgba(255,255,255,0.05)`  | Default cards, mobile top bar, ghost buttons |
-| `--glass-light-bg`  | `rgba(255,255,255,0.60)` | `rgba(255,255,255,0.035)` | Nested/secondary elements, small controls    |
-| `--glass-border`    | `rgba(255,255,255,0.85)` | `rgba(255,255,255,0.12)`  | 1px border on all glass                      |
-| `--glass-highlight` | `#FFFFFF`                | `rgba(255,255,255,0.2)`   | Inset top-edge light catch                   |
-
-Note the inversion: light mode is a _mostly opaque_ white film (60–86%) for legibility; dark mode is a _barely there_ white film (3.5–8%) so panels lift off the dark field without going grey.
-
----
-
-## 4. Glass utility classes
-
-All in `web/src/index.css`. Every tier has the same four ingredients: **fill, blur, border, inset highlight + shadow**.
+Dark mode:
 
 ```css
-.glass-strong {
-  /* hero cards, nav, drawers */
-  background: var(--glass-strong-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    /* top rim catches light */ inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-    /* faint bottom rim */ 0 8px 32px rgba(0, 0, 0, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.glass-mid {
-  /* default cards, stat panels */
-  background: var(--glass-mid-bg);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(0, 0, 0, 0.05);
-}
-
-.glass-light {
-  /* nested / secondary elements */
-  background: var(--glass-light-bg);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 4px 12px rgba(0, 0, 0, 0.04);
-}
-
-.glass-card {
-  /* mid-tier with slate-tinted shadow */
-  background: var(--glass-mid-bg);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(15, 23, 42, 0.05),
-    0 2px 6px rgba(15, 23, 42, 0.03);
-}
-
-.glass-nav {
-  /* pill navigation */
-  background: var(--glass-strong-bg);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.glass-interactive {
-  /* lift on hover */
-  transition:
-    transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.glass-interactive:hover {
-  transform: translateY(-2px);
-}
+background-image:
+  radial-gradient(circle at 8% 0%,  rgba(139, 92, 246, 0.20), transparent 38%),
+  radial-gradient(circle at 96% 0%, rgba(56, 189, 248, 0.12), transparent 34%),
+  linear-gradient(180deg, #020617 0%, #0f172a 50%, #1e293b 100%);
 ```
 
-**Key details**
-
-- **The inset top highlight** (`inset 0 1px 0 var(--glass-highlight)`) is what makes a translucent box look like a slab of glass with thickness. Every glass surface and ghost button has it.
-- **Blur scales with tier:** 20px → 16px → 10px. Stronger panels blur more; nested panels blur less, so glass-on-glass doesn't turn to fog.
-- **Shadows are low-opacity and large-radius** (4–6%, 12–32px spread). The `glass-card` / `glass-nav` shadows use the slate near-black `rgba(15,23,42,…)` instead of pure black so they sit naturally on the cool slate field.
-- Always ship `-webkit-backdrop-filter` alongside `backdrop-filter` (Safari/iOS).
-
-### Blur scale in use
-
-| Source                        | Value | Where                                                                                    |
-| ----------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `.glass-light`                | 10px  | Small controls, nested cards                                                             |
-| `.btn-ghost`                  | 12px  | Ghost buttons                                                                            |
-| `.glass-mid`, toasts          | 16px  | Cards, toasts                                                                            |
-| `.glass-strong`, `.glass-nav` | 20px  | Hero cards, nav                                                                          |
-| Tailwind `backdrop-blur-sm`   | 8px   | Modal / drawer scrim                                                                     |
-| Tailwind `backdrop-blur-md`   | 12px  | Modal header strip                                                                       |
-| Tailwind `backdrop-blur-xl`   | 24px  | Page header, modal footer                                                                |
-| Tailwind `backdrop-blur-2xl`  | 40px  | Modal sheet, bottom nav, mobile top bar, sidebar drawer (fixed chrome over busy content) |
+`AppShell` adds three slow floating orbs (`animate-orb-float-1/2/3`, 18 / 23 / 28 s) as fixed, `pointer-events-none` decoration behind the content.
 
 ---
 
-## 5. `GlassCard` component
+## 4. Surfaces
 
-[`GlassCard.jsx`](web/src/components/ui/GlassCard.jsx) wraps the utilities with radius, padding and motion:
+Use these — never a one-off `div` with ad-hoc shadows. They live in `@layer components`, so Tailwind utilities (`rounded-2xl`, `border-dashed`, …) can still override them.
 
-| `variant`       | Class          | Radius               |
-| --------------- | -------------- | -------------------- |
-| `strong`        | `glass-strong` | `rounded-3xl` (24px) |
-| `mid` (default) | `glass-mid`    | `rounded-3xl` (24px) |
-| `light`         | `glass-light`  | `rounded-2xl` (16px) |
+| Class | Use |
+|---|---|
+| `.surface` | Cards (opaque fill, `--premium-border`, `--premium-shadow`). Pair with `rounded-2xl`. |
+| `.surface-inset` | Inset rows, chips, nested panels (`--surface-inset-bg`). Pair with `rounded-xl`. |
+| `.surface-overlay` | Floating layers: sidebar, mobile drawer, modals, dropdowns, toasts (`--overlay-bg`, `blur(6px)`). |
+| `.surface-interactive` | Adds a 2px lift + `shadow-lifted` on hover for clickable cards. |
 
-- Padding: `p-5 sm:p-6`
-- Enter: `opacity 0, y 8 → opacity 1, y 0` over `0.25s easeOut`
-- `interactive`: hover lifts `y: -2` (0.15s), tap `scale: 0.99`, `cursor-pointer`
-- `transition-colors duration-200` so theme switches fade rather than snap
+Dividers inside surfaces use `border-[var(--premium-border)]`.
 
 ---
 
-## 6. Corner radius scale
+## 5. Buttons
 
-Glass never has sharp corners.
+All buttons go through [`Button`](web/src/components/ui/Button.jsx).
 
-| Element                                                                      | Radius             |
-| ---------------------------------------------------------------------------- | ------------------ |
-| Modal sheet (mobile)                                                         | `28px` top corners |
-| Large cards, modal (desktop), page header (sm+)                              | `rounded-3xl` 24px |
-| Light cards, inputs, selects, md/lg buttons, nav links, page header (mobile) | `rounded-2xl` 16px |
-| Toasts                                                                       | 16px               |
-| `.btn-base` default                                                          | 14px               |
-| Small buttons, icon buttons, logo tile, list options                         | `rounded-xl` 12px  |
-| Pills, chips, badges, bottom nav, FAB, avatars dots                          | `rounded-full`     |
+- `.btn-base`: `border-radius: 0.9rem`, `font-weight: 600`, 44px minimum tap target, spring hover lift (`translateY(-1px)` + soft shadow).
+- **`primary` = `.btn-primary-cta`**: animated violet gradient (`#5b21b6 → #6d28d9 → #9333ea → #7c3aed`, `300%` size, `primary-gradient-shift 2.2s linear infinite`, faster on hover, off when `:disabled`), inset top highlight and violet drop shadow. The primary CTA is never a flat fill.
+- **`ghost` = `.btn-quiet`**: `--surface-bg` fill, `--premium-border`, `--premium-shadow`; hover → `base-300`.
+- **`danger`**: `bg-error text-error-content`.
+- Selected/active states (tabs, sidebar item, step chips) use a flat `bg-[var(--brand)] text-white` — they are state indicators, not CTAs.
 
 ---
 
-## 7. Text colors
+## 6. Inputs / forms
 
-Slate near-blacks — never `#000` on light, never `#fff` on dark.
+`.field-base` (used by `Input`, `Textarea`, `SelectSheet`): `--premium-border` border, `--overlay-bg` fill, and an indigo focus ring — border `rgba(55,48,163,0.45)` + `0 0 0 3px rgba(55,48,163,0.12)` in light, lavender equivalents in dark. Never the browser default ring.
 
-| Token              | Light     | Dark      | Use                                       |
-| ------------------ | --------- | --------- | ----------------------------------------- |
-| `--text-primary`   | `#111827` | `#E5E7EB` | Headings, values, main copy               |
-| `--text-secondary` | `#374151` | `#AEB6C4` | Body, modal content, subtitles            |
-| `--text-muted`     | `#6B7280` | `#7C8596` | Labels, inactive nav, placeholders, icons |
+Global `:focus-visible { outline: 2px solid var(--premium-ring); outline-offset: 2px; }`.
 
-Dividers and hairlines: `border-black/[0.06]` or `bg-black/5` in light, `border-white/10` or `bg-white/5` in dark.
+On viewports under 768px, form controls are forced to 16px to stop iOS zoom.
 
 ---
 
-## 8. Supporting data colors
-
-Used for charts, tags and category dots (not for chrome).
-
-| Token           | Light     | Dark      |
-| --------------- | --------- | --------- |
-| `--data-amber`  | `#F59E0B` | `#FBBF24` |
-| `--data-blue`   | `#3B82F6` | `#60A5FA` |
-| `--data-pink`   | `#E879F9` | `#F472B6` |
-| `--data-purple` | `#8B5CF6` | `#A78BFA` |
-| `--data-teal`   | `#14B8A6` | `#2DD4BF` |
-
-
-Status colors: warning/offline uses amber (`bg-amber-500/10`, `border-amber-500/20`, `text-amber-700 / dark:text-amber-400`); destructive uses rose (`bg-rose-500/90`, hover `rose-600`, `shadow-rose-500/20`); toast error icon `#EF4444`.
-
----
-
-## 8a. Brand tint
-
-| Token          | Light                   | Dark                     | Use                                                     |
-| -------------- | ----------------------- | ------------------------ | ------------------------------------------------------- |
-| `--brand`      | `#0284C7`               | `#38BDF8`                | Primary button, active nav, focus rings, wordmark, commands in logs |
-| `--brand-soft` | `rgba(2,132,199,0.14)`  | `rgba(56,189,248,0.18)`  | Ambient orbs, subtle fills                              |
-
-Primary buttons use white text in light mode and `#0B0D11` text in dark mode for contrast.
-
-**Status mapping** (pills per §15): deploying/running/queued = brand + pulse · online/success/healthy = teal · stopped/cancelled = amber · failed/errored/unhealthy = rose · anything else = neutral.
-
----
-
-## 9. Typography
-
-| Role                                                       | Font                               | Details                       |
-| ---------------------------------------------------------- | ---------------------------------- | ----------------------------- |
-| Headings (`h1–h4`, `.font-heading`, `.font-serif-display`) | **Poppins** (`--font-poppins`)     | `letter-spacing: -0.02em`     |
-| Body                                                       | **Open Sans** (`--font-open-sans`) | Falls back to system UI stack |
-
-Recurring type patterns:
-
-- **Page title:** `text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight leading-tight`
-- **Modal title:** `text-xl sm:text-2xl font-bold tracking-tight`
-- **Eyebrow pill:** `text-[10px] font-bold uppercase tracking-[0.12em] px-2.5 py-1 rounded-full` with a 6px pulsing dot
-- **Ring center value:** `text-3xl sm:text-4xl font-medium tracking-tight`
-- **Micro label:** `text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]`
-- **Bottom-nav label:** `text-[10px]`
-- **Wordmark:** "Deploy" in `--text-primary` + "Maintainer" in a lighter weight / brand tint
-
-`html` gets `antialiased`.
-
----
-
-## 10. Buttons (non-primary variants)
-
-Base (`.btn-base`):
+## 7. Transitions
 
 ```css
-min-height: 44px;
-min-width: 44px; /* touch target */
-border-radius: 14px;
-font-weight: 500;
-font-size: 0.9375rem;
-transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+.ui-transition {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
 ```
 
-**Ghost (glass button):**
+- Standard easing: `cubic-bezier(0.22, 1, 0.36, 1)` (snappy spring).
+- Exit easing: `cubic-bezier(0.55, 0, 1, 0.45)`.
+
+---
+
+## 8. Animation utilities
+
+Keyframes and classes are defined in `index.css`.
+
+| Class | Behavior | Duration |
+|---|---|---|
+| `.animate-fade-in` | Opacity 0→1 | 380ms ease-out |
+| `.animate-fade-in-up` | Fade + rise 18px | 480ms spring |
+| `.animate-fade-in-up-1` … `-4` | Same, staggered delay 0 / 60 / 120 / 180ms | 480ms |
+| `.animate-slide-in-left` | Slide from left | 520ms spring |
+| `.animate-scale-in` | Scale 0.95→1 + rise | 220ms spring |
+| `.animate-dropdown-in` | Dropdown open | 180ms spring |
+| `.animate-row-in` | Table row enter | 320ms spring |
+| `.animate-modal-in` | Modal open (scale 0.9 + rise) | 360ms spring |
+| `.animate-modal-shimmer` | Shimmer sweep on modal open | 900ms, 200ms delay |
+| `.drawer-panel-enter-left` / `-exit-left` | Drawer slide | 280ms spring / 220ms fast-out |
+| `.drawer-backdrop-enter` / `-exit` | Backdrop fade | 250ms / 210ms |
+| `.animate-orb-float-1/2/3` | Slow background orbs | 18s / 23s (−4s) / 28s (−8s) |
+| `.animate-shimmer` | Skeleton loading sweep | 1.8s loop |
+| `.animate-blobsq-morph` | Morphing blob shape | 3s loop |
+| `.app-surface-header` | Animated violet header accent (`PageHeader`) | 8s loop |
+
+Other keyframes available: `blueprint-pulse`, `loader-orb-pulse`, `primary-gradient-shift`, `sheet-up`.
+
+Modals and drawers that use `framer-motion` (`Modal`, mobile nav drawer, `GlassCard`) drive their own entry motion with spring transitions — don't stack a CSS entry animation on top.
+
+Rules: motion is calm, purposeful and short. List entries stagger in 60ms steps. Modals open with scale + rise; drawers slide from the edge.
+
+---
+
+## 9. Scrollbar
+
+Thin slate scrollbars everywhere: `scrollbar-width: thin`, 10px WebKit bars, pill-shaped track, slate gradient thumb that darkens on hover; the dark theme swaps in a lighter thumb and navy track.
+
+---
+
+## 10. Page header
+
+[`PageHeader`](web/src/components/ui/PageHeader.jsx): a `.surface` card whose background is `.app-surface-header` — a white → 10% violet → white gradient (`220%` size) drifting over 8s. It carries a 4px primary stripe on the left, a brand-soft icon badge, an uppercase eyebrow pill, a bold `h1` and an actions slot.
+
+---
+
+## 11. Accessibility
 
 ```css
-.btn-ghost {
-  background: var(--glass-mid-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 var(--glass-highlight);
-}
-.btn-ghost:hover:not(:disabled) {
-  transform: translateY(-2px);
-  background: var(--glass-strong-bg); /* hover = step up one glass tier */
+@media (prefers-reduced-motion: reduce) {
+  .animate-blueprint-pulse, .animate-loader-orb-pulse, .animate-blobsq-morph,
+  .animate-orb-float-1, .animate-orb-float-2, .animate-orb-float-3,
+  .animate-shimmer, .animate-modal-shimmer, .btn-primary-cta, .app-surface-header {
+    animation: none !important;
+  }
 }
 ```
 
-**Danger:** `bg-rose-500/90 text-white hover:bg-rose-600 shadow-md shadow-rose-500/20`.
-
-Sizes (from `Button.jsx`):
-
-| Size   | Classes                                                     |
-| ------ | ----------------------------------------------------------- |
-| `sm`   | `min-h-[44px] px-3.5 py-1.5 text-sm rounded-xl`             |
-| `md`   | `min-h-[44px] px-5 py-2.5 text-sm sm:text-base rounded-2xl` |
-| `lg`   | `min-h-[48px] px-6 py-3 text-base rounded-2xl`              |
-| `icon` | `min-h-[44px] min-w-[44px] p-2.5 rounded-xl`                |
-
-All buttons: `active:scale-[0.98]`, `disabled:opacity-50 disabled:pointer-events-none`, 2px focus-visible ring at 50% opacity, spinner (`Loader2 animate-spin`) replaces the icon while loading.
-
-Small glass icon controls (hamburger, theme toggle): `min-h-[38px] min-w-[38px] rounded-xl glass-light border border-white/60 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 shadow-xs`.
+Keep every new looping animation in this list. Minimum tap target is 44px; text on `primary` is always white.
 
 ---
 
-## 11. Navigation chrome
+## 12. Rules summary
 
-### Mobile top bar ([`Navbar.jsx`](web/src/components/layout/Navbar.jsx))
-
-`sticky top-0 z-30 glass-mid backdrop-blur-2xl border-b border-white/60 dark:border-white/10 shadow-sm px-4 py-2.5` — hidden on `lg+`.
-
-### Floating pill bottom nav (not used here)
-
-This dashboard has six destinations, so mobile uses the top bar + drawer instead of a bottom nav. If one is added later: `fixed bottom-3 left-3 right-3`, `glass-strong backdrop-blur-2xl rounded-full` pill with `pb-[env(safe-area-inset-bottom)]`, 44px items, floating over content rather than edge to edge.
-
-### Sidebar ([`Sidebar.jsx`](web/src/components/layout/Sidebar.jsx))
-
-Fixed `glass-strong` panel on `lg+`; below `lg` the same content opens as the drawer described here.
-
-- Scrim: `fixed inset-0 bg-black/60 backdrop-blur-sm`
-- Panel: `w-72 max-w-[85vw] glass-strong backdrop-blur-2xl border-r border-white/60 dark:border-white/10 shadow-2xl p-6`, slides with `transition-transform duration-300 ease-in-out`
-- Nav links: `px-4 py-3 rounded-2xl text-sm font-medium`, 200ms transitions
-- Footer cards (theme toggle, user card): `glass-light rounded-2xl border border-white/60 dark:border-white/10 shadow-xs`
-- Logout hover: `hover:text-rose-500 hover:bg-rose-500/10`
-
----
-
-## 12. Page header ([`PageHeader.jsx`](web/src/components/ui/PageHeader.jsx))
-
-A layered glass card rather than a utility class:
-
-```
-┌ rounded-2xl sm:rounded-3xl · overflow-hidden · border-white/70 (dark: white/[0.08]) · shadow-sm
-│  ├ absolute glass fill:  bg-white/60 dark:bg-white/[0.04] backdrop-blur-xl
-│  ├ ambient orb top-right:    w-48 h-48, -top-12 -right-12, rounded-full blur-3xl, 15–20% brand tint
-│  ├ ambient orb bottom-left:  w-40 h-40, -bottom-10 -left-10, rounded-full blur-3xl, 10–15% tint
-│  ├ left stripe: 4px wide, inset top-4/bottom-4, rounded-full, vertical gradient, 80% opacity
-│  └ content (z-10): px-6 sm:px-8 py-5 sm:py-6, icon badge 44px rounded-2xl, eyebrow pill, h1, actions slot
-```
-
-The orbs are static and clipped by `overflow-hidden`, so they only color the glass from inside — they never float over the page.
-
----
-
-## 13. Modals / bottom sheets ([`Modal.jsx`](web/src/components/ui/Modal.jsx))
-
-Rendered in a portal on `document.body`, `z-[9999]`.
-
-- **Scrim:** `bg-black/40 dark:bg-black/60 backdrop-blur-sm`, fades in 0.2s
-- **Sheet surface:**
-  - Light: vertical gradient `white/95 → #F8F9FB/92 → #EEF1F6/95`
-  - Dark: `#161A23/95 → #11151C/95 → #0C0F14/95`
-  - `backdrop-blur-2xl`, `border border-white/80`
-  - `rounded-t-[28px]` on mobile (bottom sheet), `sm:rounded-3xl` centered dialog on desktop
-  - Shadow: `0 25px 60px -15px rgba(15,23,42,0.2)` plus a soft outer glow
-  - `max-h-[90dvh]` mobile / `sm:max-h-[85vh]` desktop
-- **Ambient orbs:** two `w-56 h-56 blur-3xl` circles at top-right and bottom-left corners, clipped inside
-- **Drag handle (mobile only):** `w-12 h-1.5 rounded-full bg-neutral-300/80 dark:bg-neutral-600/60`
-- **Header strip:** `bg-white/40 dark:bg-white/[0.02] backdrop-blur-md border-b border-black/[0.06] dark:border-white/10`
-- **Body:** internally scrolling, `overscroll-contain`, `text-[var(--text-secondary)] space-y-4`
-- **Sticky footer:** `bg-white/60 dark:bg-black/30 backdrop-blur-xl border-t`, bottom padding includes `env(safe-area-inset-bottom)`; buttons stack reversed on mobile, row-right-aligned on desktop
-- **Close button:** 40px, `rounded-2xl`, `hover:bg-black/[0.05] dark:hover:bg-white/10`
-
-Motion: spring `damping: 30, stiffness: 320`, enters from `y: 100%, scale 0.98, opacity 0.8`. Drag-to-dismiss on the y axis (`dragElastic` bottom 0.4) closes past 100px offset or 400px/s velocity.
-
-CSS fallbacks also exist: `.animate-sheet-up` (0.26s, `cubic-bezier(0.16, 1, 0.3, 1)`, from `translateY(100%)`) and `.animate-modal-in` (0.2s, from `scale(0.96)` + opacity 0).
-
----
-
-## 14. Form controls
-
-Inputs are "frosted wells" — slightly more opaque than surrounding glass so text stays crisp.
-
-```
-/* Auth / icon-prefixed input */
-bg-white/50 dark:bg-black/40 border border-white/60 dark:border-white/10
-rounded-2xl pl-10 pr-4 py-3 outline-none focus:ring-2
-
-/* Modal form field */
-bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10
-rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 shadow-xs transition-all
-focus:bg-white dark:focus:bg-black/40 focus:ring-3
-placeholder:text-[var(--text-muted)]/50
-```
-
-**Select sheet trigger** ([`SelectSheet.jsx`](web/src/components/ui/SelectSheet.jsx)): `bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl px-4 py-2.5 shadow-xs hover:bg-white/80 dark:hover:bg-black/60`, with a custom CSS-triangle up/down caret in `--text-muted`. Options open in the glass bottom sheet as `rounded-xl` rows.
-
-Pattern: light mode inputs are **whiter** than the card; dark mode inputs are **darker** than the card (`black/25–40`). Focus makes them more solid.
-
----
-
-## 15. Chips, pills and badges
-
-- **Neutral status chip** (sync badge): `rounded-full px-2.5 py-1 text-xs font-medium bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-xs`, `text-[11px]` label, 12px icon
-- **Tinted status pill:** `rounded-full px-3 py-1 text-xs font-medium bg-{color}-500/10 border border-{color}-500/20` — tint fill at 10%, border at 20%
-- Live states use `animate-pulse`; a 6–8px dot precedes the label
-
----
-
-## 16. Toasts ([`main.jsx`](web/src/main.jsx))
-
-`react-hot-toast`, `position: bottom-center`, styled as a glass-strong chip:
-
-```js
-background: 'var(--glass-strong-bg)',
-backdropFilter: 'blur(16px)',
-border: '1px solid var(--glass-border)',
-boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
-borderRadius: '16px',
-fontWeight: 500,
-color: 'var(--text-primary)',
-```
-
-Icon secondary color is `--glass-strong-bg` so the check/cross glyph reads as cut out of the glass.
-
----
-
-## 17. Animated ring & loader
-
-**Ring** ([`Meter.jsx`](web/src/components/ui/Meter.jsx), exported alongside the bar meter; color by threshold: teal < 70%, amber 70–90%, rose > 90%):
-
-- SVG rotated `-90deg` so the arc starts at 12 o'clock
-- Track: `text-black/[0.07] dark:text-white/[0.08]`
-- Arc: `stroke-linecap: round`, `stroke-dasharray = circumference`
-- Draw-in: `stroke-dashoffset` animates from full to target over `1.2s cubic-bezier(0.4, 0, 0.2, 1)`, starting 150ms after mount
-- Defaults: 180px size, 10px stroke; value clamped 0–100 for the arc
-
-**Loader** ([`Loader.jsx`](web/src/components/ui/Loader.jsx)): blurred radial halo (`blur-2xl`) behind concentric faint rings (10–20% opacity), spinning arcs, a glowing center dot, wordmark, and three bouncing 4px dots.
-
----
-
-## 18. Motion rules
-
-| Interaction         | Spec                                                                       |
-| ------------------- | -------------------------------------------------------------------------- |
-| Card enter          | fade + `y: 8 → 0`, 0.25s easeOut                                           |
-| Card / button hover | `translateY(-2px)`, 150–180ms `cubic-bezier(0.4, 0, 0.2, 1)`               |
-| Press               | `scale(0.98–0.99)`; icon buttons / FAB `scale(0.95)`                       |
-| Modal               | spring (damping 30, stiffness 320); scrim fade 0.2s                        |
-| Drawer              | `transform` 300ms ease-in-out                                              |
-| Theme switch        | `background`/`color` 0.3s ease on body; `transition-colors 200ms` on cards |
-| Data reveal         | ring stroke 1.2s                                                           |
-
-Cards lift with `translateY`, never `scale` on hover — scaling glass causes blurry re-rasterization and layout jitter.
-
----
-
-## 19. Scrollbars
-
-```css
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(107, 114, 128, 0.25);
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(107, 114, 128, 0.45);
-}
-
-.custom-scrollbar {
-  /* opt-in for scroll areas inside cards */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(107, 114, 128, 0.25) transparent;
-}
-```
-
-Thumb uses the muted slate text color at low opacity so it disappears into the glass.
-
----
-
-## 20. Dark mode mechanics
-
-- Toggled by `data-theme="dark"` (or `.dark`) on a root element; Tailwind's `dark:` variant is remapped:
-  ```css
-  @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
-  ```
-- All glass, text, background and data tokens are redefined under `[data-theme="dark"], .dark` — components mostly just consume variables.
-- Where Tailwind literals are used, each light value has a paired `dark:` value. Common pairs:
-
-| Light                            | Dark                             |
-| -------------------------------- | -------------------------------- |
-| `border-white/60–80`             | `border-white/10` (or `/[0.08]`) |
-| `bg-white/40–60`                 | `bg-white/[0.02–0.04]`           |
-| `bg-white/50–80` (inputs)        | `bg-black/25–40`                 |
-| `bg-black/5` (chips, hovers)     | `bg-white/5–10`                  |
-| `border-black/[0.06]` (dividers) | `border-white/10`                |
-| `bg-black/40` (scrim)            | `bg-black/60`                    |
-
----
-
-## 21. Mobile & iOS polish
-
-- **44px minimum touch targets** on all buttons and nav items (38–40px only for compact header icons)
-- Inputs forced to `16px` under 768px to prevent iOS Safari auto-zoom
-- Date/time inputs reset with `appearance: none`, `min-width: 0` to stop native overflow
-- `env(safe-area-inset-bottom)` on bottom nav and modal footer; `viewportFit: cover`
-- `dvh` units for sheet height; modal re-sizes around the on-screen keyboard
-- `html, body { overflow-x: hidden; max-width: 100vw }` and `min-w-0` / `max-w-full` throughout to prevent horizontal scroll
-- `box-sizing: border-box` on everything
-
----
-
-## 22. Checklist for a new glass surface
-
-1. Pick a tier: `glass-strong` (top-level/chrome), `glass-mid` (default), `glass-light` (nested).
-2. Radius from the scale in §6 — never 0.
-3. Keep the inset top highlight (it comes with the utility; add `inset 0 1px 0 var(--glass-highlight)` if hand-rolling).
-4. Nesting: go _down_ a tier (strong → mid → light), never stack two 20px blurs.
-5. Provide a `dark:` pair for any Tailwind literal `white/…` or `black/…`.
-6. Use `--text-primary / --text-secondary / --text-muted`, not raw hex.
-7. Hover = `translateY(-2px)`; press = `scale(0.98)`.
-8. Include `-webkit-backdrop-filter` when writing raw CSS.
+1. **White-first.** Dark surfaces only in dark mode.
+2. **Primary = `#6D28D9` light / `#8B5CF6` dark.** No other brand color.
+3. **All buttons** use `border-radius: 0.9rem`, `font-weight: 600`, spring hover lift.
+4. **Primary CTA** = animated gradient, never a flat fill.
+5. **Inputs** focus with the indigo ring, not the browser default.
+6. **Cards** = `.surface` / `.surface-inset` / `.surface-overlay` — never ad-hoc shadows.
+7. **Entry animations** = `fade-in-up`, staggered in 60ms steps for lists.
+8. **Modals** scale + rise; **drawers** slide from the edge.
+9. **Orbs** float slowly (18–28s), decoration only, never interactive.
+10. **No heavy animation.** Calm, purposeful, short.
+11. **Reduced-motion** media query must cover every loader, orb and blob.
+12. **Font**: Sora always; JetBrains Mono for code/mono contexts only.
+13. **Scrollbar** styled thin with a slate gradient thumb.
+14. **Dark mode** via `data-theme` on `<html>`, not an OS class.

@@ -24,16 +24,23 @@ export function AppShell({ deploying = false, outletContext }) {
   };
 
   return (
-    <div className="min-h-dvh">
+    <div className="relative min-h-dvh">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div className="animate-orb-float-1 absolute -left-24 top-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
+        <div className="animate-orb-float-2 absolute -right-20 top-1/3 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
+        <div className="animate-orb-float-3 absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-secondary/10 blur-3xl" />
+      </div>
       <Sidebar deploying={deploying} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <Navbar deploying={deploying} />
 
-      <div className={`transition-[padding] duration-300 ease-in-out ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
+      <div className={`relative z-10 transition-[padding] duration-300 ease-in-out ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
         <div className="px-4 pt-4 sm:px-6 lg:px-8">
           <DiskBanner />
         </div>
         <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <Outlet context={outletContext} />
+          <div className="animate-fade-in-up">
+            <Outlet context={outletContext} />
+          </div>
         </main>
       </div>
     </div>

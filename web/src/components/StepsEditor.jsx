@@ -35,7 +35,7 @@ function customIndices(value) {
 function StepRow({ step, index, onToggle, onConfigChange, children }) {
   const locked = LOCKED_TYPES.has(step.type);
   return (
-    <div className="glass-light space-y-3 rounded-2xl border border-white/60 p-4 dark:border-white/10">
+    <div className="surface-inset space-y-3 rounded-2xl border border-[var(--premium-border)] p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Toggle checked={step.enabled} onChange={(v) => !locked && onToggle(index, v)} disabled={locked} />
@@ -81,7 +81,7 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node' }) {
           const indices = customIndices(value);
           const pos = indices.indexOf(index);
           return (
-            <div key={index} className="glass-light space-y-3 rounded-2xl border border-white/60 p-4 dark:border-white/10">
+            <div key={index} className="surface-inset space-y-3 rounded-2xl border border-[var(--premium-border)] p-4">
               <div className="flex items-center gap-3">
                 <Toggle checked={step.enabled} onChange={(v) => toggleAt(index, v)} />
                 <GripVertical className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />

@@ -53,7 +53,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
       {open ? (
         <div className="fixed inset-0 z-[9999] flex items-end justify-center sm:items-center">
           <motion.div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm dark:bg-black/60"
+            className="absolute inset-0 bg-neutral/50 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -80,26 +80,22 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
               'relative flex w-full flex-col overflow-hidden',
               'max-h-[90dvh] sm:max-h-[85vh]',
               'rounded-t-[28px] sm:rounded-3xl',
-              'border border-white/80 dark:border-white/10',
-              'bg-gradient-to-b from-white/95 via-[#F8F9FB]/92 to-[#EEF1F6]/95',
-              'dark:from-[#161A23]/95 dark:via-[#11151C]/95 dark:to-[#0C0F14]/95',
-              'backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(15,23,42,0.2)]',
+              'surface-overlay shadow-[0_25px_60px_-15px_rgba(15,23,42,0.25)]',
               SIZES[size] ?? SIZES.md,
             ].join(' ')}
           >
-            <div className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full bg-[var(--brand-soft)] blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-[var(--brand-soft)] opacity-70 blur-3xl" />
+            <div className="animate-modal-shimmer pointer-events-none absolute inset-y-0 left-0 z-20 w-1/3 bg-gradient-to-r from-transparent via-[var(--brand-soft)] to-transparent" />
 
-            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-neutral-300/80 dark:bg-neutral-600/60 sm:hidden" />
+            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-base-300 sm:hidden" />
 
             {title ? (
-              <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-black/[0.06] bg-white/40 px-6 py-4 backdrop-blur-md dark:border-white/10 dark:bg-white/[0.02]">
+              <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-[var(--premium-border)] bg-base-200 px-6 py-4">
                 <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] sm:text-2xl">{title}</h2>
                 <button
                   type="button"
                   onClick={onClose}
                   aria-label="Close"
-                  className="flex h-10 w-10 items-center justify-center rounded-2xl text-[var(--text-muted)] transition-colors hover:bg-black/[0.05] dark:hover:bg-white/10"
+                  className="flex h-10 w-10 items-center justify-center rounded-2xl text-[var(--text-muted)] transition-colors hover:bg-base-300"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -112,7 +108,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
 
             {footer ? (
               <div
-                className="relative z-10 flex shrink-0 flex-col-reverse gap-3 border-t border-black/[0.06] bg-white/60 px-6 py-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/30 sm:flex-row sm:justify-end"
+                className="relative z-10 flex shrink-0 flex-col-reverse gap-3 border-t border-[var(--premium-border)] bg-base-200 px-6 py-4 sm:flex-row sm:justify-end"
                 style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
               >
                 {footer}

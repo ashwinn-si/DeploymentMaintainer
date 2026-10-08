@@ -80,9 +80,7 @@ deploy/                 Nginx site templates, sudoers rule, PM2 ecosystem files 
 docs/api-contract.md    Endpoint reference for both APIs
 DEPLOYMENT.md           Full AWS walkthrough
 deployment-helper.md    Copy-paste version of the EC2 setup
-handoff.md              Snapshot of the live state at a point in time
-plan-29.09.md           The multi-server design plan
-style.md                The glassmorphism UI design system
+style.md                The white-first violet UI design system (Tailwind + DaisyUI)
 ```
 
 ## Tech at a glance

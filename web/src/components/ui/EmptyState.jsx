@@ -1,6 +1,6 @@
 export function EmptyState({ icon: Icon, title, description, action }) {
   return (
-    <div className="glass-light flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
+    <div className="surface-inset flex flex-col items-center gap-3 rounded-2xl px-6 py-12 text-center">
       {Icon ? (
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]">
           <Icon className="h-6 w-6" />

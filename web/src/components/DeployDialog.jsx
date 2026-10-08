@@ -78,7 +78,7 @@ export function DeployDialog({ open, onClose, app }) {
                 'rounded-2xl border p-3 text-left transition-colors',
                 mode === m.value
                   ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
-                  : 'border-white/60 hover:bg-black/[0.03] dark:border-white/10 dark:hover:bg-white/5',
+                  : 'border-[var(--premium-border)] hover:bg-black/[0.03] dark:hover:bg-white/5',
               ].join(' ')}
             >
               <p className="text-sm font-medium text-[var(--text-primary)]">{m.label}</p>

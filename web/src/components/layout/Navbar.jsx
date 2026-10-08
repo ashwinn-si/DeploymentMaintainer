@@ -19,12 +19,12 @@ export function Navbar({ deploying = false }) {
 
   return (
     <>
-      <header className="glass-mid sticky top-0 z-30 flex items-center gap-3 border-b border-white/60 px-4 py-2.5 shadow-sm backdrop-blur-2xl dark:border-white/10 lg:hidden">
+      <header className="surface-overlay sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--premium-border)] px-4 py-2.5 shadow-sm backdrop-blur-2xl lg:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl glass-light border border-white/60 shadow-xs transition-colors hover:bg-black/5 active:scale-95 dark:border-white/10 dark:hover:bg-white/10"
+          className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] shadow-xs transition-colors hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
         >
           <Menu className="h-4 w-4 text-[var(--text-muted)]" />
         </button>
@@ -54,7 +54,7 @@ export function Navbar({ deploying = false }) {
               onClick={() => setOpen(false)}
             />
             <motion.div
-              className="glass-strong absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-white/60 shadow-2xl backdrop-blur-2xl dark:border-white/10"
+              className="surface-overlay absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-[var(--premium-border)] shadow-2xl backdrop-blur-2xl"
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={{ left: 0.4, right: 0 }}

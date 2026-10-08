@@ -11,8 +11,8 @@ export function ThemeToggle({ className = '' }) {
       onClick={toggleTheme}
       aria-label="Toggle theme"
       className={[
-        'flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border shadow-xs transition-colors',
-        'glass-light border-white/60 hover:bg-black/5 active:scale-95 dark:border-white/10 dark:hover:bg-white/10',
+        'flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border shadow-xs ui-transition',
+        'surface-inset border-[var(--premium-border)] hover:bg-black/5 active:scale-95 dark:hover:bg-white/10',
         className,
       ].join(' ')}
     >

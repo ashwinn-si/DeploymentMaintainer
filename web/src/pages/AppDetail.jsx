@@ -253,7 +253,7 @@ export function AppDetail() {
                 Refresh
               </Button>
             </div>
-            <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-black/[0.06] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:border-white/10 dark:bg-black/40">
+            <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-black/40">
               {runtimeLogs || 'No output yet.'}
             </pre>
           </div>

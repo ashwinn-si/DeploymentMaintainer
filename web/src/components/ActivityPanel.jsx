@@ -40,7 +40,7 @@ function LiveDeployRow({ deployment }) {
   return (
     <Link
       to={serverPath(`/deployments/${deployment.id}`)}
-      className="block rounded-2xl border border-white/60 bg-white/40 p-3 transition-colors hover:bg-white/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/30"
+      className="block rounded-2xl border border-[var(--premium-border)] bg-base-200 p-3 transition-colors hover:bg-base-300"
     >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -66,7 +66,7 @@ function FinishedRow({ deployment }) {
   return (
     <Link
       to={serverPath(`/deployments/${deployment.id}`)}
-      className="group flex items-center justify-between gap-3 rounded-2xl border border-white/60 bg-white/40 p-3 text-sm transition-all hover:border-[var(--brand)]/40 hover:bg-white/70 dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/40"
+      className="group flex items-center justify-between gap-3 rounded-2xl border border-[var(--premium-border)] bg-base-200 p-3 text-sm transition-all hover:border-[var(--brand)]/40 hover:bg-base-300"
     >
       <div className="flex items-center gap-3 min-w-0">
         <StatusPill tone={tone} className="shrink-0 font-medium">

@@ -83,7 +83,7 @@ function GithubInfoCard() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-3 border-t border-black/[0.06] pt-4 dark:border-white/10 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 border-t border-[var(--premium-border)] pt-4 sm:grid-cols-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Apps directory</p>
               <p className="font-mono text-xs text-[var(--text-primary)]">{info.appsDir}</p>
@@ -257,11 +257,11 @@ function ImportPanel() {
   };
 
   return (
-    <div className="space-y-4 border-t border-black/[0.06] pt-6 dark:border-white/10">
+    <div className="space-y-4 border-t border-[var(--premium-border)] pt-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <label className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Export file</label>
-          <label className="glass-light flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-dashed border-white/60 px-4 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] dark:border-white/10">
+          <label className="surface-inset flex min-h-[44px] cursor-pointer items-center justify-center rounded-2xl border border-dashed border-[var(--premium-border)] px-4 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)]">
             {fileName || 'Choose a .json file'}
             <input type="file" accept="application/json,.json" onChange={handleFileChange} className="hidden" />
           </label>
@@ -283,7 +283,7 @@ function ImportPanel() {
             previewRows.map((row) => {
               const rowState = rowActions[row.name] ?? { action: 'create' };
               return (
-                <div key={row.name} className="glass-light space-y-2 rounded-2xl border border-white/60 p-4 dark:border-white/10">
+                <div key={row.name} className="surface-inset space-y-2 rounded-2xl border border-[var(--premium-border)] p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-medium text-[var(--text-primary)]">{row.name}</p>
@@ -302,7 +302,7 @@ function ImportPanel() {
                         onClick={() => setRowAction(row.name, { action: rowState.action === 'create' ? 'skip' : 'create' })}
                         className={[
                           'min-h-[38px] rounded-full px-3 text-xs font-medium transition-colors',
-                          rowState.action === 'create' ? 'bg-[var(--brand)] text-white' : 'glass-light text-[var(--text-muted)]',
+                          rowState.action === 'create' ? 'bg-[var(--brand)] text-white' : 'surface-inset text-[var(--text-muted)]',
                         ].join(' ')}
                       >
                         {rowState.action === 'create' ? 'Create' : 'Skip'}

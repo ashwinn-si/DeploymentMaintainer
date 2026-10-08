@@ -3,7 +3,7 @@ const TONES = {
   teal: 'bg-teal-500/10 border-teal-500/20 text-teal-600 dark:text-teal-400',
   amber: 'bg-amber-500/10 border-amber-500/20 text-amber-700 dark:text-amber-400',
   rose: 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400',
-  neutral: 'bg-black/5 border-black/5 text-[var(--text-muted)] dark:bg-white/5 dark:border-white/10',
+  neutral: 'bg-black/5 border-black/5 text-[var(--text-muted)] dark:bg-white/5',
 };
 
 const DOT_TONES = {
