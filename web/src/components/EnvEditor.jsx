@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Trash2, Eye, EyeOff, ClipboardPaste, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Plus, Trash2, Eye, EyeOff, ClipboardPaste, ClipboardCopy, Search } from 'lucide-react';
 import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
 import { Modal } from './ui/Modal.jsx';
@@ -25,6 +26,17 @@ export function parseDotEnv(text) {
     rows.push({ key, value });
   }
   return rows;
+}
+
+// Inverse of parseDotEnv: quote only values it would otherwise mangle (spaces, #, quotes).
+export function toDotEnv(rows) {
+  return rows
+    .filter((r) => r.key)
+    .map(({ key, value }) => {
+      if (!/[\s#'"]/.test(value)) return `${key}=${value}`;
+      return value.includes('"') && !value.includes("'") ? `${key}='${value}'` : `${key}="${value}"`;
+    })
+    .join('\n');
 }
 
 export function EnvEditor({ value = [], onChange }) {
@@ -55,6 +67,15 @@ export function EnvEditor({ value = [], onChange }) {
       return next;
     });
 
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(toDotEnv(value));
+      toast.success('Copied .env to clipboard');
+    } catch {
+      toast.error('Could not copy to clipboard');
+    }
+  };
+
   const applyPaste = () => {
     const parsed = parseDotEnv(pasteText);
     if (parsed.length > 0) {
@@ -74,10 +95,16 @@ export function EnvEditor({ value = [], onChange }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Environment variables</span>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setPasteOpen(true)}>
-          <ClipboardPaste className="h-4 w-4" />
-          Paste .env
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={copyAll} disabled={!value.some((r) => r.key)}>
+            <ClipboardCopy className="h-4 w-4" />
+            Copy .env
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setPasteOpen(true)}>
+            <ClipboardPaste className="h-4 w-4" />
+            Paste .env
+          </Button>
+        </div>
       </div>
 
       {value.length > 4 ? (
