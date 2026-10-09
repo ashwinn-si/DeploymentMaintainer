@@ -44,6 +44,9 @@ const fieldSchemas = {
   NGINX_ENABLED: boolFromEnv(true),
   // Background health probing of every app. Off by default: it only helps apps that expose a health endpoint.
   HEALTH_MONITOR: boolFromEnv(false),
+  // Per-app request analytics, read from Nginx access logs in ACCESS_LOG_DIR (see DEPLOYMENT.md 3.10b).
+  ANALYTICS_ENABLED: boolFromEnv(true),
+  ACCESS_LOG_DIR: z.string().min(1).default('/var/log/nginx/deployer'),
   NODE_ENV: z.string().min(1).default('development'),
   GIT_REMOTE_BASE: z.string().min(1).default('https://github.com'),
 };
@@ -72,6 +75,8 @@ const ALWAYS_DEFAULTED = new Set([
   'DEFAULT_NODE_VERSION',
   'NGINX_ENABLED',
   'HEALTH_MONITOR',
+  'ANALYTICS_ENABLED',
+  'ACCESS_LOG_DIR',
   'NODE_ENV',
   'GIT_REMOTE_BASE',
 ]);

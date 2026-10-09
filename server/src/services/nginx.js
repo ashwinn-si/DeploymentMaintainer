@@ -4,9 +4,13 @@ import { run } from './shell.js';
 import { validateNginxPath } from '../lib/validate.js';
 import { getPublishedAppCurrentDir } from '../steps/publish.js';
 
-function proxyBlock(location, proxyPass) {
+function accessLogLine(accessLog) {
+  return accessLog ? `    access_log ${accessLog} combined;\n` : '';
+}
+
+function proxyBlock(location, proxyPass, accessLog = null) {
   return `location ${location} {
-    proxy_pass ${proxyPass};
+${accessLogLine(accessLog)}    proxy_pass ${proxyPass};
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
@@ -19,7 +23,7 @@ function proxyBlock(location, proxyPass) {
 `;
 }
 
-function staticBlock(routePath, publishedDir) {
+function staticBlock(routePath, publishedDir, accessLog = null) {
   const targetPath = publishedDir.endsWith('/') ? publishedDir : `${publishedDir}/`;
   const redirect = `location = ${routePath} {
     return 301 ${routePath}/;
@@ -28,7 +32,7 @@ function staticBlock(routePath, publishedDir) {
   return (
     redirect +
     `location ${routePath}/ {
-    alias ${targetPath};
+${accessLogLine(accessLog)}    alias ${targetPath};
     index index.html index.htm;
     try_files $uri $uri/ ${routePath}/index.html;
 }
@@ -36,15 +40,23 @@ function staticBlock(routePath, publishedDir) {
   );
 }
 
-export function renderLocation({ path: routePath, port, stripPrefix = true, serveStatic = false, publishedDir = null }) {
+// accessLog: absolute path of a per-app Nginx access log (analytics); no directive when null.
+export function renderLocation({
+  path: routePath,
+  port,
+  stripPrefix = true,
+  serveStatic = false,
+  publishedDir = null,
+  accessLog = null,
+}) {
   validateNginxPath(routePath);
 
   if (serveStatic && publishedDir) {
-    return staticBlock(routePath, publishedDir);
+    return staticBlock(routePath, publishedDir, accessLog);
   }
 
   if (!stripPrefix) {
-    return proxyBlock(routePath, `http://127.0.0.1:${port}`);
+    return proxyBlock(routePath, `http://127.0.0.1:${port}`, accessLog);
   }
 
   // Without this, a request to the bare path (no trailing slash) 404s instead of matching the "<path>/" block below.
@@ -52,7 +64,7 @@ export function renderLocation({ path: routePath, port, stripPrefix = true, serv
     return 301 ${routePath}/;
 }
 `;
-  return redirect + proxyBlock(`${routePath}/`, `http://127.0.0.1:${port}/`);
+  return redirect + proxyBlock(`${routePath}/`, `http://127.0.0.1:${port}/`, accessLog);
 }
 
 async function fileExists(filePath) {
@@ -62,6 +74,23 @@ async function fileExists(filePath) {
   } catch {
     return false;
   }
+}
+
+// True when the access-log directory exists. Checked on every apply so a missing directory silently
+// omits the directive (otherwise `nginx -t` would fail on it) and creating it later just works.
+export async function isAccessLogDirReady(config) {
+  const dir = config.ACCESS_LOG_DIR;
+  if (!dir || /[\s;"'{}$]/.test(dir)) return false;
+  try {
+    return (await fs.stat(dir)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function resolveAccessLog(config, appName) {
+  if (!config.ANALYTICS_ENABLED || !(await isAccessLogDirReady(config))) return null;
+  return path.join(config.ACCESS_LOG_DIR, `${appName}.log`);
 }
 
 // -n so a missing/expired sudo cache fails fast instead of hanging on a password prompt.
@@ -87,7 +116,8 @@ export async function applyAppRoute(app, { config, stepConfig = {}, onLine, sign
   const stripPrefix = stepConfig.stripPrefix ?? true;
   const serveStatic = app.kind === 'static' || stepConfig.serveStatic === true;
   const publishedDir = serveStatic ? getPublishedAppCurrentDir(config, app.name) : null;
-  const content = renderLocation({ path: routePath, port: app.port, stripPrefix, serveStatic, publishedDir });
+  const accessLog = await resolveAccessLog(config, app.name);
+  const content = renderLocation({ path: routePath, port: app.port, stripPrefix, serveStatic, publishedDir, accessLog });
   const filePath = routeFilePath(config, app.name);
 
   let previous = null;

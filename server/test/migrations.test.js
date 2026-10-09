@@ -162,3 +162,56 @@ test('migrate-mongo discovers and applies the real migrations folder', async () 
     assert.equal((await db.collection('apps').findOne({ name: 'legacy-a' })).rootDir, undefined);
   }, { migrationsDir: REAL_MIGRATIONS_DIR }));
 });
+
+// --- request-stat-indexes ------------------------------------------------------------------
+
+const STATS_MIGRATION = '20261010000000-request-stat-indexes.js';
+
+async function indexNames(db, collection) {
+  return (await db.collection(collection).indexes()).map((i) => i.name);
+}
+
+test('the real request-stat-indexes migration creates the unique and TTL indexes, is idempotent and reverts', async () => {
+  await withMigrationEnv({}, async ({ db }) => {
+    const migration = await import(pathToFileURL(path.join(REAL_MIGRATIONS_DIR, STATS_MIGRATION)).href);
+    assert.equal(typeof migration.up, 'function');
+    assert.equal(typeof migration.down, 'function');
+
+    await migration.up(db);
+    await migration.up(db); // second run changes nothing and does not throw
+
+    const stats = await db.collection('requeststats').indexes();
+    const unique = stats.find((i) => i.name === 'appId_1_hour_1');
+    assert.deepEqual(unique.key, { appId: 1, hour: 1 });
+    assert.equal(unique.unique, true);
+    const ttl = stats.find((i) => i.name === 'expireAt_1');
+    assert.deepEqual(ttl.key, { expireAt: 1 });
+    assert.equal(ttl.expireAfterSeconds, 0);
+    assert.ok((await indexNames(db, 'analyticsoffsets')).includes('appName_1'));
+
+    // The unique index really rejects a duplicate (appId, hour).
+    const doc = { appId: 'a', hour: new Date('2026-10-10T00:00:00Z'), total: 1 };
+    await db.collection('requeststats').insertOne({ ...doc });
+    await assert.rejects(() => db.collection('requeststats').insertOne({ ...doc }), (err) => err.code === 11000);
+
+    await migration.down(db);
+    await migration.down(db); // already gone: not an error
+    assert.deepEqual(await indexNames(db, 'requeststats'), ['_id_']);
+    assert.deepEqual(await indexNames(db, 'analyticsoffsets'), ['_id_']);
+  });
+});
+
+test('down on a database that never had the collections is not an error', async () => {
+  await withMigrationEnv({}, async ({ db }) => {
+    const migration = await import(pathToFileURL(path.join(REAL_MIGRATIONS_DIR, STATS_MIGRATION)).href);
+    await migration.down(db);
+  });
+});
+
+test('migrate-mongo applies the request-stat-indexes migration from the real folder', async () => {
+  await withBackupCleanup(() => withMigrationEnv({}, async ({ db }) => {
+    const applied = await up(db, db.client);
+    assert.ok(applied.includes(STATS_MIGRATION));
+    assert.ok((await indexNames(db, 'requeststats')).includes('expireAt_1'));
+  }, { migrationsDir: REAL_MIGRATIONS_DIR }));
+});

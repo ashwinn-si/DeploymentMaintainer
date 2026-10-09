@@ -159,3 +159,19 @@ Paths below are relative to `/api` on the agent.
 - `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment). File `version: 2`: each app also carries `rootDir` and `stagedDeploys`; version 1 files (without them) still import, defaulting to `''` and `true`
 - `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, rootDir, port, conflict: null|'name'|'port', suggestedName }] }`
 - `POST /config/import` body `{ file, passphrase, rows: [{ name /*original*/, action: 'skip'|'create', newName? }], deploy?: boolean }` → `{ created: AppSummary[], deployments: DeploymentSummary[] }`
+- `GET /analytics?range=1h|24h|7d|30d&apps=<id,id,...>` (`range` default `24h`; `apps` default all apps; a malformed id is a 400) → request counts per app, counted from Nginx access logs and stored per server (hourly buckets, kept 90 days):
+  ```
+  {
+    enabled: boolean,          // ANALYTICS_ENABLED
+    logDirReady: boolean,      // ACCESS_LOG_DIR exists on the server (see DEPLOYMENT.md 3.10b)
+    range, from /*iso, start of the first bucket*/, to /*iso, now*/,
+    bucket: 'hour'|'day',      // granularity of `series`: hour for 1h/24h, UTC day for 7d/30d
+    apps: [{ id, name, total, s2xx, s3xx, s4xx, s5xx, bytes }],   // selected apps (zeros included), sorted by total desc
+    series: [{ t /*iso bucket start*/, total, perApp: { [appId]: number } }],   // every bucket in the window, zero filled; the last one is the current (partial) bucket
+    status: { s2xx, s3xx, s4xx, s5xx },   // totals over all selected apps in the window
+    busiestHours: [{ hour /*0-23, UTC*/, total }],   // always 24 entries
+    warnings: [{ app, message }]   // e.g. an app's log file exists but the agent cannot read it
+  }
+  ```
+  Window sizes: `1h` = the previous and the current hour bucket (coarse, since data is hourly), `24h` = 24 hourly buckets ending with the current hour, `7d` / `30d` = 7 / 30 UTC days ending today. Counts include bots and 404s; there is no latency in the Nginx `combined` format.
+- `POST /analytics/setup` → `{ updated: number /*route files rewritten (Nginx reloaded)*/, skipped: [{ app, reason }] /*apps without an enabled nginx step, or NGINX_ENABLED=false*/, errors: [{ app, message }] }`. Re-applies every app's Nginx route so it carries the `access_log` directive; one app failing does not stop the rest. `400` when `ANALYTICS_ENABLED=false`, `409` when the log directory does not exist yet.
