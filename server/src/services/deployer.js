@@ -172,8 +172,12 @@ async function finalizeFailure(app, deployment, log, { error, pm2Reached, previo
   return { autoRollback };
 }
 
+// Steps a force deploy may ignore. The rest (clone, node, env, process start, nginx, publish) are
+// what make the app reachable at all, so failing them can't be papered over.
+const FORCEABLE_STEPS = new Set(['install', 'build', 'custom', 'healthCheck']);
+
 async function runPipeline(app, deployment, config, controller, opts, log) {
-  const { branch: branchUsed, mode, sha, rollbackOf, env, previousAppStatus } = opts;
+  const { branch: branchUsed, mode, sha, rollbackOf, env, previousAppStatus, force } = opts;
 
   log.info(`${app.name} — ${app.repoFullName}@${branchUsed} (${mode})`, null, { force: true });
   log.info(`node ${deployment.nodeVersion}  previous sha: ${deployment.previousSha ?? '(none)'}`, null, { force: true });
@@ -235,6 +239,10 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
       await setStepStatus(deployment._id, i, 'failed', { endedAt });
       emitStepEvent(deployment._id, stepMeta.id, 'failed', { endedAt });
       log.error(`✖ ${stepMeta.label} · failed (${endedAt.getTime() - startedAt.getTime()}ms)`, stepMeta.id, { force: true });
+      if (force && FORCEABLE_STEPS.has(stepDef.type)) {
+        log.info(`force deploy: ignoring failure of ${stepMeta.label} (${stepError.message}) and continuing`, stepMeta.id, { force: true });
+        continue;
+      }
       return finalizeFailure(app, deployment, log, {
         error: `${stepMeta.label} failed: ${stepError.message}`,
         pm2Reached,
@@ -304,7 +312,7 @@ async function executeDeployment(app, deployment, config, controller, opts, log)
 }
 
 export async function startDeployment(appId, config, opts = {}) {
-  const { branch, mode, sha, rollbackOf = null, autoRollbackOf = null } = opts;
+  const { branch, mode, sha, rollbackOf = null, autoRollbackOf = null, force = false } = opts;
   if (!['update', 'fresh', 'rollback'].includes(mode)) {
     throw new HttpError(400, 'mode must be one of update, fresh, rollback');
   }
@@ -376,7 +384,7 @@ export async function startDeployment(appId, config, opts = {}) {
     const log = createDeployLog(deployment, { secrets });
 
     executeDeployment(updatedApp, deployment, config, controller, {
-      branch: branchUsed, mode, sha, rollbackOf, autoRollbackOf, env, previousAppStatus,
+      branch: branchUsed, mode, sha, rollbackOf, autoRollbackOf, env, previousAppStatus, force,
     }, log).catch((err) => {
       console.error(`deployer: unhandled error running deployment ${deployment._id}: ${err.stack || err}`);
     });

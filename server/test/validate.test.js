@@ -89,13 +89,14 @@ test('validateNodeVersion rejects garbage', () => {
   }
 });
 
-test('validateEnvKey accepts SCREAMING_SNAKE_CASE', () => {
+test('validateEnvKey accepts upper, lower and mixed case', () => {
   assert.equal(validateEnvKey('API_KEY'), 'API_KEY');
   assert.equal(validateEnvKey('_PRIVATE'), '_PRIVATE');
+  assert.equal(validateEnvKey('mailID'), 'mailID');
 });
 
-test('validateEnvKey rejects lowercase, leading digits and stray characters', () => {
-  for (const bad of ['api_key', '1KEY', 'KEY-NAME', '']) {
+test('validateEnvKey rejects leading digits and stray characters', () => {
+  for (const bad of ['1KEY', 'KEY-NAME', '']) {
     assert.throws(() => validateEnvKey(bad), HttpError);
   }
 });

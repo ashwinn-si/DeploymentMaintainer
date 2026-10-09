@@ -129,7 +129,7 @@ Paths below are relative to `/api` on the agent.
 - `PATCH /apps/:id` body any of `{ branch, port, nodeVersion, env, steps }` → `{ app: AppDetail }` (name immutable)
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
 - `POST /apps/:id/duplicate` body `{ name, branch, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
-- `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh' }` → `{ deployment: DeploymentSummary }` (409 if one is running)
+- `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
 - `POST /apps/:id/restart` | `/stop` → `{ app: AppSummary }`
 - `GET /apps/:id/updates` → `{ behindBy: number, commits: [{ sha, message, author, date }] }` (newest first, max 5; commits on the app branch newer than the deployed commit)
 - `GET /apps/:id/logs?lines=200` → `{ text: string }` (pm2 runtime logs)

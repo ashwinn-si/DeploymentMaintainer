@@ -67,6 +67,7 @@ const duplicateAppSchema = z.object({
 const deploySchema = z.object({
   branch: z.string().min(1).optional(),
   mode: z.enum(['update', 'fresh']),
+  force: z.boolean().optional(),
 });
 
 function envArrayToObject(envArray) {
@@ -320,7 +321,7 @@ export function createAppsRouter(config) {
   router.post('/:id/deploy', async (req, res) => {
     const body = deploySchema.parse(req.body);
     const app = await findAppOr404(req.params.id);
-    const deployment = await startDeployment(String(app._id), config, { branch: body.branch, mode: body.mode });
+    const deployment = await startDeployment(String(app._id), config, { branch: body.branch, mode: body.mode, force: body.force });
     res.json({ deployment: serializeDeploymentSummary(deployment, { appName: app.name }) });
   });
 

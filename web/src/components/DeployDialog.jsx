@@ -19,11 +19,13 @@ export function DeployDialog({ open, onClose, app }) {
   const [mode, setMode] = useState('update');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [force, setForce] = useState(false);
 
   useEffect(() => {
     if (open) {
       setBranch(app?.branch ?? '');
       setMode('update');
+      setForce(false);
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,7 +39,7 @@ export function DeployDialog({ open, onClose, app }) {
     setLoading(true);
     setError(null);
     try {
-      const { deployment } = await api.apps.deploy(app.id, { branch, mode });
+      const { deployment } = await api.apps.deploy(app.id, { branch, mode, force });
       onClose();
       toast.success(`Deploy started for ${app.name}`);
       navigate(serverPath(`/deployments/${deployment.id}`));
@@ -87,6 +89,16 @@ export function DeployDialog({ open, onClose, app }) {
           ))}
         </div>
       </div>
+
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--premium-border)] p-3">
+        <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="mt-1 h-4 w-4 accent-[var(--brand)]" />
+        <span>
+          <span className="block text-sm font-medium text-[var(--text-primary)]">Force deploy</span>
+          <span className="block text-xs text-[var(--text-muted)]">
+            If an install, build, custom or health-check step fails, log it and keep going instead of stopping. The app may start broken.
+          </span>
+        </span>
+      </label>
 
       {enabledSteps.length ? (
         <div className="space-y-2">

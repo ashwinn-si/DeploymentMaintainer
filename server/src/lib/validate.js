@@ -69,7 +69,7 @@ export function validateNodeVersion(version) {
   return version;
 }
 
-const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]*$/;
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function validateEnvKey(key) {
   if (typeof key !== 'string' || !ENV_KEY_RE.test(key)) {
