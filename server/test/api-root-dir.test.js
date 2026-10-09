@@ -163,3 +163,51 @@ test('a static app publishes from inside its root directory', async () => {
   assert.equal(fs.readFileSync(path.join(current, 'index.html'), 'utf8'), '<h1>sub site</h1>');
   assert.ok(!fs.existsSync(path.join(current, 'README.md')), 'files outside the root directory are not published');
 });
+
+test('a staged deploy of a root-directory app swaps the whole repo and restores it (with its sub-folder app) on a post-swap failure', async () => {
+  const { agent } = server;
+  const name = 'mono-staged';
+  const port = server.config.APP_PORT_START + 820;
+  const createRes = await agent.post('/api/apps').send(createBody(name, 820, {
+    rootDir: SUB_DIR,
+    steps: nodeSteps(name).map((s) => (s.type === 'healthCheck' ? { ...s, config: { ...s.config, timeoutSec: 4 } } : s)),
+  }));
+  assert.equal(createRes.status, 201, JSON.stringify(createRes.body));
+  const app = createRes.body.app;
+
+  const first = await deploy(app.id);
+  assert.equal(first.status, 'success', JSON.stringify(first));
+  const second = await deploy(app.id);
+  assert.equal(second.status, 'success', JSON.stringify(second));
+
+  const live = path.join(server.appsDir, name);
+  const previous = `${live}.previous`;
+  assert.ok(fs.existsSync(path.join(live, SUB_DIR, 'server.js')));
+  assert.ok(fs.existsSync(path.join(previous, SUB_DIR, 'server.js')), '.previous is the whole old repo folder');
+  assert.ok(fs.existsSync(path.join(live, SUB_DIR, 'ecosystem.config.cjs')));
+  assert.ok(!fs.existsSync(`${live}.staging`));
+  assert.equal(await (await fetch(`http://127.0.0.1:${port}/`)).text(), 'sub-app:hello');
+
+  // A build that answers 500 on the real port only: the smoke test (spare port) passes, the live health check fails.
+  const goodSha = (await agent.get(`/api/apps/${app.id}`)).body.app.currentCommitSha;
+  server.fixture.createBranchFrom('mono-staged-bad', 'main', {
+    filename: path.join(SUB_DIR, 'server.js'),
+    content: `require('http').createServer((req, res) => { res.statusCode = String(process.env.PORT) === '${port}' ? 500 : 200; res.end('bad'); }).listen(process.env.PORT);\n`,
+  });
+  const failed = await deploy(app.id, { mode: 'update', branch: 'mono-staged-bad' });
+  assert.equal(failed.status, 'failed', JSON.stringify(failed));
+  assert.equal(failed.restoredPrevious, true);
+
+  assert.ok(!fs.existsSync(previous));
+  assert.ok(fs.readFileSync(path.join(live, SUB_DIR, 'server.js'), 'utf8').includes('GREETING'), 'the old sub-folder app is live again');
+  const deadline = Date.now() + 8000;
+  let text = '';
+  while (Date.now() < deadline && text !== 'sub-app:hello') {
+    text = await fetch(`http://127.0.0.1:${port}/`).then((r) => r.text()).catch(() => '');
+    if (text !== 'sub-app:hello') await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  assert.equal(text, 'sub-app:hello', 'the restored process runs the old code from the sub-folder');
+  const after = (await agent.get(`/api/apps/${app.id}`)).body.app;
+  assert.equal(after.currentCommitSha, goodSha);
+  assert.equal(after.status, 'online');
+});

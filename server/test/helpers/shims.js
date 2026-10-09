@@ -159,6 +159,8 @@ if (sub === 'stop' || sub === 'delete') {
     } catch {
       // already gone
     }
+    // Real pm2 returns once the process is down; callers that restart on the same port rely on that.
+    waitForDeath(proc.pid, 2000);
   }
   if (sub === 'delete') {
     delete state[name];

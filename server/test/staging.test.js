@@ -12,6 +12,9 @@ import {
   promoteStaging,
   restorePrevious,
   removeStaging,
+  repairInterruptedSwap,
+  formatBytes,
+  __setFreeBytesOverride,
 } from '../src/services/staging.js';
 import { safeRemoveAppDir, removeInsideAppsDir } from '../src/services/git.js';
 
@@ -185,4 +188,49 @@ test('removeInsideAppsDir refuses path traversal', async () => {
     await assert.rejects(() => removeInsideAppsDir(config, '../x'), /outside APPS_DIR/);
     await assert.rejects(() => removeInsideAppsDir(config, '.'), /outside APPS_DIR/);
   });
+});
+
+test('repairInterruptedSwap puts .previous back when the live dir is missing', async () => {
+  await withApps(async (config, appsDir) => {
+    await writeDir(path.join(appsDir, 'app.previous'), { 'v.txt': 'last good' });
+    await writeDir(path.join(appsDir, 'app.staging'), { 'v.txt': 'new' });
+
+    assert.equal(await repairInterruptedSwap(config, 'app'), true);
+    assert.equal(await fs.readFile(path.join(appsDir, 'app', 'v.txt'), 'utf8'), 'last good');
+    assert.equal(await exists(path.join(appsDir, 'app.previous')), false);
+    assert.equal(await exists(path.join(appsDir, 'app.staging')), true, 'staging is left for removeStaging');
+  });
+});
+
+test('repairInterruptedSwap does nothing when live exists or there is no .previous', async () => {
+  await withApps(async (config, appsDir) => {
+    await writeDir(path.join(appsDir, 'app'), { 'v.txt': 'live' });
+    await writeDir(path.join(appsDir, 'app.previous'), { 'v.txt': 'older' });
+    assert.equal(await repairInterruptedSwap(config, 'app'), false);
+    assert.equal(await fs.readFile(path.join(appsDir, 'app', 'v.txt'), 'utf8'), 'live');
+    assert.equal(await fs.readFile(path.join(appsDir, 'app.previous', 'v.txt'), 'utf8'), 'older');
+
+    assert.equal(await repairInterruptedSwap(config, 'never-deployed'), false);
+    assert.equal(await exists(path.join(appsDir, 'never-deployed')), false);
+  });
+});
+
+test('the free-space test hook overrides the statfs reading until cleared', async () => {
+  await withApps(async (config) => {
+    __setFreeBytesOverride(10);
+    try {
+      await assert.rejects(() => assertDiskForStaging(config, 'app'), /have 10 B free/);
+      // an explicit argument still wins over the hook
+      await assertDiskForStaging(config, 'app', { freeBytes: 1024 ** 4 });
+    } finally {
+      __setFreeBytesOverride(undefined);
+    }
+    await assertDiskForStaging(config, 'app').catch((err) => assert.match(err.message, /Not enough disk space/));
+  });
+});
+
+test('formatBytes picks a readable unit', () => {
+  assert.equal(formatBytes(512), '512 B');
+  assert.equal(formatBytes(2048), '2.0 KB');
+  assert.equal(formatBytes(5 * 1024 ** 3), '5.0 GB');
 });

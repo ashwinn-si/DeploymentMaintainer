@@ -117,8 +117,8 @@ async function digestAll(db) {
 // --- validation --------------------------------------------------------------------------------
 
 // Hydrates every document with the real Mongoose model (never saves) and collects schema violations.
-// App documents must additionally carry an explicit rootDir (string) and stagedDeploys (boolean), which only
-// holds after migrating, so the pre-migration pass passes requireAppDefaults: false.
+// App documents must additionally carry an explicit rootDir (string) and stagedDeploys (boolean), and deployments
+// a boolean restoredPrevious, which only holds after migrating, so the pre-migration pass passes requireAppDefaults: false.
 export async function validateModels(db, { requireAppDefaults = true } = {}) {
   const report = {};
   for (const Model of MODELS) {
@@ -138,6 +138,9 @@ export async function validateModels(db, { requireAppDefaults = true } = {}) {
       if (Model === App && requireAppDefaults) {
         if (typeof doc.rootDir !== 'string') problems.push(`rootDir must be a string, got ${doc.rootDir === undefined ? 'nothing' : typeof doc.rootDir}`);
         if (typeof doc.stagedDeploys !== 'boolean') problems.push(`stagedDeploys must be a boolean, got ${doc.stagedDeploys === undefined ? 'nothing' : typeof doc.stagedDeploys}`);
+      }
+      if (Model === Deployment && requireAppDefaults && typeof doc.restoredPrevious !== 'boolean') {
+        problems.push(`restoredPrevious must be a boolean, got ${doc.restoredPrevious === undefined ? 'nothing' : typeof doc.restoredPrevious}`);
       }
       if (problems.length > 0) {
         entry.invalid += 1;

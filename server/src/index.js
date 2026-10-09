@@ -72,7 +72,7 @@ export async function main() {
   }
 
   await connectDB(config.MONGO_URI);
-  const recovered = await recoverInterruptedDeployments();
+  const recovered = await recoverInterruptedDeployments(config);
   if (recovered > 0) {
     console.log(`Recovered ${recovered} deployment(s) interrupted by a restart.`);
   }

@@ -44,6 +44,34 @@ export async function checkPublished(config, appName, checkPath = '/') {
   return { ok: false, statusCode: 404 };
 }
 
+// The release `current` points at right now, or null (never published). Used to undo a publish.
+export async function readCurrentRelease(config, appName) {
+  try {
+    return await fs.readlink(getPublishedAppCurrentDir(config, appName));
+  } catch {
+    return null;
+  }
+}
+
+// Points `current` back at an earlier release (atomic symlink swap). Returns false when that release was pruned.
+export async function restoreCurrentRelease(config, appName, releaseDir) {
+  try {
+    await fs.access(releaseDir);
+  } catch {
+    return false;
+  }
+  const appPublishedDir = getPublishedAppDir(config, appName);
+  const tmpSymlink = path.join(appPublishedDir, `.current.tmp-${Date.now()}`);
+  try {
+    await fs.symlink(releaseDir, tmpSymlink);
+    await fs.rename(tmpSymlink, getPublishedAppCurrentDir(config, appName));
+  } catch (err) {
+    await fs.rm(tmpSymlink, { force: true }).catch(() => {});
+    throw err;
+  }
+  return true;
+}
+
 export async function removePublishedApp(config, appName) {
   await fs.rm(getPublishedAppDir(config, appName), { recursive: true, force: true });
 }

@@ -15,6 +15,7 @@ const HELPERS_URL = pathToFileURL(path.join(SERVER_DIR, 'scripts', 'migrate-help
 const REAL_FILES = [
   '20261009000000-app-root-dir-and-staged-deploys.js',
   '20261009000100-request-stat-indexes.js',
+  '20261009000200-deployment-restored-previous.js',
 ];
 
 const silent = () => {};
@@ -74,6 +75,7 @@ async function seedLegacy(db) {
   await db.collection('deployments').insertMany([
     { appId: insertedIds[0], number: 1, branch: 'main', nodeVersion: '22', mode: 'fresh', status: 'success' },
     { appId: insertedIds[1], number: 1, branch: 'main', nodeVersion: '22', mode: 'update', status: 'failed' },
+    { appId: insertedIds[1], number: 2, branch: 'main', nodeVersion: '22', mode: 'update', status: 'failed', restoredPrevious: true },
   ]);
   // A changelog entry for a migration that no longer ships, as a long-lived production database would have.
   await db.collection('migrations_changelog').insertOne({ fileName: '20250101000000-baseline.js', appliedAt: new Date('2025-01-01') });
@@ -109,7 +111,8 @@ test('dry run passes on legacy-shaped data, leaves the source untouched and drop
 
     const apps = result.collections.find((c) => c.name === 'apps');
     assert.deepEqual(apps, { name: 'apps', before: 4, after: 4 });
-    assert.equal(result.collections.find((c) => c.name === 'deployments').after, 2);
+    assert.equal(result.collections.find((c) => c.name === 'deployments').after, 3);
+    assert.equal(result.validation.deployments.checked, 3);
     assert.equal(result.validation.apps.checked, 4);
     assert.equal(result.validation.apps.invalid, 0);
     assert.equal(result.validation.deployments.invalid, 0);
@@ -131,7 +134,7 @@ test('keep leaves the migrated scratch database in place', async () => {
 
     const scratch = client.db(result.scratchDb);
     assert.equal((await scratch.collection('apps').findOne({ name: 'legacy-a' })).rootDir, '');
-    assert.equal((await scratch.collection('migrations_changelog').countDocuments({})), 3, 'copied changelog + 2 new entries');
+    assert.equal((await scratch.collection('migrations_changelog').countDocuments({})), 4, 'copied changelog + 3 new entries');
     assert.equal(await db.collection('apps').countDocuments({ rootDir: { $exists: true } }), 1, 'only the seeded app had a rootDir in the source');
     await scratch.dropDatabase();
   });
@@ -153,6 +156,7 @@ test('nothing pending still passes and says so', async () => {
     // Already-migrated data, as it would be in production.
     await db.collection('apps').updateMany({ rootDir: { $exists: false } }, { $set: { rootDir: '' } });
     await db.collection('apps').updateMany({ stagedDeploys: { $exists: false } }, { $set: { stagedDeploys: true } });
+    await db.collection('deployments').updateMany({ restoredPrevious: { $exists: false } }, { $set: { restoredPrevious: false } });
     const lines = [];
 
     const result = await runDryRun({ mongoUri, databaseName, log: (l) => lines.push(l) });
@@ -166,7 +170,7 @@ test('nothing pending still passes and says so', async () => {
 
 test('a migration that throws fails the run, names the file, and still cleans up', async () => {
   const dir = await tempMigrationsDir({
-    '20261009000200-explode.js': 'export async function up() { throw new Error("kaboom"); }\nexport async function down() {}\n',
+    '20261009000300-explode.js': 'export async function up() { throw new Error("kaboom"); }\nexport async function down() {}\n',
   });
   try {
     await withSourceDb(async ({ mongoUri, databaseName, db, client }) => {
@@ -176,10 +180,10 @@ test('a migration that throws fails the run, names the file, and still cleans up
       const result = await runDryRun({ mongoUri, databaseName, migrationsDir: dir, log: silent });
 
       assert.equal(result.ok, false);
-      assert.equal(result.pending.length, 3);
-      assert.deepEqual(result.applied, REAL_FILES, 'the two good migrations ran before the bad one');
+      assert.equal(result.pending.length, 4);
+      assert.deepEqual(result.applied, REAL_FILES, 'the real migrations ran before the bad one');
       assert.equal(result.errors.length, 1);
-      assert.match(result.errors[0], /20261009000200-explode\.js/);
+      assert.match(result.errors[0], /20261009000300-explode\.js/);
       assert.match(result.errors[0], /kaboom/);
       assert.ok(!(await databaseNames(client)).includes(result.scratchDb), 'scratch database dropped even though the run failed');
       assert.deepEqual(await fingerprint(db), sourceBefore);
@@ -210,7 +214,7 @@ test('migrated data that fails model validation fails the run, with examples', a
 });
 
 test('a migration that leaves an app without rootDir / stagedDeploys fails the extra App check', async () => {
-  const dir = await tempMigrationsDir({ '20261009000200-noop.js': 'export async function up() {}\nexport async function down() {}\n' }, { includeReal: false });
+  const dir = await tempMigrationsDir({ '20261009000300-noop.js': 'export async function up() {}\nexport async function down() {}\n' }, { includeReal: false });
   try {
     await withSourceDb(async ({ mongoUri, databaseName, db }) => {
       await db.collection('apps').insertOne(legacyApps()[0]);
@@ -232,7 +236,7 @@ export async function down() {}
 `;
 
 test('the round trip catches a migration whose down does not undo up; --no-roundtrip skips it', async () => {
-  const dir = await tempMigrationsDir({ '20261009000200-not-reversible.js': NOT_REVERSIBLE });
+  const dir = await tempMigrationsDir({ '20261009000300-not-reversible.js': NOT_REVERSIBLE });
   try {
     await withSourceDb(async ({ mongoUri, databaseName, db, client }) => {
       await seedLegacy(db);

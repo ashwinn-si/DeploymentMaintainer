@@ -110,7 +110,9 @@ DeploymentSummary = {
   id, number /*per-app sequence, #N*/, appId, appName, branch, commitSha, previousSha,
   mode: 'update'|'fresh'|'rollback', rollbackOf: string|null, autoRollbackOf: string|null,
   status: 'queued'|'running'|'success'|'failed'|'cancelled',
-  nodeVersion, error: string|null, createdAt, finishedAt, durationMs: number|null,
+  nodeVersion, error: string|null,
+  restoredPrevious: boolean,   // staged deploy failed after the swap and the previous version was put back (it is serving again)
+  createdAt, finishedAt, durationMs: number|null,
   steps: { id /*e.g. "3-install"*/, type, label, status: 'pending'|'running'|'success'|'failed'|'skipped', startedAt, endedAt }[]
 }
 DeploymentDetail = DeploymentSummary & { entryCount: number, repoFullName }
@@ -134,6 +136,13 @@ Paths below are relative to `/api` on the agent.
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
 - `POST /apps/:id/duplicate` body `{ name, branch, rootDir? /*default: the source app's*/, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
+  **Staged pipeline** (apps with `stagedDeploys !== false`, the default; `PATCH /apps/:id { stagedDeploys: false }` deploys in place as before):
+  1. *Preflight*: needs free disk >= live folder x 1.2 + 500 MB, otherwise the deployment fails with `Not enough disk space for a staged deploy: need ~X, have Y free`, every step `skipped`, and nothing (folder, process, app status) is touched. Stale `<name>.staging` / `<name>.previous` folders are cleared.
+  2. *Staging phase*: every step before the first enabled `pm2` / `publish` step (git sync, node, env, install, build, custom steps...) runs in `APPS_DIR/<name>.staging`. A failure or cancel removes the staging folder, the deployment fails/cancels, remaining steps are `skipped`, and the live folder, process, `status` and `currentCommitSha` stay as they were; no auto-rollback runs.
+  3. *Smoke test* (node apps with an enabled health-check step): the staged build is started on a spare port and polled on the health-check path; logged under the pm2 step. Failure -> `error: "Smoke test failed: <reason>"`, same untouched-live handling. `force: true` ignores a failed smoke test.
+  4. *Promote*: `<name>` -> `<name>.previous`, `<name>.staging` -> `<name>`. The pm2/publish, nginx, health-check steps and anything after run against the live folder as usual. On success `<name>.previous` is kept as the instant-rollback copy (its size is logged).
+  5. *Post-promote failure* (any step after the swap, including the live health check): when a previous successful version exists, `<name>.previous` is swapped back, its pm2 process is started again (static apps: the previous published release is re-linked), `App.status` returns to its pre-deploy value, the deployment is `failed` with `restoredPrevious: true`, and the rebuild-based auto-rollback is not started. Without a previous version (first deploy) or if the restore itself fails, the old behaviour applies (app `failed`, auto-rollback when enabled). Cancelling after the swap does not swap back.
+  Startup recovery removes leftover staging folders and repairs a swap cut between its two renames.
 - `POST /apps/:id/restart` | `/stop` → `{ app: AppSummary }`
 - `GET /apps/:id/updates` → `{ behindBy: number, commits: [{ sha, message, author, date }] }` (newest first, max 5; commits on the app branch newer than the deployed commit)
 - `GET /apps/:id/commits` → `{ deployed: Commit|null, missing: boolean, neverDeployed: boolean, newer: Commit[], newerTotal: number, older: Commit[] }` where `Commit = { sha, message /* first line */, author, date, deployment: { id, number, status } | null }` (`deployment` = this app's most recent deployment of that sha). A window around the deployed commit: `newer` = up to 5 commits on the app branch after the deployed one (newest first; `newerTotal - newer.length` more are not shown), `older` = up to 5 commits before it (newest first). Never deployed → `neverDeployed: true`, `deployed: null`, `older` = latest 10 commits of the branch. Deployed sha unknown to GitHub (e.g. force-push) → `missing: true`, `deployed: null`, `older` = latest 10 commits of the branch. GitHub results are cached for 30s.

@@ -47,6 +47,8 @@ const deploymentSchema = new mongoose.Schema(
       default: 'queued',
     },
     error: { type: String, default: null },
+    // Staged deploys: a failure after the swap put the previous version back in place (it is serving again).
+    restoredPrevious: { type: Boolean, default: false },
     steps: { type: [deploymentStepSchema], default: [] },
     // Capped at ~1MB by services/deployLog.js before entries reach here.
     entries: { type: [entrySchema], default: [] },

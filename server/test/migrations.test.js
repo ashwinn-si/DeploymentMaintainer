@@ -222,6 +222,48 @@ test('migrate-mongo applies the request-stat-indexes migration from the real fol
   }, { migrationsDir: REAL_MIGRATIONS_DIR }));
 });
 
+// --- deployment-restored-previous ------------------------------------------------------------
+
+const RESTORED_MIGRATION = '20261009000200-deployment-restored-previous.js';
+
+test('the real deployment-restored-previous migration backfills false, is idempotent and reverts only the default', async () => {
+  await withBackupCleanup(() => withMigrationEnv({}, async ({ db }) => {
+    const migration = await import(pathToFileURL(path.join(REAL_MIGRATIONS_DIR, RESTORED_MIGRATION)).href);
+    assert.equal(typeof migration.up, 'function');
+    assert.equal(typeof migration.down, 'function');
+    const deployments = db.collection('deployments');
+    await deployments.insertMany([
+      { number: 1, status: 'success' },
+      { number: 2, status: 'failed' },
+      { number: 3, status: 'failed', restoredPrevious: true },
+    ]);
+    const flag = async (number) => (await deployments.findOne({ number })).restoredPrevious;
+
+    await migration.up(db);
+    assert.equal(await flag(1), false);
+    assert.equal(await flag(2), false);
+    assert.equal(await flag(3), true, 'a deploy that really restored the previous version keeps true');
+
+    const afterFirst = await deployments.find({}).sort({ number: 1 }).toArray();
+    await migration.up(db);
+    assert.deepEqual(await deployments.find({}).sort({ number: 1 }).toArray(), afterFirst, 'a second run changes nothing');
+
+    await migration.down(db);
+    await migration.down(db); // twice is fine
+    assert.equal(await flag(1), undefined);
+    assert.equal(await flag(2), undefined);
+    assert.equal(await flag(3), true, 'down only removes the backfilled default');
+    assert.equal((await deployments.findOne({ number: 1 })).status, 'success', 'other fields survive');
+  }));
+});
+
+test('down on a database without a deployments collection is not an error', async () => {
+  await withMigrationEnv({}, async ({ db }) => {
+    const migration = await import(pathToFileURL(path.join(REAL_MIGRATIONS_DIR, RESTORED_MIGRATION)).href);
+    await migration.down(db);
+  });
+});
+
 // --- dry run support -------------------------------------------------------------------------
 
 test('backupCollection is a no-op returning null while MIGRATE_DRY_RUN=1', async () => {

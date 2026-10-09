@@ -75,6 +75,7 @@ export function serializeDeploymentSummary(deployment, { appName = null } = {}) 
     status: deployment.status,
     nodeVersion: deployment.nodeVersion,
     error: deployment.error ?? null,
+    restoredPrevious: deployment.restoredPrevious ?? false,
     createdAt: toIso(createdAt),
     finishedAt: toIso(finishedAt),
     durationMs,

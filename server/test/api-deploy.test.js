@@ -266,6 +266,8 @@ test('a health check failure with autoRollback triggers a rollback deployment to
     steps: stepsFor('dep-autorollback', {}).map((s) => (s.type === 'healthCheck' ? { ...s, config: { ...s.config, timeoutSec: 4, intervalSec: 1 } } : s)),
   }));
   const app = createRes.body.app;
+  // The rebuild-based auto-rollback belongs to in-place deploys; staged deploys swap the old folder back instead.
+  assert.equal((await agent.patch(`/api/apps/${app.id}`).send({ stagedDeploys: false })).status, 200);
 
   const first = await agent.post(`/api/apps/${app.id}/deploy`).send({ mode: 'update' });
   const deployment1 = await waitForDeployment(agent, first.body.deployment.id);
@@ -315,6 +317,8 @@ test('a failed rollback deployment never triggers another auto-rollback', async 
     steps: stepsFor('dep-norollbackchain', {}).map((s) => (s.type === 'healthCheck' ? { ...s, config: { ...s.config, timeoutSec: 4, intervalSec: 1 } } : s)),
   }));
   const app = createRes.body.app;
+  // The rebuild-based auto-rollback belongs to in-place deploys; staged deploys swap the old folder back instead.
+  assert.equal((await agent.patch(`/api/apps/${app.id}`).send({ stagedDeploys: false })).status, 200);
 
   const first = await agent.post(`/api/apps/${app.id}/deploy`).send({ mode: 'update' });
   const deployment1 = await waitForDeployment(agent, first.body.deployment.id);
@@ -517,7 +521,8 @@ test('first deploy of a new app starts the pm2 process; the next update deploy r
   calls = shims.readCalls().slice(before).filter((c) => c.includes(pm2Name) || c.includes('/dep-restart/ecosystem'));
   assert.ok(calls.some((c) => c.startsWith('pm2 restart ') && c.includes('/dep-restart/ecosystem') && c.endsWith('--update-env')), calls.join('\n'));
   assert.ok(!calls.some((c) => c.startsWith('pm2 start ')), 'an unchanged definition must not be recreated');
-  assert.ok(!calls.some((c) => c.startsWith('pm2 delete')));
+  // (the smoke test's throwaway "-smoke" process is deleted each deploy; the real one must not be)
+  assert.ok(!calls.includes(`pm2 delete ${pm2Name}`));
 
   const proc = shims.readPm2State()[pm2Name];
   assert.ok(proc.pm2_env.restart_time > restartsAfterFirst);

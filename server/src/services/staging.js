@@ -8,6 +8,12 @@ import { getFolderSizeBytes, statDisk } from './system.js';
 const DISK_HEADROOM_FACTOR = 1.2;
 const DISK_HEADROOM_BYTES = 500 * 1024 * 1024;
 
+// Test hook (like __resetDeployerState): pretend the APPS_DIR disk has this much free space; undefined = read it.
+let freeBytesOverride;
+export function __setFreeBytesOverride(bytes) {
+  freeBytesOverride = bytes;
+}
+
 export function liveDir(config, name) {
   return path.join(config.APPS_DIR, name);
 }
@@ -24,7 +30,7 @@ function failedDir(config, name) {
   return `${liveDir(config, name)}.failed`;
 }
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = bytes;
   let unit = 0;
@@ -46,7 +52,7 @@ async function exists(dir) {
 
 // Fails early (before anything is touched) when a second copy of the app wouldn't fit.
 // `freeBytes` overrides the statfs reading so tests don't depend on the real disk.
-export async function assertDiskForStaging(config, name, { freeBytes } = {}) {
+export async function assertDiskForStaging(config, name, { freeBytes = freeBytesOverride } = {}) {
   let liveSize = 0;
   if (await exists(liveDir(config, name))) {
     liveSize = (await getFolderSizeBytes(liveDir(config, name))) ?? 0;
@@ -115,4 +121,14 @@ export async function removeStaging(config, name) {
   } catch {
     // best effort: a leftover staging dir is cleaned by the next deploy's prepareStaging
   }
+}
+
+// Startup repair for a promote that was interrupted between its two renames (live -> previous, staging -> live):
+// the live folder is gone but `.previous` is the last good version, so put it back.
+export async function repairInterruptedSwap(config, name) {
+  const live = liveDir(config, name);
+  const previous = previousDir(config, name);
+  if (await exists(live) || !(await exists(previous))) return false;
+  await fsp.rename(previous, live);
+  return true;
 }

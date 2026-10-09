@@ -48,7 +48,7 @@ npm run migrate:dry-run -w server -- --no-roundtrip   # skip the down + up rever
 It copies every collection and index (including `migrations_changelog`) into a scratch database on the same Mongo
 server, runs the pending migrations there, prints document counts before/after, validates every document of
 `apps` / `deployments` / `requeststats` / `analyticsoffsets` with the real Mongoose models (and that every app has a
-string `rootDir` and boolean `stagedDeploys`), then runs `down` for what it applied and `up` again and checks the
+string `rootDir` and boolean `stagedDeploys`, and every deployment a boolean `restoredPrevious`), then runs `down` for what it applied and `up` again and checks the
 counts are unchanged. It ends with `DRY RUN PASSED — safe to run: npm run migrate:up -w server` (exit 0) or
 `DRY RUN FAILED — do NOT migrate production` plus the reasons (exit 1). It needs free disk/RAM for a second copy of
 the database, so run it at a quiet moment on a large database.
