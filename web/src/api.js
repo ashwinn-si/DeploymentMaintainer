@@ -134,6 +134,7 @@ export function serverApi(serverId) {
       restart: (id) => post(`/apps/${id}/restart`),
       stop: (id) => post(`/apps/${id}/stop`),
       updates: (id) => get(`/apps/${id}/updates`),
+      commits: (id) => get(`/apps/${id}/commits`),
       logs: (id, lines = 200) => get(`/apps/${id}/logs${toQuery({ lines })}`),
       deployments: (id, { limit, before } = {}) => get(`/apps/${id}/deployments${toQuery({ limit, before })}`),
     },

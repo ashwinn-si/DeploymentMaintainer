@@ -6,6 +6,8 @@ import {
   detectNodeVersion,
   detectProjectType,
   getTokenInfo,
+  getCommitWindow,
+  getLatestCommits,
   GitHubError,
   setFetchImpl,
   __resetCache,
@@ -282,4 +284,111 @@ test('detectProjectType treats a malformed package.json as absent', async () => 
     ? mockResponse({ text: '{ not json' })
     : mockResponse({ status: 404, json: { message: 'Not Found' } })));
   assert.equal((await detectProjectType(freshConfig(), 'octo', 'bad', 'main')).type, 'unknown');
+});
+
+function fakeCommit(n) {
+  const sha = String(n).padStart(40, '0');
+  return {
+    sha,
+    commit: { message: `commit ${n}\n\nbody line`, author: { name: `author-${n}`, date: `2024-01-${String(n % 28 + 1).padStart(2, '0')}T00:00:00Z` } },
+  };
+}
+const sha = (n) => String(n).padStart(40, '0');
+
+// Mocks a linear history 1..total (higher = newer). Deployed commit is `deployedN`.
+function historyFetch({ total, deployedN, calls = [] }) {
+  return async (url) => {
+    calls.push(url);
+    if (url.includes('/compare/')) {
+      const commits = [];
+      for (let n = deployedN + 1; n <= total; n += 1) commits.push(fakeCommit(n));
+      return mockResponse({ json: { ahead_by: commits.length, commits } });
+    }
+    const u = new URL(url);
+    const perPage = Number(u.searchParams.get('per_page'));
+    const start = u.searchParams.get('sha') === sha(deployedN) ? deployedN : total;
+    const commits = [];
+    for (let n = start; n >= 1 && commits.length < perPage; n -= 1) commits.push(fakeCommit(n));
+    return mockResponse({ json: commits });
+  };
+}
+
+test('getCommitWindow splits newer/deployed/older, newest first, with "more" total', async () => {
+  const config = freshConfig();
+  setFetchImpl(historyFetch({ total: 20, deployedN: 10 }));
+  const win = await getCommitWindow(config, 'octo', 'repo', sha(10), 'main');
+  assert.equal(win.deployed.sha, sha(10));
+  assert.equal(win.deployed.message, 'commit 10');
+  assert.equal(win.deployed.author, 'author-10');
+  assert.deepEqual(win.newer.map((c) => c.sha), [15, 14, 13, 12, 11].map(sha));
+  assert.equal(win.newerTotal, 10);
+  assert.deepEqual(win.older.map((c) => c.sha), [9, 8, 7, 6, 5].map(sha));
+  assert.equal(win.missing, undefined);
+});
+
+test('getCommitWindow with the deployed commit at the branch head has no newer commits and few older ones', async () => {
+  setFetchImpl(historyFetch({ total: 3, deployedN: 3 }));
+  const win = await getCommitWindow(freshConfig(), 'octo', 'repo', sha(3), 'main');
+  assert.deepEqual(win.newer, []);
+  assert.equal(win.newerTotal, 0);
+  assert.deepEqual(win.older.map((c) => c.sha), [2, 1].map(sha));
+});
+
+test('getCommitWindow returns missing:true with latest commits when the deployed sha is unknown to GitHub', async () => {
+  const calls = [];
+  setFetchImpl(async (url) => {
+    calls.push(url);
+    if (url.includes('/compare/')) return mockResponse({ status: 404, json: { message: 'Not Found' } });
+    if (url.includes(`sha=${sha(99)}`)) return mockResponse({ status: 422, json: { message: 'No commit found for SHA' } });
+    assert.match(url, /commits\?sha=main&per_page=10/);
+    return mockResponse({ json: [fakeCommit(5), fakeCommit(4)] });
+  });
+  const win = await getCommitWindow(freshConfig(), 'octo', 'repo', sha(99), 'main');
+  assert.equal(win.missing, true);
+  assert.equal(win.deployed, null);
+  assert.deepEqual(win.newer, []);
+  assert.equal(win.newerTotal, 0);
+  assert.deepEqual(win.older.map((c) => c.sha), [5, 4].map(sha));
+});
+
+test('getCommitWindow still propagates real GitHub errors', async () => {
+  setFetchImpl(async () => mockResponse({ status: 403, headers: { 'x-ratelimit-remaining': '0' }, json: {} }));
+  await assert.rejects(() => getCommitWindow(freshConfig(), 'octo', 'repo', sha(1), 'main'), (err) => {
+    assert.ok(err instanceof GitHubError);
+    assert.equal(err.status, 503);
+    return true;
+  });
+  // A 404 on the commits list (repo gone) is a real 404, not "missing".
+  setFetchImpl(async () => mockResponse({ status: 404, json: { message: 'Not Found' } }));
+  await assert.rejects(() => getCommitWindow(freshConfig(), 'octo', 'gone', sha(1), 'main'), (err) => err instanceof GitHubError && err.status === 404);
+});
+
+test('getCommitWindow caches results briefly and __resetCache clears them', async () => {
+  const config = freshConfig();
+  const calls = [];
+  setFetchImpl(historyFetch({ total: 8, deployedN: 4, calls }));
+  const first = await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  const callsAfterFirst = calls.length;
+  assert.equal(callsAfterFirst, 2);
+  first.newer.pop(); // mutating a result must not poison the cache
+  const second = await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  assert.equal(calls.length, callsAfterFirst);
+  assert.equal(second.newer.length, 4);
+
+  await getCommitWindow(config, 'octo', 'repo', sha(4), 'other-branch');
+  assert.ok(calls.length > callsAfterFirst, 'different branch is a different cache key');
+
+  __resetCache();
+  const before = calls.length;
+  await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  assert.ok(calls.length > before);
+});
+
+test('getLatestCommits maps the first line of each message', async () => {
+  setFetchImpl(async (url) => {
+    assert.match(url, /commits\?sha=main&per_page=10/);
+    return mockResponse({ json: [fakeCommit(2), fakeCommit(1)] });
+  });
+  const commits = await getLatestCommits(freshConfig(), 'octo', 'repo', 'main');
+  assert.deepEqual(commits.map((c) => c.message), ['commit 2', 'commit 1']);
 });

@@ -14,6 +14,7 @@ import { StepsEditor } from '../components/StepsEditor.jsx';
 import { DeployDialog } from '../components/DeployDialog.jsx';
 import { DuplicateDialog } from '../components/DuplicateDialog.jsx';
 import { DeploymentRow } from '../components/DeploymentRow.jsx';
+import { CommitHistory } from '../components/CommitHistory.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
 import { formatBytes, formatDuration, formatRelativeTime, shortSha, githubCommitUrl } from '../lib/format.js';
@@ -23,6 +24,7 @@ const TABS = [
   { value: 'environment', label: 'Environment' },
   { value: 'steps', label: 'Steps' },
   { value: 'deployments', label: 'Deployments' },
+  { value: 'commits', label: 'Commits' },
   { value: 'logs', label: 'Runtime logs' },
 ];
 // Static sites have no process, so no runtime logs.
@@ -130,6 +132,9 @@ export function AppDetail() {
   const [logStream, setLogStream] = useState('out');
   const [logsLoading, setLogsLoading] = useState(false);
   const [updates, setUpdates] = useState(null);
+  const [commits, setCommits] = useState(null);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [commitsError, setCommitsError] = useState(null);
 
   const tab = TABS.some((t) => t.value === searchParams.get('tab')) ? searchParams.get('tab') : 'overview';
   const setTab = (value) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), tab: value }));
@@ -179,6 +184,20 @@ export function AppDetail() {
   useEffect(() => {
     if (tab === 'logs') loadLogs();
   }, [tab, loadLogs]);
+
+  const loadCommits = useCallback(() => {
+    setCommitsLoading(true);
+    setCommitsError(null);
+    api.apps
+      .commits(id)
+      .then(setCommits)
+      .catch((err) => setCommitsError(err instanceof ApiError ? err.message : 'Could not load commits.'))
+      .finally(() => setCommitsLoading(false));
+  }, [api, id]);
+
+  useEffect(() => {
+    if (tab === 'commits') loadCommits();
+  }, [tab, loadCommits]);
 
   const runAction = async (action, fn) => {
     setBusy(action);
@@ -296,6 +315,17 @@ export function AppDetail() {
             ) : (
               deployments.map((d) => <DeploymentRow key={d.id} deployment={d} />)
             )}
+          </div>
+        ) : null}
+        {tab === 'commits' ? (
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" variant="ghost" loading={commitsLoading} onClick={loadCommits}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
+            <CommitHistory data={commits} loading={commitsLoading} error={commitsError} repoFullName={app.repoFullName} branch={app.branch} />
           </div>
         ) : null}
         {tab === 'logs' ? (

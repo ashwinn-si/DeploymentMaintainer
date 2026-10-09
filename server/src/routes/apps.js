@@ -23,7 +23,7 @@ import { assertRoutePathFree } from '../services/routePaths.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
-import { getCommitsBehind } from '../services/github.js';
+import { getCommitsBehind, getCommitWindow, getLatestCommits } from '../services/github.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
 
 const envEntrySchema = z.object({ key: z.string(), value: z.string() });
@@ -160,6 +160,25 @@ async function findAppOr404(id) {
   const app = await App.findById(id);
   if (!app) throw new HttpError(404, 'App not found');
   return app;
+}
+
+// Most recent deployment per commit sha for this app: Map<sha, { id, number, status }>.
+async function latestDeploymentsBySha(app, shas) {
+  const map = new Map();
+  if (shas.length === 0) return map;
+  const deployments = await Deployment.find({ appId: app._id, commitSha: { $in: shas } })
+    .sort({ createdAt: -1 })
+    .select('number status commitSha')
+    .lean();
+  for (const d of deployments) {
+    if (!map.has(d.commitSha)) map.set(d.commitSha, { id: String(d._id), number: d.number, status: d.status });
+  }
+  return map;
+}
+
+async function annotateWithDeployments(app, commits) {
+  const byCommit = await latestDeploymentsBySha(app, commits.map((c) => c.sha));
+  return commits.map((c) => ({ ...c, deployment: byCommit.get(c.sha) ?? null }));
 }
 
 export function createAppsRouter(config) {
@@ -376,6 +395,31 @@ export function createAppsRouter(config) {
     if (!app.currentCommitSha || !app.repoFullName) return res.json({ behindBy: 0, commits: [] });
     const [owner, repo] = app.repoFullName.split('/');
     res.json(await getCommitsBehind(config, owner, repo, app.currentCommitSha, app.branch));
+  });
+
+  // Commit timeline around the deployed commit, each commit annotated with its latest deployment (if any).
+  router.get('/:id/commits', async (req, res) => {
+    const app = await findAppOr404(req.params.id);
+    const [owner, repo] = app.repoFullName.split('/');
+
+    if (!app.currentCommitSha) {
+      const older = await getLatestCommits(config, owner, repo, app.branch, 10);
+      const annotated = await annotateWithDeployments(app, older);
+      return res.json({ deployed: null, missing: false, neverDeployed: true, newer: [], newerTotal: 0, older: annotated });
+    }
+
+    const window = await getCommitWindow(config, owner, repo, app.currentCommitSha, app.branch);
+    const allShas = [window.deployed, ...window.newer, ...window.older].filter(Boolean).map((c) => c.sha);
+    const byCommit = await latestDeploymentsBySha(app, allShas);
+    const annotate = (c) => ({ ...c, deployment: byCommit.get(c.sha) ?? null });
+    res.json({
+      deployed: window.deployed ? annotate(window.deployed) : null,
+      missing: Boolean(window.missing),
+      neverDeployed: false,
+      newer: window.newer.map(annotate),
+      newerTotal: window.newerTotal,
+      older: window.older.map(annotate),
+    });
   });
 
   router.get('/:id/logs', async (req, res) => {
