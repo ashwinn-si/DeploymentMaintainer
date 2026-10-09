@@ -37,3 +37,6 @@ backup-*/
 # Personal notes with credentials — never commit
 server.md
 *.secrets.md
+
+# Pre-migration collection backups (contain app config)
+server/backups/

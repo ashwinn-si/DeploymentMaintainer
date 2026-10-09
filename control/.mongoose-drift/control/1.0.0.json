@@ -1,0 +1,130 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2026-10-09T16:04:49.719Z",
+  "modelsPath": "./src/models",
+  "collections": {
+    "User": {
+      "fields": {
+        "email": {
+          "type": "String",
+          "required": true,
+          "unique": true,
+          "trim": true
+        },
+        "passwordHash": {
+          "type": "String",
+          "required": true
+        },
+        "tokenVersion": {
+          "type": "Number",
+          "default": 0
+        },
+        "createdAt": {
+          "type": "Date",
+          "immutable": true
+        },
+        "updatedAt": {
+          "type": "Date"
+        }
+      },
+      "indexes": [],
+      "options": {
+        "strict": true,
+        "strictQuery": false,
+        "strictRead": false,
+        "bufferCommands": true,
+        "capped": false,
+        "versionKey": "__v",
+        "optimisticConcurrency": false,
+        "minimize": true,
+        "autoIndex": null,
+        "discriminatorKey": "__t",
+        "shardKey": null,
+        "read": null,
+        "validateBeforeSave": true,
+        "validateModifiedOnly": false,
+        "_id": true,
+        "id": true,
+        "typeKey": "type",
+        "timestamps": true,
+        "pluralization": true
+      }
+    },
+    "Server": {
+      "fields": {
+        "name": {
+          "type": "String",
+          "required": true,
+          "trim": true,
+          "minlength": 1,
+          "maxlength": 60
+        },
+        "url": {
+          "type": "String",
+          "required": true,
+          "unique": true
+        },
+        "serverId": {
+          "type": "String",
+          "required": true,
+          "unique": true
+        },
+        "secretEncrypted": {
+          "type": "Mixed",
+          "required": true
+        },
+        "version": {
+          "type": "String",
+          "default": null
+        },
+        "hostname": {
+          "type": "String",
+          "default": null
+        },
+        "lastSeenAt": {
+          "type": "Date",
+          "default": null
+        },
+        "lastStatus": {
+          "type": "String",
+          "default": null,
+          "enum": [
+            "online",
+            "offline",
+            "unauthorized",
+            null
+          ]
+        },
+        "createdAt": {
+          "type": "Date",
+          "immutable": true
+        },
+        "updatedAt": {
+          "type": "Date"
+        }
+      },
+      "indexes": [],
+      "options": {
+        "strict": true,
+        "strictQuery": false,
+        "strictRead": false,
+        "bufferCommands": true,
+        "capped": false,
+        "versionKey": "__v",
+        "optimisticConcurrency": false,
+        "minimize": true,
+        "autoIndex": null,
+        "discriminatorKey": "__t",
+        "shardKey": null,
+        "read": null,
+        "validateBeforeSave": true,
+        "validateModifiedOnly": false,
+        "_id": true,
+        "id": true,
+        "typeKey": "type",
+        "timestamps": true,
+        "pluralization": true
+      }
+    }
+  }
+}
