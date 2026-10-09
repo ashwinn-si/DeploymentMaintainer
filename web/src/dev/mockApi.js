@@ -662,6 +662,87 @@ export function createMockStream(serverId, depId, after = -1) {
   return handle;
 }
 
+// ------------------------------------------------------------------ analytics
+
+const ANALYTICS_RANGES = { '1h': { bucket: 'hour', count: 2 }, '24h': { bucket: 'hour', count: 24 }, '7d': { bucket: 'day', count: 7 }, '30d': { bucket: 'day', count: 30 } };
+
+function hashUnit(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 10000) / 10000;
+}
+
+// Busier in the UTC afternoon, quiet at night.
+function hourCurve(hour) {
+  return 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(((hour - 8) / 24) * 2 * Math.PI));
+}
+
+function mockAppRequests(appId, index, bucketStart, bucket) {
+  const scale = 400 / (index + 1) ** 1.3;
+  const noise = 0.7 + 0.6 * hashUnit(`${appId}:${bucketStart}`);
+  if (bucket === 'hour') return Math.round(scale * hourCurve(new Date(bucketStart).getUTCHours()) * noise);
+  let daily = 0;
+  for (let h = 0; h < 24; h += 1) daily += scale * hourCurve(h);
+  return Math.round(daily * noise);
+}
+
+function buildAnalytics(query) {
+  const rangeKey = ANALYTICS_RANGES[query.get('range')] ? query.get('range') : '24h';
+  const { bucket, count } = ANALYTICS_RANGES[rangeKey];
+  const wanted = (query.get('apps') ?? '').split(',').filter(Boolean);
+  const selected = apps.filter((a) => wanted.length === 0 || wanted.includes(a.id));
+
+  const unitMs = bucket === 'hour' ? 3600e3 : 86400e3;
+  const lastStart = Math.floor(Date.now() / unitMs) * unitMs;
+  const starts = Array.from({ length: count }, (_, i) => lastStart - (count - 1 - i) * unitMs);
+
+  const series = starts.map((start) => {
+    const perApp = {};
+    let total = 0;
+    for (const app of selected) {
+      // Rank by position in the full app list so an app keeps its volume whatever the filter is.
+      const n = mockAppRequests(app.id, apps.indexOf(app), start, bucket);
+      perApp[app.id] = n;
+      total += n;
+    }
+    return { t: new Date(start).toISOString(), total, perApp };
+  });
+
+  const status = { s2xx: 0, s3xx: 0, s4xx: 0, s5xx: 0 };
+  const rows = selected.map((app) => {
+    const total = series.reduce((sum, p) => sum + p.perApp[app.id], 0);
+    const s3xx = Math.round(total * 0.05);
+    const s4xx = Math.round(total * (0.02 + 0.06 * hashUnit(`${app.id}:4`)));
+    const s5xx = Math.round(total * 0.01 * hashUnit(`${app.id}:5`));
+    const s2xx = total - s3xx - s4xx - s5xx;
+    status.s2xx += s2xx;
+    status.s3xx += s3xx;
+    status.s4xx += s4xx;
+    status.s5xx += s5xx;
+    return { id: app.id, name: app.name, total, s2xx, s3xx, s4xx, s5xx, bytes: total * 18_000 };
+  });
+  rows.sort((a, b) => b.total - a.total);
+
+  const busiestHours = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    total: Math.round(rows.reduce((sum, r) => sum + (r.total / 24 / 0.67) * hourCurve(hour) * (0.9 + 0.2 * hashUnit(`${r.id}:${hour}`)), 0)),
+  }));
+
+  return {
+    enabled: true,
+    logDirReady: true,
+    range: rangeKey,
+    from: new Date(starts[0]).toISOString(),
+    to: new Date().toISOString(),
+    bucket,
+    apps: rows,
+    series,
+    status,
+    busiestHours,
+    warnings: [],
+  };
+}
+
 // ------------------------------------------------------------------ HTTP-ish route handling
 
 function matchRepoBranches(pathname) {
@@ -1078,6 +1159,15 @@ function agentRoute(pathname, method, body, query) {
         }))
         .sort((a, b) => a.port - b.port),
     };
+  }
+
+  if (pathname === '/api/analytics' && method === 'GET') {
+    return buildAnalytics(query);
+  }
+
+  if (pathname === '/api/analytics/setup' && method === 'POST') {
+    const published = apps.filter((a) => a.path);
+    return { updated: published.length, skipped: apps.filter((a) => !a.path).map((a) => ({ app: a.name, reason: 'no nginx step' })), errors: [] };
   }
 
   if (pathname === '/api/node/versions' && method === 'GET') {

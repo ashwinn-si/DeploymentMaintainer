@@ -152,6 +152,10 @@ export function serverApi(serverId) {
     ports: {
       list: () => get('/ports'),
     },
+    analytics: {
+      get: (range, appIds) => get(`/analytics${toQuery({ range, apps: appIds?.length ? appIds.join(',') : undefined })}`),
+      setup: () => post('/analytics/setup'),
+    },
     node: {
       versions: () => get('/node/versions'),
     },
