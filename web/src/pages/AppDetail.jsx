@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { AppWindow, Rocket, RotateCw, Square, Copy, Trash2, ExternalLink, RefreshCw } from 'lucide-react';
+import { AppWindow, Rocket, RotateCw, Square, Copy, Trash2, ExternalLink, RefreshCw, ArrowUpCircle } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Button } from '../components/ui/Button.jsx';
@@ -76,6 +76,44 @@ function OverviewTab({ app }) {
   );
 }
 
+function UpdateBanner({ app, updates, onDeploy }) {
+  const { behindBy, commits } = updates;
+  const plural = behindBy === 1 ? 'commit' : 'commits';
+  return (
+    <GlassCard variant="mid" className="border-amber-500/30">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <ArrowUpCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-[var(--text-primary)]">
+              {behindBy >= 100 ? '100+' : behindBy} new {plural} on {app.branch} since{' '}
+              <span className="font-mono">{shortSha(app.currentCommitSha)}</span>
+            </p>
+            <ul className="space-y-1">
+              {commits.map((c) => (
+                <li key={c.sha} className="text-[13px] text-[var(--text-secondary)]">
+                  <a href={githubCommitUrl(app.repoFullName, c.sha)} target="_blank" rel="noreferrer" className="font-mono text-[var(--brand)] hover:underline">
+                    {shortSha(c.sha)}
+                  </a>{' '}
+                  {c.message}
+                  <span className="text-[var(--text-muted)]">
+                    {c.author ? ` · ${c.author}` : ''}
+                    {c.date ? ` · ${formatRelativeTime(c.date)}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <Button size="sm" onClick={onDeploy}>
+          <Rocket className="h-4 w-4" />
+          Deploy latest
+        </Button>
+      </div>
+    </GlassCard>
+  );
+}
+
 export function AppDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,6 +128,7 @@ export function AppDetail() {
   const [deployments, setDeployments] = useState([]);
   const [runtimeLogs, setRuntimeLogs] = useState('');
   const [logsLoading, setLogsLoading] = useState(false);
+  const [updates, setUpdates] = useState(null);
 
   const tab = TABS.some((t) => t.value === searchParams.get('tab')) ? searchParams.get('tab') : 'overview';
   const setTab = (value) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), tab: value }));
@@ -106,6 +145,17 @@ export function AppDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Re-check for newer commits whenever the deployed commit changes. Best effort: GitHub errors just hide the banner.
+  const deployedSha = app?.currentCommitSha;
+  useEffect(() => {
+    setUpdates(null);
+    if (!deployedSha) return;
+    api.apps
+      .updates(id)
+      .then(setUpdates)
+      .catch(() => {});
+  }, [api, id, deployedSha]);
 
   useEffect(() => {
     if (tab === 'deployments') {
@@ -225,6 +275,8 @@ export function AppDetail() {
           </span>
         </span>
       </PageHeader>
+
+      {updates && updates.behindBy > 0 ? <UpdateBanner app={app} updates={updates} onDeploy={() => setDeployOpen(true)} /> : null}
 
       <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 

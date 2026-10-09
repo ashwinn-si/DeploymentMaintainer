@@ -894,6 +894,15 @@ function agentRoute(pathname, method, body, query) {
     return { app: toAppSummary(app) };
   }
 
+  const updatesMatch = pathname.match(/^\/api\/apps\/([^/]+)\/updates$/);
+  if (updatesMatch && method === 'GET') {
+    findApp(updatesMatch[1]);
+    return { behindBy: 2, commits: [
+      { sha: sha(), message: 'fix: handle empty payload', author: 'ashwinn-si', date: new Date(Date.now() - 3600e3).toISOString() },
+      { sha: sha(), message: 'feat: add health route', author: 'ashwinn-si', date: new Date(Date.now() - 7200e3).toISOString() },
+    ] };
+  }
+
   const logsMatch = pathname.match(/^\/api\/apps\/([^/]+)\/logs$/);
   if (logsMatch && method === 'GET') {
     const app = findApp(logsMatch[1]);

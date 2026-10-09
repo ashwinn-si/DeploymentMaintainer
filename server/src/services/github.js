@@ -1,5 +1,5 @@
 import { HttpError } from '../lib/httpError.js';
-import { validateOwner, validateRepo, validateRef } from '../lib/validate.js';
+import { validateOwner, validateRepo, validateRef, validateCommitSha } from '../lib/validate.js';
 import { classifyProject } from '../lib/frontend.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -248,4 +248,26 @@ export async function getTokenInfo(config) {
     scopes,
     rateLimitRemaining: rateLimitRemaining !== null ? Number(rateLimitRemaining) : null,
   };
+}
+
+// Commits on `branch` that the deployed `sha` doesn't have yet (GitHub compare, base...head).
+export async function getCommitsBehind(config, owner, repo, sha, branch) {
+  const token = requireToken(config);
+  const validOwner = validateOwner(owner);
+  const validRepo = validateRepo(repo);
+  const validBranch = validateRef(branch);
+  const validSha = validateCommitSha(sha);
+
+  const url = `${GITHUB_API}/repos/${encodeURIComponent(validOwner)}/${encodeURIComponent(validRepo)}/compare/${validSha}...${encodeURIComponent(validBranch)}?per_page=100`;
+  const res = await githubFetch(token, url, { notFoundMessage: 'Deployed commit or branch not found on GitHub' });
+  const data = await res.json();
+  const behindBy = data.ahead_by ?? 0;
+  // Compare lists oldest first; show the newest few.
+  const commits = (data.commits ?? []).slice(-5).reverse().map((c) => ({
+    sha: c.sha,
+    message: String(c.commit?.message ?? '').split('\n')[0],
+    author: c.commit?.author?.name ?? c.author?.login ?? null,
+    date: c.commit?.author?.date ?? null,
+  }));
+  return { behindBy, commits };
 }

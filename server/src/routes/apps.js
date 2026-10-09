@@ -23,6 +23,7 @@ import { assertRoutePathFree } from '../services/routePaths.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
+import { getCommitsBehind } from '../services/github.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
 
 const envEntrySchema = z.object({ key: z.string(), value: z.string() });
@@ -345,6 +346,13 @@ export function createAppsRouter(config) {
       pm2: await getPm2Info(app.name),
       activeDeploymentId: getActiveDeploymentId(app._id),
     }) });
+  });
+
+  router.get('/:id/updates', async (req, res) => {
+    const app = await findAppOr404(req.params.id);
+    if (!app.currentCommitSha || !app.repoFullName) return res.json({ behindBy: 0, commits: [] });
+    const [owner, repo] = app.repoFullName.split('/');
+    res.json(await getCommitsBehind(config, owner, repo, app.currentCommitSha, app.branch));
   });
 
   router.get('/:id/logs', async (req, res) => {
