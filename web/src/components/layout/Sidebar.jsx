@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Logo } from '../ui/Logo.jsx';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid,
   PlusCircle,
@@ -159,7 +159,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
   return (
     <div className={`flex h-full flex-col transition-all duration-300 ${collapsed ? 'p-3' : 'p-6'}`}>
       <div className={`mb-6 flex items-center justify-between gap-2 ${collapsed ? 'px-0 flex-col gap-3' : 'px-1'}`}>
-        <div className="flex items-center gap-2">
+        <Link to="/" onClick={onNavigate} aria-label="Go to home" className="flex items-center gap-2">
           <Logo className="h-9 w-auto shrink-0" />
           {!collapsed ? (
             <span className="font-heading text-lg leading-tight">
@@ -167,7 +167,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
               <span className="font-light text-[var(--brand)]">Maintainer</span>
             </span>
           ) : null}
-        </div>
+        </Link>
         {onToggleCollapse ? (
           <button
             type="button"
