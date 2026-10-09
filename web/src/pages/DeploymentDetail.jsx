@@ -139,6 +139,15 @@ export function DeploymentDetail() {
         </GlassCard>
       ) : null}
 
+      {deployment.restoredPrevious ? (
+        <GlassCard variant="light" className="flex items-center gap-3 border border-teal-500/20 bg-teal-500/10">
+          <Undo2 className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+          <p className="text-sm text-[var(--text-secondary)]">
+            This deploy failed after the new build went live, so the previous version was restored automatically. The app is serving the commit it had before.
+          </p>
+        </GlassCard>
+      ) : null}
+
       {(status ?? deployment.status) === 'failed' && deployment.error ? (
         <GlassCard variant="light" className="border border-rose-500/20 bg-rose-500/10">
           <p className="mb-1 text-sm font-semibold text-rose-600 dark:text-rose-400">Deployment failed</p>

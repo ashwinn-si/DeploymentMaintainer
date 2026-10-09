@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { Tabs } from '../components/ui/Tabs.jsx';
+import { Toggle } from '../components/ui/Toggle.jsx';
 import { StatusPill, statusTone } from '../components/ui/StatusPill.jsx';
 import { Loader } from '../components/ui/Loader.jsx';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx';
@@ -40,7 +41,7 @@ function Field({ label, children }) {
   );
 }
 
-function OverviewTab({ app, onEditRootDir, editingRootDir }) {
+function OverviewTab({ app, onEditRootDir, editingRootDir, onToggleStaged, togglingStaged }) {
   const commitUrl = githubCommitUrl(app.repoFullName, app.currentCommitSha);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -62,6 +63,21 @@ function OverviewTab({ app, onEditRootDir, editingRootDir }) {
           >
             Edit
           </button>
+        </span>
+      </Field>
+      <Field label="Staged deploys">
+        <span className="flex flex-col gap-1">
+          <Toggle
+            checked={app.stagedDeploys !== false}
+            onChange={onToggleStaged}
+            disabled={togglingStaged}
+            label={app.stagedDeploys !== false ? 'On' : 'Off'}
+          />
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {app.stagedDeploys !== false
+              ? 'Builds and tests in a separate folder; the live version is swapped out only if that passes.'
+              : 'Deploys run in the live folder (a failed build can leave it broken).'}
+          </span>
         </span>
       </Field>
       <Field label="Commit">
@@ -244,6 +260,12 @@ export function AppDetail() {
     });
   };
 
+  const handleToggleStaged = (enabled) =>
+    runAction('staged', async () => {
+      await api.apps.update(id, { stagedDeploys: enabled });
+      toast.success(enabled ? 'Staged deploys on' : 'Staged deploys off — deploys run in the live folder');
+    });
+
   const handleDelete = async () => {
     setBusy('delete');
     try {
@@ -324,7 +346,7 @@ export function AppDetail() {
       <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 
       <GlassCard variant="mid">
-        {tab === 'overview' ? <OverviewTab app={app} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} /> : null}
+        {tab === 'overview' ? <OverviewTab app={app} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} onToggleStaged={handleToggleStaged} togglingStaged={busy === 'staged'} /> : null}
         {tab === 'environment' ? (
           <div className="space-y-4">
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
