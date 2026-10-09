@@ -474,7 +474,9 @@ Apps live on a specific server, so first open the server in the dashboard (pick 
 
 **Same repo, another branch:** create another app (e.g. `my-api-dev` on `dev`) with its own env, or use **Duplicate** on the app page.
 
-**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull in place) or **Fresh** (wipe and re-clone).
+**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull, rebuild, restart the PM2 process) or **Fresh** (re-clone from scratch and start a new process). By default both are *staged*: the new version is built and smoke-tested in `<app>.staging` while the live one keeps serving, and only swapped in if that passes; if it fails after the swap, the previous version is restored automatically (Overview → Staged deploys turns this off).
+
+**Monorepo?** In New App, **Root directory** lets you deploy a sub-folder (e.g. `apps/web`) of a repo; leave it at `/` for the whole repo. **Commits** on the app page shows the commits around the deployed one; **Analytics** (server menu) shows traffic per app (needs 3.10b).
 
 **Something broke?** Deployments → pick an earlier successful deploy → **Rollback to this**.
 
@@ -483,25 +485,35 @@ Apps live on a specific server, so first open the server in the dashboard (pick 
 ## Part 7: Day-2 operations
 
 ### 7.1 Update the dashboard and agents
-Updating is the same `git pull` everywhere, then a reload of whatever runs on that box.
+Updating is the same `git pull` everywhere, then a reload of whatever runs on that box. Agents also have database migrations, which you **rehearse on a copy of the real data before applying**.
 
 On **every server** (agent):
 ```bash
 cd ~/deployment_maintainer
 git pull
 npm ci
-npm run migrate:status -w server   # lists database migrations that are still pending
-npm run migrate:up -w server       # applies them (a no-op when there are none)
+
+# 1. Dry run: copies the live database into a throwaway one, migrates the copy, validates every
+#    document and tests down + up again. It only READS the real database and drops the copy at the end.
+npm run migrate:status -w server      # lists pending migrations (changes nothing)
+npm run migrate:dry-run -w server     # must end with: DRY RUN PASSED
+
+# 2. Only if the dry run passed: apply them for real (each one backs up what it touches to server/backups/)
+npm run migrate:up -w server
+npm run migrate:status -w server      # everything should now say the migration's applied date
+
 pm2 reload deployment-maintainer
 ```
-Migrations back up the collections they touch to `server/backups/` first, are safe to run twice, and can be reverted with `npm run migrate:down -w server`. Do an Export (7.2) before the first one on a live server. See `server/migrations/README.md`.
+If the dry run ends with `DRY RUN FAILED — do NOT migrate production`, stop: read the reasons, don't run `migrate:up`, and fix or report it (the old code keeps working; the new code reads new fields with defaults, so deploying it before migrating is safe). Do an **Export** (7.2) before the first migration on a live server. To undo the last migration: `npm run migrate:down -w server`. The dry run needs free disk for a second copy of the database. See `server/migrations/README.md`.
 
-On **server 1**, also rebuild the UI and reload the control plane:
+On **server 1**, also rebuild the UI and reload the control plane (its database has no pending migrations today; `npm run migrate:dry-run` is agent-only):
 ```bash
 npm run build
 pm2 reload deployment-control
 ```
-Avoid updating while an app deploy is running. An interrupted deploy is marked failed; just redeploy it. Reloading the control plane only drops open log streams; reload the page and they resume.
+Avoid updating while an app deploy is running. An interrupted deploy is marked failed; just redeploy it (a half-built staging folder or a half-done folder swap is cleaned up/repaired when the agent starts). Reloading the control plane only drops open log streams; reload the page and they resume.
+
+Disk note: staged deploys (on by default, see Part 6) keep one previous copy of each app (`<app>.previous`) and need room for a second copy while building, so apps use about 2x their size under `APPS_DIR`; a deploy fails early with a clear message if there isn't enough free space.
 
 ### 7.2 Backups
 - **App configs:** open the server in the dashboard → Settings → Backup → **Export** (passphrase-encrypted JSON). Do it per server, and keep the file somewhere off the server.

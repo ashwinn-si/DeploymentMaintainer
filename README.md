@@ -41,7 +41,13 @@ deployed apps through its own Nginx. Adding a server in the dashboard generates 
 - Three app types, auto-detected from the repo: Node servers (PM2), frontend apps (Vite, React, Astro... built then served by Nginx) and plain static HTML. Static types need no process or port and are served from `PUBLISHED_DIR`
 - Deploy any branch on demand (update in place or fresh re-clone); duplicate an app to run another branch side by side
 - Live streaming deploy logs (SSE) on the home page, a global Deployments page and a per-deploy detail view, with step timeline, cancel, copy and download; secrets are masked
-- Auto-rollback on a failed health check, one-click manual rollback to any past successful deploy
+- **Staged deploys** (on by default): each deploy builds and smoke-tests in `<app>.staging` while the live version keeps serving, checks disk space first, swaps the folder in only on success and restores the previous version automatically if something fails after the swap
+- PM2 step **starts** a new process on a new app or fresh deploy and **restarts** the existing one on updates (recreating it if the start command, folder or Node version changed)
+- **Root directory** per app (like Vercel): deploy a sub-folder of a monorepo, picked with a GitHub folder browser
+- A `PORT` set in the environment variables becomes the app's port (otherwise the assigned port is injected as `PORT`)
+- App page: **Commits** timeline around the deployed commit (what is live, what is not yet deployed), runtime logs split into Output and Errors
+- **Analytics**: requests per app over time, status mix and busiest hours, from per-app Nginx access logs (stored on each agent)
+- Auto-rollback on a failed health check (in-place deploys), one-click manual rollback to any past successful deploy
 - Server health (CPU/RAM/disk with 1h history, per-app memory and disk use, app health pings) and a ports/routing overview
 - Per-server settings (GitHub token status, passphrase-encrypted config export/import) and an account page to change the dashboard password
 
@@ -74,11 +80,14 @@ Run all test suites with `npm test`.
 ## Project layout
 
 ```
-server/    Agent API: deploy pipeline (src/steps, src/services), bearer auth, scripts/clear-db, tests
-control/   Control plane: admin login, server registry, authenticated proxy, serves web/dist, scripts/seed + clear-db, tests
+server/    Agent API: deploy pipeline (src/steps, src/services: deployer, staging, smoke, analytics), bearer auth,
+           migrations/ (migrate-mongo), scripts/ (clear-db, migrate-dry-run, drift-check), .mongoose-drift/ (schema snapshots), tests
+control/   Control plane: admin login, server registry, authenticated proxy, serves web/dist, scripts/seed + clear-db + drift-check,
+           .mongoose-drift/ (schema snapshots), tests
 web/       React + Vite + Tailwind dashboard (styled per style.md)
 deploy/    Nginx sites (agent + control plane), sudoers rule, PM2 ecosystems (see DEPLOYMENT.md)
 docs/      API reference (control plane API and agent API)
+AGENTS.md  Rules for contributors and AI agents (repo map, commands, database migration rules)
 style.md   UI design system
 ```
 
@@ -102,6 +111,10 @@ plane on server 1, adding more servers, and deploying your first app.
 | `npm run clear-db:control` | Drops the control plane's database (typed confirmation, or `--yes`) |
 | `npm run build` | Builds the frontend to `web/dist`, served by the control plane |
 | `npm test` | Runs every workspace's test suite |
+| `npm run migrate:status -w server` | Lists pending database migrations |
+| `npm run migrate:dry-run -w server` | Rehearses pending migrations on a throwaway copy of the real data (never writes to the real DB) |
+| `npm run migrate:up -w server` / `migrate:down -w server` | Applies / reverts migrations (run the dry run first on a live server) |
+| `npm run drift:check -w server` (or `-w control`) | Fails if the Mongoose models changed without a new schema snapshot + migration |
 
 ## Known limitations
 
@@ -111,4 +124,6 @@ plane on server 1, adding more servers, and deploying your first app.
 - **Not yet verified on a real server**: pipeline tests use fake `pm2`/`fnm`/`sudo`, and several pages were only checked against the dev mock. Treat the first EC2 deploy as the integration test.
 - **Secrets**: app env is encrypted in MongoDB but written in plaintext (mode 600) to each app's `.env`, its `ecosystem.config.cjs`, and pm2's dump. Log redaction is best-effort: values shorter than 4 chars and common values like `true` or `production` aren't masked. Custom step commands run arbitrary code by design.
 - **`ENCRYPTION_KEY` rotation** makes stored data unreadable: on an agent it hides app env (export config first, per server); on the control plane it hides stored server secrets (you would re-add the servers).
+- **Staged deploys** run the app a second time briefly (a smoke test on a spare port with the real env), so code that fires jobs or webhooks on boot can run twice; turn **Staged deploys** off per app (Overview) or disable the health-check step to skip it. A folder swap keeps absolute paths, but anything that baked the staging path into build output would carry it. Cancelling after the swap does not swap back.
+- **Analytics** counts come from Nginx access logs: they include bots and 404s and have no latency. It needs the one-time log directory setup in DEPLOYMENT.md 3.10b.
 - **Rollbacks** use the app's current env and steps, not the ones from the target deployment.
