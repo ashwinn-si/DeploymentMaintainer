@@ -194,6 +194,8 @@ export function NewApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, repoFullName, branch]);
 
+  const envPort = env.find((e) => e.key === 'PORT' && e.value.trim())?.value.trim();
+
   const submit = async (deploy) => {
     setSubmitting(deploy ? 'deploy' : 'create');
     setFormError(null);
@@ -204,7 +206,8 @@ export function NewApp() {
         kind,
         repoFullName,
         branch,
-        port: !isStatic && port ? Number(port) : undefined,
+        // An untouched port is just the suggested one; a PORT in the env wins over it.
+        port: !isStatic && port && !(envPort && !portTouched) ? Number(port) : undefined,
         nodeVersion: needsNode ? nodeVersion : nodeVersion || '20',
         env,
         steps,
@@ -304,6 +307,9 @@ export function NewApp() {
               }}
               error={fieldErrors.port}
               placeholder="Auto-assigned"
+              hint={envPort && !portTouched
+                ? `Using PORT=${envPort} from your environment variables.`
+                : 'Passed to your app as the PORT env var. Or set PORT in the environment variables below and it is used instead.'}
             />
           </div>
           )}

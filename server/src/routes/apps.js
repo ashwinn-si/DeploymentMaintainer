@@ -80,6 +80,21 @@ function envArrayToObject(envArray) {
   return obj;
 }
 
+// A PORT set in the env editor is the app's port: adopted when no explicit port is given,
+// and rejected when it contradicts one (nginx and health checks use app.port, not the env).
+function reconcilePort(requested, envObj) {
+  const raw = envObj.PORT;
+  if (raw === undefined || raw === '') return requested;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+    throw new HttpError(400, `PORT in environment variables must be an integer between 1024 and 65535, got "${raw}"`);
+  }
+  if (requested !== undefined && requested !== n) {
+    throw new HttpError(400, `PORT in environment variables (${n}) does not match the port field (${requested}); make them match or remove PORT`);
+  }
+  return n;
+}
+
 function envObjectToArray(obj) {
   return Object.entries(obj || {}).map(([key, value]) => ({ key, value }));
 }
@@ -176,10 +191,10 @@ export function createAppsRouter(config) {
     if (existing) throw new HttpError(409, `An app named "${body.name}" already exists`);
 
     const kind = body.kind ?? 'node';
-    const port = await resolvePort(config, kind, body.port);
+    const envObj = envArrayToObject(body.env ?? []);
+    const port = await resolvePort(config, kind, kind === 'static' ? body.port : reconcilePort(body.port, envObj));
 
     validateNodeVersion(body.nodeVersion);
-    const envObj = envArrayToObject(body.env ?? []);
     const steps = normalizeSteps(body.steps?.length ? body.steps : defaultSteps(body.name, kind), { kind });
     await assertRoutePathFree(body.name, steps);
 
@@ -216,18 +231,20 @@ export function createAppsRouter(config) {
       validateRef(body.branch);
       app.branch = body.branch;
     }
-    if (body.port !== undefined) {
+    const envObj = body.env !== undefined ? envArrayToObject(body.env) : undefined;
+    const newPort = envObj && app.kind !== 'static' ? reconcilePort(body.port, envObj) : body.port;
+    if (newPort !== undefined) {
       if (app.kind === 'static') throw new HttpError(400, 'Static apps do not use a port');
-      validatePort(body.port);
-      if (body.port !== app.port) await assertPortAvailable(body.port, app._id);
-      app.port = body.port;
+      validatePort(newPort);
+      if (newPort !== app.port) await assertPortAvailable(newPort, app._id);
+      app.port = newPort;
     }
     if (body.nodeVersion !== undefined) {
       validateNodeVersion(body.nodeVersion);
       app.nodeVersion = body.nodeVersion;
     }
-    if (body.env !== undefined) {
-      app.envEncrypted = encryptJSON(config, envArrayToObject(body.env));
+    if (envObj) {
+      app.envEncrypted = encryptJSON(config, envObj);
     }
     if (body.steps !== undefined) {
       const steps = normalizeSteps(body.steps, { kind: app.kind });
@@ -290,7 +307,12 @@ export function createAppsRouter(config) {
     const nodeVersion = body.nodeVersion ?? source.nodeVersion;
     validateNodeVersion(nodeVersion);
 
-    const envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
+    let envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
+    if (body.copyEnv && kind !== 'static') {
+      // The copy gets its own port, so a PORT carried over from the original must follow it.
+      const copied = decryptAppEnv(config, source.envEncrypted);
+      if ('PORT' in copied) envEncrypted = encryptJSON(config, { ...copied, PORT: String(port) });
+    }
     const steps = normalizeSteps(JSON.parse(JSON.stringify(source.steps)), { kind });
     // A copy must not inherit the original's URL path, or Nginx would serve only one of them.
     for (const step of steps) {

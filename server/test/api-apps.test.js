@@ -103,6 +103,47 @@ test('create, get, patch, list an app', async () => {
   }
 });
 
+test('PORT in env sets the app port, conflicts are rejected, duplicate rewrites it', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const envPort = config.APP_PORT_START + 120;
+
+    const adopted = await agent.post('/api/apps').send(createAppBody(fixture, { env: [{ key: 'PORT', value: String(envPort) }] }));
+    assert.equal(adopted.status, 201);
+    assert.equal(adopted.body.app.port, envPort);
+
+    const mismatch = await agent.post('/api/apps').send(createAppBody(fixture, {
+      name: 'mismatch-app',
+      port: envPort + 1,
+      steps: stepsFor('mismatch-app'),
+      env: [{ key: 'PORT', value: String(envPort + 2) }],
+    }));
+    assert.equal(mismatch.status, 400);
+    assert.match(mismatch.body.error, /does not match the port field/);
+
+    const bad = await agent.post('/api/apps').send(createAppBody(fixture, {
+      name: 'bad-port-app',
+      steps: stepsFor('bad-port-app'),
+      env: [{ key: 'PORT', value: 'abc' }],
+    }));
+    assert.equal(bad.status, 400);
+
+    const patched = await agent.patch(`/api/apps/${adopted.body.app.id}`).send({ env: [{ key: 'PORT', value: String(envPort + 3) }] });
+    assert.equal(patched.status, 200);
+    assert.equal(patched.body.app.port, envPort + 3);
+
+    const dup = await agent.post(`/api/apps/${adopted.body.app.id}/duplicate`).send({ name: 'dup-port', branch: 'main', copyEnv: true });
+    assert.equal(dup.status, 201);
+    const dupEnv = dup.body.app.env.find((e) => e.key === 'PORT');
+    assert.equal(dupEnv.value, String(dup.body.app.port));
+    assert.notEqual(dup.body.app.port, patched.body.app.port);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
 test('GET /apps/defaults returns steps, a free port and the server default node version', async () => {
   const server = await setupTestServer();
   try {
