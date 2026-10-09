@@ -903,6 +903,41 @@ function agentRoute(pathname, method, body, query) {
     ] };
   }
 
+  const commitsMatch = pathname.match(/^\/api\/apps\/([^/]+)\/commits$/);
+  if (commitsMatch && method === 'GET') {
+    const app = findApp(commitsMatch[1]);
+    const subjects = [
+      'fix: handle empty payload', 'feat: add health route', 'chore: bump dependencies', 'refactor: split router',
+      'feat: paginate listings', 'fix: race in cache refresh', 'docs: update readme', 'feat: structured logging',
+      'fix: trim env values', 'test: cover retry path', 'chore: tidy lint config', 'feat: graceful shutdown',
+    ];
+    const mk = (i, hoursAgo) => ({
+      sha: sha(),
+      message: subjects[i % subjects.length],
+      author: i % 3 === 0 ? 'ashwinn-si' : 'octocat',
+      date: new Date(Date.now() - hoursAgo * 3600e3).toISOString(),
+    });
+    const badge = (c) => {
+      const d = deployments.filter((x) => x.appId === app.id && x.commitSha === c.sha).sort(byCreatedAtDesc)[0];
+      return { ...c, deployment: d ? { id: d.id, number: d.number, status: d.status } : null };
+    };
+    const older = Array.from({ length: 10 }, (_, i) => mk(i, 30 + i * 9));
+    if (!app.currentCommitSha) {
+      return { deployed: null, missing: false, neverDeployed: true, newer: [], newerTotal: 0, older: older.map(badge) };
+    }
+    const deployed = { ...mk(3, 20), sha: app.currentCommitSha };
+    const newer = Array.from({ length: 5 }, (_, i) => mk(i + 5, 2 + i * 3));
+    const withBadges = (list) => list.map(badge);
+    return {
+      deployed: badge(deployed),
+      missing: false,
+      neverDeployed: false,
+      newer: withBadges(newer),
+      newerTotal: 8,
+      older: withBadges(older.slice(0, 5)),
+    };
+  }
+
   const logsMatch = pathname.match(/^\/api\/apps\/([^/]+)\/logs$/);
   if (logsMatch && method === 'GET') {
     const app = findApp(logsMatch[1]);

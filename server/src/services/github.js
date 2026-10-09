@@ -23,8 +23,13 @@ export function setFetchImpl(fn) {
 // serve stale data from a different token.
 let repoListCache = new Map();
 
+// Commit-window results are cached briefly so flipping between tabs or hammering Refresh doesn't burn rate limit.
+const COMMIT_CACHE_TTL_MS = 30 * 1000;
+let commitCache = new Map();
+
 export function __resetCache() {
   repoListCache = new Map();
+  commitCache = new Map();
 }
 
 function requireToken(config) {
@@ -270,4 +275,78 @@ export async function getCommitsBehind(config, owner, repo, sha, branch) {
     date: c.commit?.author?.date ?? null,
   }));
   return { behindBy, commits };
+}
+
+function mapCommit(c) {
+  return {
+    sha: c.sha,
+    message: String(c.commit?.message ?? '').split('\n')[0],
+    author: c.commit?.author?.name ?? c.author?.login ?? null,
+    date: c.commit?.author?.date ?? null,
+  };
+}
+
+// Returns null when the response status is one of `missingStatuses` (meaning "the deployed sha is unknown to
+// GitHub", e.g. force-pushed away); anything else that isn't ok is a real error.
+async function githubFetchOrMissing(token, url, missingStatuses) {
+  const res = await fetchImpl(url, { headers: authHeaders(token) });
+  if (missingStatuses.includes(res.status)) return null;
+  if (!res.ok) await throwForStatus(res);
+  return res;
+}
+
+async function cachedCommits(key, load) {
+  const hit = commitCache.get(key);
+  if (hit && hit.expires > Date.now()) return structuredClone(hit.value);
+  const value = await load();
+  commitCache.set(key, { expires: Date.now() + COMMIT_CACHE_TTL_MS, value });
+  return structuredClone(value);
+}
+
+// Latest `count` commits on `branch`, newest first.
+export async function getLatestCommits(config, owner, repo, branch, count = 10) {
+  const token = requireToken(config);
+  const validOwner = validateOwner(owner);
+  const validRepo = validateRepo(repo);
+  const validBranch = validateRef(branch);
+
+  return cachedCommits(`latest:${validOwner}/${validRepo}/${validBranch}/${count}`, async () => {
+    const url = `${GITHUB_API}/repos/${encodeURIComponent(validOwner)}/${encodeURIComponent(validRepo)}/commits?sha=${encodeURIComponent(validBranch)}&per_page=${count}`;
+    const res = await githubFetch(token, url, { notFoundMessage: 'Repository or branch not found' });
+    return ((await res.json()) ?? []).map(mapCommit);
+  });
+}
+
+// A window of history around the deployed commit: up to `count` newer commits on `branch` (newest first),
+// the deployed commit itself, and up to `count` older ones (newest first).
+// If the deployed sha no longer exists on GitHub, returns `{ deployed: null, missing: true, ... }` with the latest commits.
+export async function getCommitWindow(config, owner, repo, sha, branch, count = 5) {
+  const token = requireToken(config);
+  const validOwner = validateOwner(owner);
+  const validRepo = validateRepo(repo);
+  const validBranch = validateRef(branch);
+  const validSha = validateCommitSha(sha);
+
+  return cachedCommits(`window:${validOwner}/${validRepo}/${validSha}/${validBranch}/${count}`, async () => {
+    const base = `${GITHUB_API}/repos/${encodeURIComponent(validOwner)}/${encodeURIComponent(validRepo)}`;
+    const [olderRes, compareRes] = await Promise.all([
+      // An unknown sha on the commits list is a 422; a 404 there means the repo itself is gone (real error).
+      githubFetchOrMissing(token, `${base}/commits?sha=${validSha}&per_page=${count + 1}`, [422]),
+      githubFetchOrMissing(token, `${base}/compare/${validSha}...${encodeURIComponent(validBranch)}?per_page=100`, [404, 422]),
+    ]);
+
+    if (!olderRes || !compareRes) {
+      const res = await githubFetch(token, `${base}/commits?sha=${encodeURIComponent(validBranch)}&per_page=${count * 2}`, {
+        notFoundMessage: 'Repository or branch not found',
+      });
+      const older = ((await res.json()) ?? []).map(mapCommit);
+      return { deployed: null, missing: true, newer: [], newerTotal: 0, older };
+    }
+
+    const [deployed, ...older] = ((await olderRes.json()) ?? []).map(mapCommit);
+    const compare = await compareRes.json();
+    // Compare lists oldest first; the ones right after the deployed commit are the first `count`.
+    const newer = (compare.commits ?? []).slice(0, count).reverse().map(mapCommit);
+    return { deployed: deployed ?? null, newer, newerTotal: compare.ahead_by ?? newer.length, older };
+  });
 }
