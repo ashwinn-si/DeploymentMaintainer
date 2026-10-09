@@ -71,6 +71,12 @@
   --surface-inset-bg: #f8fafc;
   --overlay-bg: rgba(255, 255, 255, 0.9);
 
+  /* Floating sidebar */
+  --sidebar-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.8) 100%);
+  --sidebar-border: rgba(234, 88, 12, 0.2);
+  --sidebar-shadow: 0 20px 50px -24px rgba(15, 23, 42, 0.25), 0 4px 14px -6px rgba(15, 23, 42, 0.08);
+  --sidebar-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
   --page-bg:
     radial-gradient(circle at 8% 0%, rgba(30, 27, 75, 0.08), transparent 38%),
     radial-gradient(circle at 96% 0%, rgba(194, 65, 12, 0.08), transparent 34%),
@@ -100,6 +106,14 @@
   --surface-bg: #1e293b;
   --surface-inset-bg: #0f172a;
   --overlay-bg: rgba(30, 41, 59, 0.92);
+
+  /* Floating sidebar: navy gradient a step lighter than the page, brand glow in the top-left corner */
+  --sidebar-bg:
+    radial-gradient(circle at 0% 0%, rgba(251, 146, 60, 0.16), transparent 46%),
+    linear-gradient(180deg, #1a2538 0%, #111a2b 100%);
+  --sidebar-border: rgba(251, 146, 60, 0.18);
+  --sidebar-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  --sidebar-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
   --page-bg:
     radial-gradient(circle at 8% 0%, rgba(251, 146, 60, 0.2), transparent 38%),
@@ -207,6 +221,15 @@ h6,
     box-shadow: var(--premium-shadow);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Floating sidebar panel (desktop) and mobile drawer */
+  .surface-sidebar {
+    border: 1px solid var(--sidebar-border);
+    background: var(--sidebar-bg);
+    box-shadow: var(--sidebar-highlight), var(--sidebar-shadow);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
 
   .surface-interactive {
