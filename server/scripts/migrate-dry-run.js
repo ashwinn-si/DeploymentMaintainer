@@ -123,7 +123,9 @@ export async function validateModels(db, { requireAppDefaults = true } = {}) {
   const report = {};
   for (const Model of MODELS) {
     const name = Model.collection.name;
-    const entry = { checked: 0, invalid: 0, examples: [] };
+    // `problems` maps every invalid document id to its list of problems, so the run can tell what the migration broke
+    // from what was already wrong before it.
+    const entry = { checked: 0, invalid: 0, examples: [], problems: new Map() };
     report[name] = entry;
     const present = (await db.listCollections({ name }).toArray()).length > 0;
     if (!present) continue;
@@ -144,6 +146,7 @@ export async function validateModels(db, { requireAppDefaults = true } = {}) {
       }
       if (problems.length > 0) {
         entry.invalid += 1;
+        entry.problems.set(String(doc._id), problems);
         if (entry.examples.length < MAX_EXAMPLES) entry.examples.push({ id: String(doc._id), message: problems.join('; ') });
       }
     }
@@ -158,8 +161,26 @@ function totalInvalid(validation) {
 function printValidation(validation, log) {
   for (const [name, v] of Object.entries(validation)) {
     log(`  ${name.padEnd(18)} checked ${String(v.checked).padStart(5)}, invalid ${v.invalid}`);
-    for (const example of v.examples) log(`      ${example.id}: ${example.message}`);
+    for (const example of v.examples) {
+      const message = example.message.length > 200 ? `${example.message.slice(0, 200)}…` : example.message;
+      log(`      ${example.id}: ${message}`);
+    }
   }
+}
+
+// Documents the migration made worse: invalid after, with a problem they did not have before (a document that was
+// already invalid and has exactly the same problems is not the migration's doing).
+export function findRegressions(before, after) {
+  const regressions = [];
+  for (const [name, v] of Object.entries(after)) {
+    const beforeProblems = before?.[name]?.problems ?? new Map();
+    for (const [id, problems] of v.problems) {
+      const known = new Set(beforeProblems.get(id) ?? []);
+      const fresh = problems.filter((problem) => !known.has(problem));
+      if (fresh.length > 0) regressions.push({ collection: name, id, problems: fresh });
+    }
+  }
+  return regressions;
 }
 
 function printTable(rows, log) {
@@ -185,6 +206,7 @@ export async function runDryRun({
     collections: [],
     validation: {},
     validationBefore: {},
+    regressions: [],
     warnings: [],
     errors: [],
     scratchDb: null,
@@ -278,8 +300,20 @@ export async function runDryRun({
       log('\nValidating the migrated data with the Mongoose models...');
       result.validation = await validateModels(scratch);
       printValidation(result.validation, log);
-      const invalid = totalInvalid(result.validation);
-      if (invalid > 0) fail(`${invalid} migrated document(s) fail model validation`);
+      // Only what the migration broke fails the run. Documents that were already invalid before it (e.g. old log lines
+      // with empty text) and are unchanged are reported as a warning: the real migration would not touch them.
+      const regressions = findRegressions(result.validationBefore, result.validation);
+      result.regressions = regressions;
+      if (regressions.length > 0) {
+        fail(`${regressions.length} document(s) fail model validation after migrating that did not before`);
+        for (const r of regressions.slice(0, MAX_EXAMPLES)) log(`      ${r.collection} ${r.id}: ${r.problems.join('; ').slice(0, 200)}`);
+      }
+      const untouched = totalInvalid(result.validation) - regressions.length;
+      if (untouched > 0) {
+        const note = `${untouched} document(s) were already invalid before migrating and are unchanged by it (not caused by this migration)`;
+        result.warnings.push(note);
+        log(`  note: ${note}`);
+      }
 
       // (e) round trip: down what was just applied, then up again
       if (roundtrip && result.applied.length > 0) {

@@ -35,6 +35,10 @@ commit the new `.mongoose-drift/server/<version>.json` snapshot together with th
 differ; `test/drift.test.js` runs it, so forgetting the snapshot + migration fails `npm test`. `control/` has the same
 check (`npm run drift:check -w control`, snapshots in `control/.mongoose-drift/control`).
 
+Validation only fails the dry run for what the migration breaks: a document that is invalid after migrating but was fine
+before (or gained a new problem, or lacks a required default) fails it. Documents that were already invalid before and
+are unchanged (for example old deployments with empty log lines) are printed as a note and counted in `warnings`.
+
 ## Running on a live server
 
 Always rehearse first. The dry run only ever *reads* the real database:

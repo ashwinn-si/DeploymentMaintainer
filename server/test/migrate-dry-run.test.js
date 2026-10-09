@@ -193,24 +193,53 @@ test('a migration that throws fails the run, names the file, and still cleans up
   }
 });
 
-test('migrated data that fails model validation fails the run, with examples', async () => {
+test('documents that were already invalid before migrating only warn, and the run still passes', async () => {
   await withSourceDb(async ({ mongoUri, databaseName, db, client }) => {
     await seedLegacy(db);
     const { insertedId } = await db.collection('apps').insertOne({
       name: 'broken', repoFullName: 'me/x', branch: 'main', port: 4100, nodeVersion: '22', kind: 'cobol',
     });
+    // The shape seen on a real server: deployment log entries with empty text.
+    await db.collection('deployments').insertOne({
+      appId: insertedId, number: 99, branch: 'main', mode: 'update', status: 'success',
+      entries: [{ i: 0, t: new Date(), stream: 'info', text: 'ok' }, { i: 1, t: new Date(), stream: 'info', text: '' }],
+    });
 
     const result = await runDryRun({ mongoUri, databaseName, log: silent });
 
-    assert.equal(result.ok, false);
+    assert.equal(result.ok, true, result.errors.join('; '));
+    assert.equal(result.validationBefore.apps.invalid, 1);
     assert.equal(result.validation.apps.invalid, 1);
-    assert.equal(result.validation.apps.checked, 5);
     assert.equal(result.validation.apps.examples[0].id, String(insertedId));
     assert.match(result.validation.apps.examples[0].message, /kind/);
-    assert.ok(result.errors.some((e) => /fail model validation/.test(e)));
-    assert.equal(result.validationBefore.apps.invalid, 1, 'the bad document was already invalid before migrating');
+    assert.deepEqual(result.regressions, []);
+    assert.ok(result.warnings.some((w) => /already invalid before migrating/.test(w)), result.warnings.join('; '));
     assert.ok(!(await databaseNames(client)).includes(result.scratchDb));
   });
+});
+
+const BREAKS_AN_APP = `
+export async function up(db) { await db.collection('apps').updateOne({ name: 'legacy-a' }, { $set: { kind: 'cobol' } }); }
+export async function down(db) { await db.collection('apps').updateOne({ name: 'legacy-a' }, { $set: { kind: 'node' } }); }
+`;
+
+test('a migration that makes a valid document invalid fails the run, with examples', async () => {
+  const dir = await tempMigrationsDir({ '20261009000300-breaks-an-app.js': BREAKS_AN_APP });
+  try {
+    await withSourceDb(async ({ mongoUri, databaseName, db, client }) => {
+      await seedLegacy(db);
+      const result = await runDryRun({ mongoUri, databaseName, migrationsDir: dir, roundtrip: false, log: silent });
+
+      assert.equal(result.ok, false);
+      assert.equal(result.regressions.length, 1);
+      assert.equal(result.regressions[0].collection, 'apps');
+      assert.match(result.regressions[0].problems.join(' '), /kind/);
+      assert.ok(result.errors.some((e) => /fail model validation after migrating that did not before/.test(e)), result.errors.join('; '));
+      assert.ok(!(await databaseNames(client)).includes(result.scratchDb));
+    });
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('a migration that leaves an app without rootDir / stagedDeploys fails the extra App check', async () => {

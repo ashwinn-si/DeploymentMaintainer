@@ -71,7 +71,8 @@ type/default/enum/required, new index or collection) **must ship with all of the
 1. Export a backup from the dashboard (Server settings -> Backup).
 2. `git pull && npm ci`
 3. `npm run migrate:status -w server`, then **`npm run migrate:dry-run -w server`**. It copies the real data into a
-   `<db>_dryrun_<timestamp>` database, runs the pending migrations there, validates every document, round-trips
+   `<db>_dryrun_<timestamp>` database, runs the pending migrations there, validates every document (failing only on
+   problems the migration introduces; data that was already invalid is just a warning), round-trips
    `down`/`up`, drops the copy, and never writes to the real database. It must print `DRY RUN PASSED`.
 4. Only then `npm run migrate:up -w server`, then `pm2 reload deployment-maintainer`.
 
