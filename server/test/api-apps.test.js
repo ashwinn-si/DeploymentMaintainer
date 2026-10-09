@@ -147,6 +147,30 @@ test('PORT in env sets the app port, conflicts are rejected, duplicate rewrites 
   }
 });
 
+test('stagedDeploys defaults to true and can be turned off via PATCH', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'staged-app', port: config.APP_PORT_START + 70, steps: stepsFor('staged-app') }));
+    assert.equal(createRes.status, 201, JSON.stringify(createRes.body));
+    assert.equal(createRes.body.app.stagedDeploys, true);
+
+    const patchRes = await agent.patch(`/api/apps/${createRes.body.app.id}`).send({ stagedDeploys: false });
+    assert.equal(patchRes.status, 200, JSON.stringify(patchRes.body));
+    assert.equal(patchRes.body.app.stagedDeploys, false);
+
+    const getRes = await agent.get(`/api/apps/${createRes.body.app.id}`);
+    assert.equal(getRes.body.app.stagedDeploys, false);
+
+    const bad = await agent.patch(`/api/apps/${createRes.body.app.id}`).send({ stagedDeploys: 'nope' });
+    assert.equal(bad.status, 400);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
 test('GET /apps/defaults returns steps, a free port and the server default node version', async () => {
   const server = await setupTestServer();
   try {
@@ -365,6 +389,45 @@ test('GET /apps/:id/commits: never-deployed app lists the latest commits on the 
   }
 });
 
+test('rootDir defaults to the repo root, is normalised on create/patch and rejects unsafe values', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+
+    const plain = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'root-plain', port: config.APP_PORT_START + 80, steps: stepsFor('root-plain') }));
+    assert.equal(plain.status, 201, JSON.stringify(plain.body));
+    assert.equal(plain.body.app.rootDir, '');
+
+    const sub = await agent.post('/api/apps').send(createAppBody(fixture, {
+      name: 'root-sub', port: config.APP_PORT_START + 81, steps: stepsFor('root-sub'), rootDir: './apps/web/',
+    }));
+    assert.equal(sub.status, 201, JSON.stringify(sub.body));
+    assert.equal(sub.body.app.rootDir, 'apps/web');
+    assert.equal((await agent.get(`/api/apps/${sub.body.app.id}`)).body.app.rootDir, 'apps/web');
+    const list = await agent.get('/api/apps');
+    assert.equal(list.body.apps.find((a) => a.name === 'root-sub').rootDir, 'apps/web');
+
+    for (const bad of ['../x', '/etc', 'a b', 'a;b']) {
+      const res = await agent.post('/api/apps').send(createAppBody(fixture, {
+        name: 'root-bad', port: config.APP_PORT_START + 82, steps: stepsFor('root-bad'), rootDir: bad,
+      }));
+      assert.equal(res.status, 400, `rootDir ${bad}`);
+    }
+
+    const patched = await agent.patch(`/api/apps/${plain.body.app.id}`).send({ rootDir: 'packages/api' });
+    assert.equal(patched.status, 200, JSON.stringify(patched.body));
+    assert.equal(patched.body.app.rootDir, 'packages/api');
+    const backToRoot = await agent.patch(`/api/apps/${plain.body.app.id}`).send({ rootDir: '/' });
+    assert.equal(backToRoot.body.app.rootDir, '');
+    const badPatch = await agent.patch(`/api/apps/${plain.body.app.id}`).send({ rootDir: '../escape' });
+    assert.equal(badPatch.status, 400);
+    assert.equal((await agent.get(`/api/apps/${plain.body.app.id}`)).body.app.rootDir, '');
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
 test('GET /apps/:id/commits: deployed app returns the window with deployment badges', async () => {
   const server = await setupTestServer();
   try {
@@ -406,6 +469,52 @@ test('GET /apps/:id/commits: deployed app returns the window with deployment bad
   } finally {
     setFetchImpl();
     __resetCache();
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('an app saved before rootDir existed reads back as the repo root', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, config } = server;
+    const { insertedId } = await App.collection.insertOne({
+      name: 'legacy-app', repoFullName: 'fixture/repo', branch: 'main', kind: 'node', port: config.APP_PORT_START + 83,
+      nodeVersion: '20', envEncrypted: null, steps: [], status: 'not_deployed', deploySeq: 0,
+    });
+    const res = await agent.get(`/api/apps/${insertedId}`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.app.rootDir, '');
+    assert.equal(res.body.app.stagedDeploys, true);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('POST /apps/:id/duplicate copies rootDir unless one is given', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, {
+      name: 'dup-root', port: config.APP_PORT_START + 84, steps: stepsFor('dup-root'), rootDir: 'apps/web',
+    }));
+    assert.equal(createRes.status, 201, JSON.stringify(createRes.body));
+    const app = createRes.body.app;
+
+    const copy = await agent.post(`/api/apps/${app.id}/duplicate`).send({ name: 'dup-root-copy', branch: 'main', copyEnv: false });
+    assert.equal(copy.status, 201, JSON.stringify(copy.body));
+    assert.equal(copy.body.app.rootDir, 'apps/web');
+
+    const other = await agent.post(`/api/apps/${app.id}/duplicate`).send({ name: 'dup-root-other', branch: 'main', copyEnv: false, rootDir: 'apps/api' });
+    assert.equal(other.body.app.rootDir, 'apps/api');
+
+    const toRoot = await agent.post(`/api/apps/${app.id}/duplicate`).send({ name: 'dup-root-top', branch: 'main', copyEnv: false, rootDir: '/' });
+    assert.equal(toRoot.body.app.rootDir, '');
+
+    const bad = await agent.post(`/api/apps/${app.id}/duplicate`).send({ name: 'dup-root-bad', branch: 'main', copyEnv: false, rootDir: '../x' });
+    assert.equal(bad.status, 400);
+  } finally {
     await server.cleanup();
     await clearTestDB();
   }

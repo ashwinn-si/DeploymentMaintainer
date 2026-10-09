@@ -13,6 +13,7 @@ import { EnvEditor } from '../components/EnvEditor.jsx';
 import { StepsEditor } from '../components/StepsEditor.jsx';
 import { DeployDialog } from '../components/DeployDialog.jsx';
 import { DuplicateDialog } from '../components/DuplicateDialog.jsx';
+import { RootDirModal, displayRootDir } from '../components/RootDirPicker.jsx';
 import { DeploymentRow } from '../components/DeploymentRow.jsx';
 import { CommitHistory } from '../components/CommitHistory.jsx';
 import { ApiError } from '../api.js';
@@ -39,7 +40,7 @@ function Field({ label, children }) {
   );
 }
 
-function OverviewTab({ app }) {
+function OverviewTab({ app, onEditRootDir, editingRootDir }) {
   const commitUrl = githubCommitUrl(app.repoFullName, app.currentCommitSha);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -50,6 +51,19 @@ function OverviewTab({ app }) {
         </a>
       </Field>
       <Field label="Branch">{app.branch}</Field>
+      <Field label="Root directory">
+        <span className="flex items-center gap-2">
+          <span className="font-mono">{displayRootDir(app.rootDir)}</span>
+          <button
+            type="button"
+            onClick={onEditRootDir}
+            disabled={editingRootDir}
+            className="text-xs font-semibold text-[var(--brand)] hover:underline disabled:opacity-50"
+          >
+            Edit
+          </button>
+        </span>
+      </Field>
       <Field label="Commit">
         {commitUrl ? (
           <a href={commitUrl} target="_blank" rel="noreferrer" className="font-mono text-[var(--brand)] hover:underline">
@@ -127,6 +141,7 @@ export function AppDetail() {
   const [deployOpen, setDeployOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rootDirOpen, setRootDirOpen] = useState(false);
   const [deployments, setDeployments] = useState([]);
   const [runtimeLogs, setRuntimeLogs] = useState({ out: '', err: '' });
   const [logStream, setLogStream] = useState('out');
@@ -221,6 +236,14 @@ export function AppDetail() {
     toast.success('Steps saved — takes effect on the next deploy');
   });
 
+  const handleSaveRootDir = (rootDir) => {
+    if (rootDir === (app.rootDir ?? '')) return;
+    return runAction('rootDir', async () => {
+      await api.apps.update(id, { rootDir });
+      toast.success('Saved — redeploy to apply');
+    });
+  };
+
   const handleDelete = async () => {
     setBusy('delete');
     try {
@@ -301,7 +324,7 @@ export function AppDetail() {
       <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 
       <GlassCard variant="mid">
-        {tab === 'overview' ? <OverviewTab app={app} /> : null}
+        {tab === 'overview' ? <OverviewTab app={app} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} /> : null}
         {tab === 'environment' ? (
           <div className="space-y-4">
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
@@ -353,6 +376,14 @@ export function AppDetail() {
 
       <DeployDialog open={deployOpen} onClose={() => setDeployOpen(false)} app={app} />
       <DuplicateDialog open={duplicateOpen} onClose={() => setDuplicateOpen(false)} app={app} />
+      <RootDirModal
+        open={rootDirOpen}
+        onClose={() => setRootDirOpen(false)}
+        repoFullName={app.repoFullName}
+        branch={app.branch}
+        value={app.rootDir ?? ''}
+        onSelect={handleSaveRootDir}
+      />
       <ConfirmDialog
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}

@@ -91,6 +91,8 @@ One per managed server. Served by `server/` on `:3000` behind Nginx on that serv
 ```ts
 AppSummary = {
   id, name, repoFullName, branch, port, nodeVersion,
+  rootDir: string,                // sub-folder of the repo the app lives in, no leading/trailing slash; '' = repo root (shown as '/')
+  stagedDeploys: boolean,         // true (default): build/test in <name>.staging and swap in only on success; false: deploy in place
   path: string | null,            // nginx path if nginx step enabled, else null ("localhost only")
   status: 'not_deployed'|'deploying'|'online'|'stopped'|'failed',
   pm2: { status: string|null, cpu: number|null, memory: number|null /*bytes*/, restarts: number|null, uptimeMs: number|null } ,
@@ -121,14 +123,16 @@ Paths below are relative to `/api` on the agent.
 
 - `GET /repos?q=&refresh=1` → `{ repos: [{ fullName, name, owner, private, defaultBranch, pushedAt, description, htmlUrl }] }`
 - `GET /repos/:owner/:repo/branches` → `{ branches: string[] }` (default first)
-- `GET /repos/:owner/:repo/node-version?ref=` → `{ version: string|null, source }`
+- `GET /repos/:owner/:repo/node-version?ref=&root=` → `{ version: string|null, source }` (`root` optional: read `.nvmrc` / `package.json` inside that sub-folder instead of the repo root)
+- `GET /repos/:owner/:repo/detect-project?ref=&root=` → project classification (`classifyProject` result); `root` optional, same meaning
+- `GET /repos/:owner/:repo/tree?branch=&path=` → `{ path: string /*normalised, '' = repo root*/, directories: [{ name, path /*from repo root*/, hasPackageJson, hasIndexHtml }] }` (directories only, sorted by name; only the first 30 get the two flags, the rest report false; cached ~60s; 400 on an invalid `path`, 404 when the folder does not exist on that branch)
 - `GET /apps` → `{ apps: AppSummary[] }`
 - `GET /apps/defaults?name=` → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
-- `POST /apps` body `{ name, repoFullName, branch, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
+- `POST /apps` body `{ name, repoFullName, branch, rootDir?: string /*default ''*/, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
 - `GET /apps/:id` → `{ app: AppDetail }`
-- `PATCH /apps/:id` body any of `{ branch, port, nodeVersion, env, steps }` → `{ app: AppDetail }` (name immutable)
+- `PATCH /apps/:id` body any of `{ branch, rootDir, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable; a changed `rootDir` applies from the next deploy)
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
-- `POST /apps/:id/duplicate` body `{ name, branch, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
+- `POST /apps/:id/duplicate` body `{ name, branch, rootDir? /*default: the source app's*/, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
 - `POST /apps/:id/restart` | `/stop` → `{ app: AppSummary }`
 - `GET /apps/:id/updates` → `{ behindBy: number, commits: [{ sha, message, author, date }] }` (newest first, max 5; commits on the app branch newer than the deployed commit)
@@ -153,6 +157,22 @@ Paths below are relative to `/api` on the agent.
 - `GET /system` → `{ current: SystemSample, history: SystemSample[], info: { hostname, platform, uptimeSec, nodeVersion, pm2Version, nginxVersion, cpuCount }, disks: [{ mount, total, used, free }], apps: [{ appId, appName, pm2Status, cpu, memory, restarts, uptimeMs, diskBytes, health }] }`
   - `SystemSample = { t, cpuPct, memUsed, memTotal, swapUsed, swapTotal, load1, load5, load15, diskUsedPct }`
 - `GET /settings/info` → `{ github: { login, scopes, rateLimitRemaining } | { error }, appsDir, nginxEnabled, domainHint: null, serverId, hostname }`
-- `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment)
-- `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, port, conflict: null|'name'|'port', suggestedName }] }`
+- `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment). File `version: 2`: each app also carries `rootDir` and `stagedDeploys`; version 1 files (without them) still import, defaulting to `''` and `true`
+- `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, rootDir, port, conflict: null|'name'|'port', suggestedName }] }`
 - `POST /config/import` body `{ file, passphrase, rows: [{ name /*original*/, action: 'skip'|'create', newName? }], deploy?: boolean }` → `{ created: AppSummary[], deployments: DeploymentSummary[] }`
+- `GET /analytics?range=1h|24h|7d|30d&apps=<id,id,...>` (`range` default `24h`; `apps` default all apps; a malformed id is a 400) → request counts per app, counted from Nginx access logs and stored per server (hourly buckets, kept 90 days):
+  ```
+  {
+    enabled: boolean,          // ANALYTICS_ENABLED
+    logDirReady: boolean,      // ACCESS_LOG_DIR exists on the server (see DEPLOYMENT.md 3.10b)
+    range, from /*iso, start of the first bucket*/, to /*iso, now*/,
+    bucket: 'hour'|'day',      // granularity of `series`: hour for 1h/24h, UTC day for 7d/30d
+    apps: [{ id, name, total, s2xx, s3xx, s4xx, s5xx, bytes }],   // selected apps (zeros included), sorted by total desc
+    series: [{ t /*iso bucket start*/, total, perApp: { [appId]: number } }],   // every bucket in the window, zero filled; the last one is the current (partial) bucket
+    status: { s2xx, s3xx, s4xx, s5xx },   // totals over all selected apps in the window
+    busiestHours: [{ hour /*0-23, UTC*/, total }],   // always 24 entries
+    warnings: [{ app, message }]   // e.g. an app's log file exists but the agent cannot read it
+  }
+  ```
+  Window sizes: `1h` = the previous and the current hour bucket (coarse, since data is hourly), `24h` = 24 hourly buckets ending with the current hour, `7d` / `30d` = 7 / 30 UTC days ending today. Counts include bots and 404s; there is no latency in the Nginx `combined` format.
+- `POST /analytics/setup` → `{ updated: number /*route files rewritten (Nginx reloaded)*/, skipped: [{ app, reason }] /*apps without an enabled nginx step, or NGINX_ENABLED=false*/, errors: [{ app, message }] }`. Re-applies every app's Nginx route so it carries the `access_log` directive; one app failing does not stop the rest. `400` when `ANALYTICS_ENABLED=false`, `409` when the log directory does not exist yet.

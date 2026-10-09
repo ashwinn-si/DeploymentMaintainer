@@ -25,6 +25,8 @@ export function serializeAppSummary(app, { pm2 = null, activeDeploymentId = null
     kind: app.kind ?? 'node',
     port: app.port ?? null,
     nodeVersion: app.nodeVersion,
+    rootDir: app.rootDir ?? '',
+    stagedDeploys: app.stagedDeploys ?? true,
     path: nginxPathFor(app),
     status: app.status,
     pm2: pm2 ?? EMPTY_PM2,

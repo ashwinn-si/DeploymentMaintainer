@@ -7,6 +7,7 @@ import { Input } from './ui/Input.jsx';
 import { Toggle } from './ui/Toggle.jsx';
 import { BranchPicker } from './BranchPicker.jsx';
 import { NodeVersionPicker } from './NodeVersionPicker.jsx';
+import { displayRootDir } from './RootDirPicker.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
 
@@ -86,10 +87,17 @@ export function DuplicateDialog({ open, onClose, app }) {
     >
       <Input label="New app name" value={name} onChange={(e) => setName(e.target.value)} hint={slugify(name) ? `Slug: ${slugify(name)}` : undefined} />
       <BranchPicker repoFullName={app.repoFullName} value={branch} onChange={setBranch} />
+      <div className="space-y-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Root directory</span>
+        <div className="surface-inset flex min-h-[44px] items-center rounded-2xl px-3.5 sm:px-4">
+          <span className="truncate font-mono text-sm text-[var(--text-primary)]">{displayRootDir(app.rootDir)}</span>
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">The copy keeps the same root directory. Change it from the app's Overview.</p>
+      </div>
       {isStatic ? null : (
         <>
           <Input label="Port" type="number" value={port} onChange={(e) => setPort(e.target.value)} placeholder="Auto-assigned" />
-          <NodeVersionPicker repoFullName={app.repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
+          <NodeVersionPicker repoFullName={app.repoFullName} branch={branch} rootDir={app.rootDir ?? ''} value={nodeVersion} onChange={setNodeVersion} />
         </>
       )}
       <Toggle checked={copyEnv} onChange={setCopyEnv} label="Copy environment variables" />

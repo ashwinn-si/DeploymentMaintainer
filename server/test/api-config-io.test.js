@@ -41,7 +41,9 @@ test('export -> delete -> import round trip preserves env; a wrong passphrase is
     assert.match(exportRes.headers['content-disposition'], /attachment; filename="deployer-config-\d{4}-\d{2}-\d{2}\.json"/);
     const file = exportRes.body;
     assert.equal(file.format, 'deployment-maintainer');
-    assert.equal(file.version, 1);
+    assert.equal(file.version, 2);
+    assert.equal(file.apps[0].rootDir, '');
+    assert.equal(file.apps[0].stagedDeploys, true);
     assert.equal(file.apps.length, 1);
     assert.equal(file.apps[0].name, 'cfg-app');
     assert.equal(file.apps[0].port, app.port);
@@ -216,6 +218,72 @@ test('a skipped row is not created and does not block the rest of the import', a
 
     const skippedExists = await App.findOne({ name: 'cfg-skip' }).lean();
     assert.equal(skippedExists, null);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('export -> delete -> import round trip preserves rootDir and stagedDeploys', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, config, {
+      name: 'cfg-root', portOffset: 360, rootDir: 'apps/web',
+    }));
+    assert.equal(createRes.status, 201, JSON.stringify(createRes.body));
+    const app = createRes.body.app;
+    assert.equal((await agent.patch(`/api/apps/${app.id}`).send({ stagedDeploys: false })).status, 200);
+
+    const file = (await agent.post('/api/config/export').send({ appIds: [app.id], passphrase: 'pw12345678' })).body;
+    assert.equal(file.version, 2);
+    assert.equal(file.apps[0].rootDir, 'apps/web');
+    assert.equal(file.apps[0].stagedDeploys, false);
+
+    await agent.delete(`/api/apps/${app.id}`).send({ confirmName: 'cfg-root' });
+
+    const preview = await agent.post('/api/config/import/preview').send({ file, passphrase: 'pw12345678' });
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.equal(preview.body.rows[0].rootDir, 'apps/web');
+
+    const importRes = await agent.post('/api/config/import').send({ file, passphrase: 'pw12345678', rows: [{ name: 'cfg-root', action: 'create' }] });
+    assert.equal(importRes.status, 200, JSON.stringify(importRes.body));
+    assert.equal(importRes.body.created[0].rootDir, 'apps/web');
+    assert.equal(importRes.body.created[0].stagedDeploys, false);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('a version-1 export without rootDir/stagedDeploys still imports, defaulting to the repo root', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, config, { name: 'cfg-v1', portOffset: 370 }));
+    const app = createRes.body.app;
+    const file = (await agent.post('/api/config/export').send({ appIds: [app.id], passphrase: 'pw12345678' })).body;
+    await agent.delete(`/api/apps/${app.id}`).send({ confirmName: 'cfg-v1' });
+
+    // Rewrite it to look like a file from before these fields existed.
+    const oldFile = { ...file, version: 1, apps: file.apps.map(({ rootDir, stagedDeploys, ...rest }) => rest) };
+    assert.equal('rootDir' in oldFile.apps[0], false);
+
+    const preview = await agent.post('/api/config/import/preview').send({ file: oldFile, passphrase: 'pw12345678' });
+    assert.equal(preview.status, 200, JSON.stringify(preview.body));
+    assert.equal(preview.body.rows[0].rootDir, '');
+
+    const importRes = await agent.post('/api/config/import').send({ file: oldFile, passphrase: 'pw12345678', rows: [{ name: 'cfg-v1', action: 'create' }] });
+    assert.equal(importRes.status, 200, JSON.stringify(importRes.body));
+    assert.equal(importRes.body.created[0].rootDir, '');
+    assert.equal(importRes.body.created[0].stagedDeploys, true);
+
+    const unknownVersion = await agent.post('/api/config/import/preview').send({ file: { ...oldFile, version: 3 }, passphrase: 'pw12345678' });
+    assert.equal(unknownVersion.status, 400);
+
+    const badRoot = { ...file, apps: file.apps.map((a) => ({ ...a, rootDir: '../x' })) };
+    const rejected = await agent.post('/api/config/import').send({ file: badRoot, passphrase: 'pw12345678', rows: [{ name: 'cfg-v1', action: 'create', newName: 'cfg-v1-bad' }] });
+    assert.equal(rejected.status, 400);
   } finally {
     await server.cleanup();
     await clearTestDB();

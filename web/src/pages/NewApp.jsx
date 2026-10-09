@@ -8,6 +8,7 @@ import { Input } from '../components/ui/Input.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { RepoPicker } from '../components/RepoPicker.jsx';
 import { BranchPicker } from '../components/BranchPicker.jsx';
+import { RootDirPicker } from '../components/RootDirPicker.jsx';
 import { NodeVersionPicker } from '../components/NodeVersionPicker.jsx';
 import { EnvEditor } from '../components/EnvEditor.jsx';
 import { StepsEditor } from '../components/StepsEditor.jsx';
@@ -113,6 +114,8 @@ export function NewApp() {
   const presetTouched = useRef(false);
   const [repoFullName, setRepoFullName] = useState('');
   const [branch, setBranch] = useState('');
+  // Sub-folder of the repo the app lives in; '' = repo root.
+  const [rootDir, setRootDir] = useState('');
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [port, setPort] = useState('');
@@ -131,9 +134,10 @@ export function NewApp() {
   useEffect(() => {
     if (!nameTouched && repoFullName && branch) {
       const repoSlug = repoFullName.split('/')[1] ?? repoFullName;
-      setName(slugify(`${repoSlug}-${branch}`));
+      const folder = rootDir.split('/').pop();
+      setName(slugify(folder ? `${repoSlug}-${folder}` : `${repoSlug}-${branch}`));
     }
-  }, [repoFullName, branch, nameTouched]);
+  }, [repoFullName, branch, rootDir, nameTouched]);
 
   useEffect(() => {
     const slug = slugify(name);
@@ -176,7 +180,7 @@ export function NewApp() {
     const [owner, repo] = repoFullName.split('/');
     let cancelled = false;
     api.repos
-      .detectProject(owner, repo, branch)
+      .detectProject(owner, repo, branch, rootDir)
       .then((result) => {
         if (cancelled) return;
         setDetected(result);
@@ -192,7 +196,7 @@ export function NewApp() {
     };
     // choosePreset closes over state this effect must not re-run on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, repoFullName, branch]);
+  }, [api, repoFullName, branch, rootDir]);
 
   const envPort = env.find((e) => e.key === 'PORT' && e.value.trim())?.value.trim();
 
@@ -206,6 +210,7 @@ export function NewApp() {
         kind,
         repoFullName,
         branch,
+        rootDir,
         // An untouched port is just the suggested one; a PORT in the env wins over it.
         port: !isStatic && port && !(envPort && !portTouched) ? Number(port) : undefined,
         nodeVersion: needsNode ? nodeVersion : nodeVersion || '20',
@@ -239,14 +244,26 @@ export function NewApp() {
       </PageHeader>
 
       <Section step={1} title="Repository" description="Pick the GitHub repo to deploy.">
-        <RepoPicker value={repoFullName} onChange={(v) => { presetTouched.current = false; setRepoFullName(v); setBranch(''); }} />
+        <RepoPicker value={repoFullName} onChange={(v) => { presetTouched.current = false; setRepoFullName(v); setBranch(''); setRootDir(''); }} />
       </Section>
 
       <Section step={2} title="Branch" description="Which branch this app tracks.">
-        <BranchPicker repoFullName={repoFullName} value={branch} onChange={setBranch} />
+        <BranchPicker
+          repoFullName={repoFullName}
+          value={branch}
+          onChange={(v) => {
+            // A different branch can have different folders, so the previous selection no longer applies.
+            setBranch(v);
+            setRootDir('');
+          }}
+        />
       </Section>
 
-      <Section step={3} title="Project type" description="How this app is built and served.">
+      <Section step={3} title="Root directory" description="The folder that contains the app. Leave it at / unless this repo holds several projects.">
+        <RootDirPicker repoFullName={repoFullName} branch={branch} value={rootDir} onChange={setRootDir} />
+      </Section>
+
+      <Section step={4} title="Project type" description="How this app is built and served.">
         <div className="space-y-3">
         <DetectionBanner detected={detected} status={detectStatus} preset={preset} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -273,7 +290,7 @@ export function NewApp() {
         </div>
       </Section>
 
-      <Section step={4} title={isStatic ? 'Name' : 'Name & port'} description="The name becomes the folder name and, if routed, the URL path.">
+      <Section step={5} title={isStatic ? 'Name' : 'Name & port'} description="The name becomes the folder name and, if routed, the URL path.">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="App name"
@@ -327,18 +344,18 @@ export function NewApp() {
       />
 
       {needsNode ? (
-        <Section step={5} title="Node version">
-          <NodeVersionPicker repoFullName={repoFullName} branch={branch} value={nodeVersion} onChange={setNodeVersion} />
+        <Section step={6} title="Node version">
+          <NodeVersionPicker repoFullName={repoFullName} branch={branch} rootDir={rootDir} value={nodeVersion} onChange={setNodeVersion} />
         </Section>
       ) : null}
 
       {preset === 'html' ? null : (
-      <Section step={6} title="Environment variables" description={isStatic ? 'Baked into the build (VITE_*, REACT_APP_*...), so changing them needs a redeploy.' : undefined}>
+      <Section step={7} title="Environment variables" description={isStatic ? 'Baked into the build (VITE_*, REACT_APP_*...), so changing them needs a redeploy.' : undefined}>
         <EnvEditor value={env} onChange={setEnv} />
       </Section>
       )}
 
-      <Section step={7} title="Deploy steps" description="What runs, in order, on every deploy.">
+      <Section step={8} title="Deploy steps" description="What runs, in order, on every deploy.">
         {steps.length ? <StepsEditor value={steps} kind={kind} port={port || null} onChange={(v) => { setStepsTouched(true); setSteps(v); }} /> : (
           <p className="text-sm text-[var(--text-muted)]">Pick a name to load the default pipeline.</p>
         )}

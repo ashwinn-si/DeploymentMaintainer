@@ -89,7 +89,7 @@ export function getMemInfo() {
 
 // --- Disks -------------------------------------------------------------------
 
-async function statDisk(targetPath) {
+export async function statDisk(targetPath) {
   const stats = await fsp.statfs(targetPath);
   const total = stats.blocks * stats.bsize;
   const free = stats.bavail * stats.bsize;
@@ -198,6 +198,14 @@ export function getCachedFolderSize(appName) {
   return folderSizeCache.get(appName)?.bytes ?? null;
 }
 
+// Awaited `du -sk` in bytes; rejects when du fails (e.g. the directory doesn't exist).
+export async function getFolderSizeBytes(dir) {
+  const result = await run('du', ['-sk', dir]);
+  if (result.code !== 0) throw new Error(`du exited with code ${result.code}`);
+  const kb = parseInt(result.stdout.trim().split(/\s+/)[0], 10);
+  return Number.isFinite(kb) ? kb * 1024 : null;
+}
+
 export function refreshFolderSize(config, appName) {
   const entry = folderSizeCache.get(appName);
   const now = Date.now();
@@ -206,11 +214,8 @@ export function refreshFolderSize(config, appName) {
   folderSizeCache.set(appName, { bytes: entry?.bytes ?? null, expiresAt: entry?.expiresAt ?? 0, computing: true });
   const dir = path.join(config.APPS_DIR, appName);
 
-  run('du', ['-sk', dir])
-    .then((result) => {
-      if (result.code !== 0) throw new Error(`du exited with code ${result.code}`);
-      const kb = parseInt(result.stdout.trim().split(/\s+/)[0], 10);
-      const bytes = Number.isFinite(kb) ? kb * 1024 : null;
+  getFolderSizeBytes(dir)
+    .then((bytes) => {
       folderSizeCache.set(appName, { bytes, expiresAt: Date.now() + FOLDER_SIZE_CACHE_TTL_MS, computing: false });
     })
     .catch(() => {

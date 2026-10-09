@@ -23,6 +23,7 @@ const AppDetail = lazyWithReload(() => import('./pages/AppDetail.jsx').then((m) 
 const Deployments = lazyWithReload(() => import('./pages/Deployments.jsx').then((m) => ({ default: m.Deployments })));
 const DeploymentDetail = lazyWithReload(() => import('./pages/DeploymentDetail.jsx').then((m) => ({ default: m.DeploymentDetail })));
 const Ports = lazyWithReload(() => import('./pages/Ports.jsx').then((m) => ({ default: m.Ports })));
+const Analytics = lazyWithReload(() => import('./pages/Analytics.jsx').then((m) => ({ default: m.Analytics })));
 const Server = lazyWithReload(() => import('./pages/Server.jsx').then((m) => ({ default: m.Server })));
 const ServerSettings = lazyWithReload(() => import('./pages/ServerSettings.jsx').then((m) => ({ default: m.ServerSettings })));
 
@@ -115,6 +116,14 @@ export default function App() {
             element={
               <Lazy>
                 <Ports />
+              </Lazy>
+            }
+          />
+          <Route
+            path="analytics"
+            element={
+              <Lazy>
+                <Analytics />
               </Lazy>
             }
           />

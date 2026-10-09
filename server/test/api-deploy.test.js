@@ -480,3 +480,87 @@ test('recoverInterruptedDeployments fails stuck deployments and resets the app s
   const reloadedApp = await App.findById(app._id).lean();
   assert.equal(reloadedApp.status, 'failed');
 });
+
+// --- pm2 start vs restart ---------------------------------------------------
+
+// pm2 shim calls that concern one app, in order (the log is shared by every test in this file).
+function pm2CallsFor(name) {
+  return server.shims.readCalls().filter((line) => (
+    line.startsWith('pm2 ') && (line.includes(`app-${name} `) || line.endsWith(`app-${name}`) || line.includes(`/${name}/ecosystem`))
+  ));
+}
+
+async function deployOnce(agent, appId, body = { mode: 'update' }) {
+  const res = await agent.post(`/api/apps/${appId}/deploy`).send(body);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const deployment = await waitForDeployment(agent, res.body.deployment.id);
+  assert.equal(deployment.status, 'success', JSON.stringify(deployment));
+  return deployment;
+}
+
+test('first deploy of a new app starts the pm2 process; the next update deploy restarts it with --update-env', async () => {
+  const { agent, fixture, config, shims } = server;
+  const createRes = await agent.post('/api/apps').send(createAppBody(fixture, config, { name: 'dep-restart', portOffset: 20 }));
+  const app = createRes.body.app;
+  const pm2Name = 'app-dep-restart';
+
+  await deployOnce(agent, app.id);
+  let calls = pm2CallsFor('dep-restart');
+  assert.ok(calls.some((c) => c.startsWith('pm2 start ') && c.endsWith('--update-env')), calls.join('\n'));
+  assert.ok(!calls.some((c) => c.startsWith('pm2 restart')), 'a new app must not be restarted');
+  assert.ok(!calls.some((c) => c.startsWith('pm2 startOrReload')));
+  const restartsAfterFirst = shims.readPm2State()[pm2Name].pm2_env.restart_time;
+  const pidAfterFirst = shims.readPm2State()[pm2Name].pid;
+
+  const before = shims.readCalls().length;
+  await deployOnce(agent, app.id);
+  calls = shims.readCalls().slice(before).filter((c) => c.includes(pm2Name) || c.includes('/dep-restart/ecosystem'));
+  assert.ok(calls.some((c) => c.startsWith('pm2 restart ') && c.includes('/dep-restart/ecosystem') && c.endsWith('--update-env')), calls.join('\n'));
+  assert.ok(!calls.some((c) => c.startsWith('pm2 start ')), 'an unchanged definition must not be recreated');
+  assert.ok(!calls.some((c) => c.startsWith('pm2 delete')));
+
+  const proc = shims.readPm2State()[pm2Name];
+  assert.ok(proc.pm2_env.restart_time > restartsAfterFirst);
+  assert.notEqual(proc.pid, pidAfterFirst);
+  assert.equal((await fetchText(app.port, '/')).text, 'hello');
+});
+
+test('an update deploy after changing the pm2 start command deletes and recreates the process', async () => {
+  const { agent, fixture, config, shims } = server;
+  const createRes = await agent.post('/api/apps').send(createAppBody(fixture, config, { name: 'dep-newcmd', portOffset: 21 }));
+  const app = createRes.body.app;
+  const pm2Name = 'app-dep-newcmd';
+
+  await deployOnce(agent, app.id);
+
+  const patchRes = await agent.patch(`/api/apps/${app.id}`).send({ steps: stepsFor('dep-newcmd', { pm2Command: 'node ./server.js' }) });
+  assert.equal(patchRes.status, 200, JSON.stringify(patchRes.body));
+
+  const before = shims.readCalls().length;
+  await deployOnce(agent, app.id);
+  const calls = shims.readCalls().slice(before).filter((c) => c.includes(pm2Name) || c.includes('/dep-newcmd/ecosystem'));
+  const deleteIdx = calls.indexOf(`pm2 delete ${pm2Name}`);
+  const startIdx = calls.findIndex((c) => c.startsWith('pm2 start '));
+  assert.ok(deleteIdx >= 0 && startIdx > deleteIdx, calls.join('\n'));
+  assert.ok(!calls.some((c) => c.startsWith('pm2 restart')));
+
+  assert.equal((await fetchText(app.port, '/')).text, 'hello');
+});
+
+test('a fresh deploy deletes any leftover pm2 process and starts a new one', async () => {
+  const { agent, fixture, config, shims } = server;
+  const createRes = await agent.post('/api/apps').send(createAppBody(fixture, config, { name: 'dep-freshpm2', portOffset: 22 }));
+  const app = createRes.body.app;
+  const pm2Name = 'app-dep-freshpm2';
+
+  await deployOnce(agent, app.id);
+
+  const before = shims.readCalls().length;
+  await deployOnce(agent, app.id, { mode: 'fresh' });
+  const calls = shims.readCalls().slice(before).filter((c) => c.includes(pm2Name) || c.includes('/dep-freshpm2/ecosystem'));
+  const deleteIdx = calls.indexOf(`pm2 delete ${pm2Name}`);
+  const startIdx = calls.findIndex((c) => c.startsWith('pm2 start '));
+  assert.ok(deleteIdx >= 0 && startIdx > deleteIdx, calls.join('\n'));
+  assert.ok(!calls.some((c) => c.startsWith('pm2 restart')));
+  assert.equal((await fetchText(app.port, '/')).text, 'hello');
+});

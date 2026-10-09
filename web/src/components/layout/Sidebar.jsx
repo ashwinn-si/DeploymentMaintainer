@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Info,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
@@ -35,6 +36,7 @@ const SERVER_NAV_GROUPS = [
     heading: 'This server',
     items: [
       { path: '/ports', label: 'Ports & routes', desc: 'Port and URL path per app', icon: Plug },
+      { path: '/analytics', label: 'Analytics', desc: 'Traffic per app', icon: BarChart3 },
       { path: '/server', label: 'Resources', desc: 'CPU, memory and disk', icon: Server },
       { path: '/settings', label: 'Server settings', desc: 'Connection, backup, cleanup', icon: Settings },
     ],

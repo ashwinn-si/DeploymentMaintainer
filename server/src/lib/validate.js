@@ -139,6 +139,29 @@ export function validateStaticDir(staticDir) {
   return staticDir;
 }
 
+const ROOT_DIR_SEGMENT_RE = /^[A-Za-z0-9._@-]+$/;
+
+/**
+ * Validates an app's root directory (a sub-folder of its repo, Vercel-style) and returns it normalised:
+ * no leading or trailing slash, and '' for the repo root. '', '/', '.' and './' all mean the root.
+ * Rejects absolute paths, ".." segments, backslashes, spaces and shell characters.
+ */
+export function validateRootDir(value) {
+  const invalid = () => new HttpError(400, 'Invalid root directory');
+  if (typeof value !== 'string' || value.length > 200) throw invalid();
+
+  let dir = value;
+  if (dir === '' || dir === '/' || dir === '.' || dir === './') return '';
+  if (dir.startsWith('./')) dir = dir.slice(2);
+  if (dir.endsWith('/')) dir = dir.slice(0, -1);
+
+  const segments = dir.split('/');
+  for (const segment of segments) {
+    if (!ROOT_DIR_SEGMENT_RE.test(segment) || segment === '.' || segment.includes('..')) throw invalid();
+  }
+  return segments.join('/');
+}
+
 // Wraps a throwing validate* function for use in a zod .refine(); undefined
 // passes through so it composes with .optional().
 export function refinable(validator) {

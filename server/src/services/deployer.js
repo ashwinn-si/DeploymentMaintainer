@@ -215,7 +215,7 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
       app, deployment, env, config, log,
       signal: controller.signal,
       state, step: stepDef, stepId: stepMeta.id,
-      branch: branchUsed, sha, fresh: mode === 'fresh',
+      branch: branchUsed, sha, fresh: mode === 'fresh', mode,
     };
 
     let result;

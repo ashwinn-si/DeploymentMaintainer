@@ -4,6 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+// With `subDir`, the app is the monorepo's sub-folder app and answers with this prefix so tests can tell
+// it apart from anything served from the repo root.
+function serverSource(responsePrefix = '') {
+  return SERVER_JS_SOURCE.replace("res.end(process.env.GREETING || '');", `res.end(${JSON.stringify(responsePrefix)} + (process.env.GREETING || ''));`);
+}
+
 const SERVER_JS_SOURCE = `const http = require('http');
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
@@ -24,7 +30,9 @@ function git(cwd, args) {
 
 // A bare repo + working "seed" clone, served over file:// so git.js's
 // syncRepo can be exercised without any network access or real GitHub token.
-export async function createGitFixture() {
+// `subDir` (e.g. 'apps/web') puts the fixture app inside that folder of a monorepo instead of the repo root;
+// the root then holds only a README, so a deploy that wrongly runs at the root fails.
+export async function createGitFixture({ subDir } = {}) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-git-fixture-'));
   const bareDir = path.join(root, 'fixture', 'repo.git');
   const seedDir = path.join(root, 'seed');
@@ -38,9 +46,12 @@ export async function createGitFixture() {
   git(seedDir, ['config', 'user.name', 'Test']);
   git(seedDir, ['config', 'core.autocrlf', 'false']);
 
-  await fsp.writeFile(path.join(seedDir, 'server.js'), SERVER_JS_SOURCE);
+  const appFolder = subDir ? path.join(seedDir, subDir) : seedDir;
+  await fsp.mkdir(appFolder, { recursive: true });
+  if (subDir) await fsp.writeFile(path.join(seedDir, 'README.md'), 'monorepo root\n');
+  await fsp.writeFile(path.join(appFolder, 'server.js'), serverSource(subDir ? 'sub-app:' : ''));
   await fsp.writeFile(
-    path.join(seedDir, 'package.json'),
+    path.join(appFolder, 'package.json'),
     JSON.stringify({ name: 'fixture-app', private: true, scripts: { start: 'node server.js' } }, null, 2),
   );
   git(seedDir, ['add', '-A']);
@@ -60,6 +71,7 @@ export async function createGitFixture() {
     remoteBase: `file://${root}`,
     repoFullName: 'fixture/repo',
     seedDir,
+    subDir: subDir ?? '',
     addCommit(branch, { filename = 'extra.txt', content = 'x', message = 'update' } = {}) {
       git(seedDir, ['checkout', '-q', branch]);
       fs.writeFileSync(path.join(seedDir, filename), content);

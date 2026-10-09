@@ -43,14 +43,28 @@ async function git(cwd, args, { onLine, signal } = {}) {
   return result;
 }
 
-export async function safeRemoveAppDir(config, name) {
+// Resolves `name` under APPS_DIR and refuses anything that would escape it.
+function resolveInsideAppsDir(config, name) {
   const appsDir = path.resolve(config.APPS_DIR);
   const target = path.resolve(appsDir, name);
   const rel = path.relative(appsDir, target);
   if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new HttpError(400, 'Refusing to remove a path outside APPS_DIR');
   }
+  return target;
+}
+
+// Removes exactly one directory under APPS_DIR (used by staging cleanup too).
+export async function removeInsideAppsDir(config, name) {
+  await fsp.rm(resolveInsideAppsDir(config, name), { recursive: true, force: true });
+}
+
+// Also removes the staged-deploy siblings so deleting an app leaves nothing behind.
+export async function safeRemoveAppDir(config, name) {
+  const target = resolveInsideAppsDir(config, name);
   await fsp.rm(target, { recursive: true, force: true });
+  await fsp.rm(resolveInsideAppsDir(config, `${name}.staging`), { recursive: true, force: true });
+  await fsp.rm(resolveInsideAppsDir(config, `${name}.previous`), { recursive: true, force: true });
 }
 
 export async function getHeadSha(dir) {
@@ -61,23 +75,28 @@ export async function getHeadSha(dir) {
   return result.stdout.trim();
 }
 
-export async function syncRepo({ dir, repoFullName, branch, sha, fresh, config, onLine, signal }) {
+export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom, config, onLine, signal }) {
   const validBranch = validateRef(branch);
   const validSha = sha ? validateCommitSha(sha) : null;
   const remoteUrl = buildRemoteUrl(config, repoFullName);
   const auth = authArgs(config, remoteUrl);
 
   if (fresh) {
-    await safeRemoveAppDir(config, path.basename(dir));
+    await removeInsideAppsDir(config, path.basename(dir));
   }
 
   const exists = fs.existsSync(path.join(dir, '.git'));
 
   if (!exists) {
     await fsp.mkdir(path.dirname(dir), { recursive: true });
+    // Seeding from the live checkout borrows its objects so only new ones come over the network;
+    // --dissociate copies them in, since the seed dir is deleted/renamed after promotion.
+    const seedArgs = !fresh && seedFrom && fs.existsSync(path.join(seedFrom, '.git'))
+      ? ['--reference', seedFrom, '--dissociate']
+      : [];
     await git(
       path.dirname(dir),
-      [...auth, 'clone', '--branch', validBranch, '--single-branch', '--', remoteUrl, dir],
+      [...auth, 'clone', ...seedArgs, '--branch', validBranch, '--single-branch', '--', remoteUrl, dir],
       { onLine, signal },
     );
   } else {

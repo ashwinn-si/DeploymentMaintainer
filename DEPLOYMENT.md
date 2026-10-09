@@ -255,6 +255,8 @@ Set these values:
 | `APP_PORT_START` | `4001` |
 | `DEFAULT_NODE_VERSION` | `20` |
 | `NGINX_ENABLED` | `true` |
+| `ANALYTICS_ENABLED` | `true` (optional; per-app request analytics, needs 3.10b) |
+| `ACCESS_LOG_DIR` | `/var/log/nginx/deployer` (optional; where the per-app Nginx access logs go, see 3.10b) |
 | `NODE_ENV` | `production` |
 | `GIT_REMOTE_BASE` | `https://github.com` (leave as is) |
 
@@ -294,6 +296,21 @@ sudo chown root:root /etc/sudoers.d/deployer
 sudo chmod 0440 /etc/sudoers.d/deployer
 sudo -n nginx -t && echo "sudo rule OK"
 ```
+
+### 3.10b Request logging for Analytics (optional)
+The dashboard's **Analytics** page counts requests per app from Nginx access logs. The agent only writes `access_log` lines into an app's route if the log directory exists, so create it once (as `ubuntu`, readable by the agent and writable by Nginx's `www-data`) and add log rotation:
+```bash
+sudo install -d -o root -g ubuntu -m 2755 /var/log/nginx/deployer
+sudo cp deploy/logrotate-deployer-nginx /etc/logrotate.d/deployer-nginx
+sudo logrotate -d /etc/logrotate.d/deployer-nginx    # dry run, should print no errors
+```
+Then restart the agent if needed (`pm2 reload deployment-maintainer`), open **Analytics** in the dashboard and press **Enable request logging**. That rewrites each app's Nginx route with an `access_log` line and reloads Nginx. (Redeploying an app does the same for that app.) To turn the feature off set `ANALYTICS_ENABLED=false` in `server/.env`.
+
+Things to know:
+- Counts come from Nginx, so they include bots, crawlers and 404s (the status mix shows how many). Health checks that go straight to the app's port are not counted.
+- The default `combined` log format has no latency, so there are no response-time charts.
+- The 1-hour range is coarse: it uses hourly buckets (the current and previous hour).
+- Hourly counters are kept in the agent's own MongoDB for 90 days; the raw logs are rotated weekly (4 kept).
 
 ### 3.11 HTTPS with certbot
 DNS from step 1.5 must already resolve to `YOUR_IP`.
@@ -473,8 +490,12 @@ On **every server** (agent):
 cd ~/deployment_maintainer
 git pull
 npm ci
+npm run migrate:status -w server   # lists database migrations that are still pending
+npm run migrate:up -w server       # applies them (a no-op when there are none)
 pm2 reload deployment-maintainer
 ```
+Migrations back up the collections they touch to `server/backups/` first, are safe to run twice, and can be reverted with `npm run migrate:down -w server`. Do an Export (7.2) before the first one on a live server. See `server/migrations/README.md`.
+
 On **server 1**, also rebuild the UI and reload the control plane:
 ```bash
 npm run build

@@ -1,0 +1,225 @@
+{
+  "version": "1.1.0",
+  "createdAt": "2026-10-09T16:10:01.047Z",
+  "modelsPath": "./src/models",
+  "collections": {
+    "Deployment": {
+      "fields": {
+        "appId": {
+          "type": "ObjectId",
+          "required": true,
+          "ref": "App"
+        },
+        "number": {
+          "type": "Number",
+          "required": true
+        },
+        "branch": {
+          "type": "String",
+          "required": true
+        },
+        "commitSha": {
+          "type": "String",
+          "default": null
+        },
+        "previousSha": {
+          "type": "String",
+          "default": null
+        },
+        "nodeVersion": {
+          "type": "String",
+          "required": true
+        },
+        "mode": {
+          "type": "String",
+          "required": true,
+          "enum": [
+            "update",
+            "fresh",
+            "rollback"
+          ]
+        },
+        "rollbackOf": {
+          "type": "ObjectId",
+          "default": null,
+          "ref": "Deployment"
+        },
+        "autoRollbackOf": {
+          "type": "ObjectId",
+          "default": null,
+          "ref": "Deployment"
+        },
+        "status": {
+          "type": "String",
+          "default": "queued",
+          "enum": [
+            "queued",
+            "running",
+            "success",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "error": {
+          "type": "String",
+          "default": null
+        },
+        "steps": {
+          "type": "Array<DocumentArrayElement>",
+          "default": []
+        },
+        "entries": {
+          "type": "Array<DocumentArrayElement>",
+          "default": []
+        },
+        "finishedAt": {
+          "type": "Date",
+          "default": null
+        },
+        "createdAt": {
+          "type": "Date",
+          "immutable": true
+        }
+      },
+      "indexes": [
+        {
+          "fields": {
+            "appId": 1,
+            "createdAt": -1
+          },
+          "options": {}
+        }
+      ],
+      "options": {
+        "strict": true,
+        "strictQuery": false,
+        "strictRead": false,
+        "bufferCommands": true,
+        "capped": false,
+        "versionKey": "__v",
+        "optimisticConcurrency": false,
+        "minimize": true,
+        "autoIndex": null,
+        "discriminatorKey": "__t",
+        "shardKey": null,
+        "read": null,
+        "validateBeforeSave": true,
+        "validateModifiedOnly": false,
+        "_id": true,
+        "id": true,
+        "typeKey": "type",
+        "timestamps": {
+          "createdAt": true,
+          "updatedAt": false
+        },
+        "pluralization": true
+      }
+    },
+    "App": {
+      "fields": {
+        "name": {
+          "type": "String",
+          "required": true,
+          "unique": true,
+          "trim": true
+        },
+        "repoFullName": {
+          "type": "String",
+          "required": true
+        },
+        "branch": {
+          "type": "String",
+          "required": true
+        },
+        "kind": {
+          "type": "String",
+          "default": "node",
+          "enum": [
+            "node",
+            "static"
+          ]
+        },
+        "port": {
+          "type": "Number",
+          "required": true,
+          "default": null
+        },
+        "nodeVersion": {
+          "type": "String",
+          "required": true
+        },
+        "envEncrypted": {
+          "type": "Mixed",
+          "default": null
+        },
+        "steps": {
+          "type": "Array<DocumentArrayElement>",
+          "default": []
+        },
+        "status": {
+          "type": "String",
+          "default": "not_deployed",
+          "enum": [
+            "not_deployed",
+            "deploying",
+            "online",
+            "stopped",
+            "failed"
+          ]
+        },
+        "health": {
+          "type": "Embedded"
+        },
+        "currentCommitSha": {
+          "type": "String",
+          "default": null
+        },
+        "lastDeployedAt": {
+          "type": "Date",
+          "default": null
+        },
+        "rootDir": {
+          "type": "String",
+          "default": ""
+        },
+        "stagedDeploys": {
+          "type": "Boolean",
+          "default": true
+        },
+        "deploySeq": {
+          "type": "Number",
+          "default": 0
+        },
+        "createdAt": {
+          "type": "Date",
+          "immutable": true
+        },
+        "updatedAt": {
+          "type": "Date"
+        }
+      },
+      "indexes": [],
+      "options": {
+        "strict": true,
+        "strictQuery": false,
+        "strictRead": false,
+        "bufferCommands": true,
+        "capped": false,
+        "versionKey": "__v",
+        "optimisticConcurrency": false,
+        "minimize": true,
+        "autoIndex": null,
+        "discriminatorKey": "__t",
+        "shardKey": null,
+        "read": null,
+        "validateBeforeSave": true,
+        "validateModifiedOnly": false,
+        "_id": true,
+        "id": true,
+        "typeKey": "type",
+        "timestamps": true,
+        "pluralization": true
+      }
+    }
+  }
+}

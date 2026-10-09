@@ -12,6 +12,8 @@ import {
   validateEnvKey,
   validateEnvValue,
   validateRef,
+  validateRootDir,
+  refinable,
 } from '../lib/validate.js';
 import { serializeAppSummary, serializeAppDetail, serializeDeploymentSummary } from '../lib/serializers.js';
 import { defaultSteps, normalizeSteps } from '../steps/index.js';
@@ -33,11 +35,14 @@ const stepInputSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 });
 
+const rootDirSchema = z.string().optional().refine(refinable(validateRootDir), { message: 'Invalid root directory' });
+
 const createAppSchema = z.object({
   name: z.string(),
   kind: z.enum(['node', 'static']).optional(),
   repoFullName: z.string().min(1),
   branch: z.string().min(1),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1),
   env: z.array(envEntrySchema).default([]),
@@ -47,10 +52,12 @@ const createAppSchema = z.object({
 
 const patchAppSchema = z.object({
   branch: z.string().min(1).optional(),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1).optional(),
   env: z.array(envEntrySchema).optional(),
   steps: z.array(stepInputSchema).optional(),
+  stagedDeploys: z.boolean().optional(),
 });
 
 const deleteAppSchema = z.object({ confirmName: z.string() });
@@ -58,6 +65,7 @@ const deleteAppSchema = z.object({ confirmName: z.string() });
 const duplicateAppSchema = z.object({
   name: z.string(),
   branch: z.string().min(1),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1).optional(),
   copyEnv: z.boolean(),
@@ -221,6 +229,7 @@ export function createAppsRouter(config) {
       name: body.name,
       repoFullName: body.repoFullName,
       branch: body.branch,
+      rootDir: body.rootDir === undefined ? '' : validateRootDir(body.rootDir),
       kind,
       port,
       nodeVersion: body.nodeVersion,
@@ -250,6 +259,10 @@ export function createAppsRouter(config) {
       validateRef(body.branch);
       app.branch = body.branch;
     }
+    if (body.rootDir !== undefined) {
+      // Applies from the next deploy; a running one keeps the value it started with.
+      app.rootDir = validateRootDir(body.rootDir);
+    }
     const envObj = body.env !== undefined ? envArrayToObject(body.env) : undefined;
     const newPort = envObj && app.kind !== 'static' ? reconcilePort(body.port, envObj) : body.port;
     if (newPort !== undefined) {
@@ -269,6 +282,9 @@ export function createAppsRouter(config) {
       const steps = normalizeSteps(body.steps, { kind: app.kind });
       await assertRoutePathFree(app.name, steps, { excludeId: app._id });
       app.steps = steps;
+    }
+    if (body.stagedDeploys !== undefined) {
+      app.stagedDeploys = body.stagedDeploys;
     }
 
     await app.save();
@@ -343,6 +359,7 @@ export function createAppsRouter(config) {
       name: body.name,
       repoFullName: source.repoFullName,
       branch: body.branch,
+      rootDir: body.rootDir === undefined ? (source.rootDir ?? '') : validateRootDir(body.rootDir),
       kind,
       port,
       nodeVersion,
