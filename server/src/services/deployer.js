@@ -21,6 +21,7 @@ import {
   promoteStaging,
   restorePrevious,
   removeStaging,
+  removePrevious,
   repairInterruptedSwap,
 } from './staging.js';
 
@@ -361,7 +362,7 @@ async function runPipelineSteps(app, deployment, config, controller, opts, log, 
     state.promoted = true;
     state.hadPrevious = hadPrevious;
     log.info(
-      `promoted staged build (previous version kept at ${path.basename(previousDir(config, app.name))})`,
+      `promoted staged build (previous version kept at ${path.basename(previousDir(config, app.name))} until the deploy passes)`,
       null,
       { force: true },
     );
@@ -472,14 +473,16 @@ async function runPipelineSteps(app, deployment, config, controller, opts, log, 
   }
 
   if (staged && state.hadPrevious) {
-    // The old version stays on disk as the instant-rollback copy; say what it costs.
+    // Every step, including the live health check, has passed: the old version has done its job (it only exists to
+    // be swapped back if something after the swap fails), so free its disk instead of keeping a second copy.
+    let bytes = null;
     try {
-      const bytes = await getFolderSizeBytes(previousDir(config, app.name));
-      if (bytes !== null) {
-        log.info(`kept the previous version at ${path.basename(previousDir(config, app.name))} (${formatBytes(bytes)} on disk)`, null, { force: true });
-      }
+      bytes = await getFolderSizeBytes(previousDir(config, app.name));
     } catch {
       // size is informational only
+    }
+    if (await removePrevious(config, app.name)) {
+      log.info(`deleted the previous version${bytes === null ? '' : ` (freed ${formatBytes(bytes)})`}`, null, { force: true });
     }
   }
   return finalizeSuccess(app, deployment, log);

@@ -41,7 +41,7 @@ deployed apps through its own Nginx. Adding a server in the dashboard generates 
 - Three app types, auto-detected from the repo: Node servers (PM2), frontend apps (Vite, React, Astro... built then served by Nginx) and plain static HTML. Static types need no process or port and are served from `PUBLISHED_DIR`
 - Deploy any branch on demand (update in place or fresh re-clone); duplicate an app to run another branch side by side
 - Live streaming deploy logs (SSE) on the home page, a global Deployments page and a per-deploy detail view, with step timeline, cancel, copy and download; secrets are masked
-- **Staged deploys** (on by default): each deploy builds and smoke-tests in `<app>.staging` while the live version keeps serving, checks disk space first, swaps the folder in only on success and restores the previous version automatically if something fails after the swap
+- **Staged deploys** (on by default): each deploy builds and smoke-tests in `<app>.staging` while the live version keeps serving, checks disk space first, swaps the folder in only on success and restores the previous version automatically if something fails after the swap (the old copy is deleted once the deploy has fully passed, so only one copy stays on disk)
 - PM2 step **starts** a new process on a new app or fresh deploy and **restarts** the existing one on updates (recreating it if the start command, folder or Node version changed)
 - **Root directory** per app (like Vercel): deploy a sub-folder of a monorepo, picked with a GitHub folder browser
 - A `PORT` set in the environment variables becomes the app's port (otherwise the assigned port is injected as `PORT`)

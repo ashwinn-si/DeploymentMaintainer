@@ -513,7 +513,7 @@ pm2 reload deployment-control
 ```
 Avoid updating while an app deploy is running. An interrupted deploy is marked failed; just redeploy it (a half-built staging folder or a half-done folder swap is cleaned up/repaired when the agent starts). Reloading the control plane only drops open log streams; reload the page and they resume.
 
-Disk note: staged deploys (on by default, see Part 6) keep one previous copy of each app (`<app>.previous`) and need room for a second copy while building, so apps use about 2x their size under `APPS_DIR`; a deploy fails early with a clear message if there isn't enough free space.
+Disk note: staged deploys (on by default, see Part 6) need room for a second copy of the app while a deploy runs (`<app>.staging`, then the old version as `<app>.previous` until the deploy has fully passed). Once it passes the old copy is deleted, so at rest each app takes its normal size. A deploy fails early with a clear message if there isn't enough free space.
 
 ### 7.2 Backups
 - **App configs:** open the server in the dashboard → Settings → Backup → **Export** (passphrase-encrypted JSON). Do it per server, and keep the file somewhere off the server.

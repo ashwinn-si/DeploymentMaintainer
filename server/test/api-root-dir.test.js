@@ -183,7 +183,7 @@ test('a staged deploy of a root-directory app swaps the whole repo and restores 
   const live = path.join(server.appsDir, name);
   const previous = `${live}.previous`;
   assert.ok(fs.existsSync(path.join(live, SUB_DIR, 'server.js')));
-  assert.ok(fs.existsSync(path.join(previous, SUB_DIR, 'server.js')), '.previous is the whole old repo folder');
+  assert.ok(!fs.existsSync(previous), 'the old copy is deleted once the deploy passed');
   assert.ok(fs.existsSync(path.join(live, SUB_DIR, 'ecosystem.config.cjs')));
   assert.ok(!fs.existsSync(`${live}.staging`));
   assert.equal(await (await fetch(`http://127.0.0.1:${port}/`)).text(), 'sub-app:hello');

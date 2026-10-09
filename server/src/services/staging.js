@@ -115,6 +115,17 @@ export async function restorePrevious(config, name) {
   await fsp.rm(failed, { recursive: true, force: true }).catch(() => {});
 }
 
+// Deletes the old version once a deploy has fully passed (after the live health check). Best effort: a leftover
+// `.previous` is cleared by the next deploy's prepareStaging.
+export async function removePrevious(config, name) {
+  try {
+    await removeInsideAppsDir(config, `${name}.previous`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function removeStaging(config, name) {
   try {
     await removeInsideAppsDir(config, `${name}.staging`);

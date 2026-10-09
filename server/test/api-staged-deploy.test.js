@@ -136,7 +136,7 @@ function branchWith(name, files) {
 
 // --- happy path -------------------------------------------------------------------------------
 
-test('staged deploy swaps the new build in, keeps the old code in .previous and serves the new code', async () => {
+test('staged deploy swaps the new build in, serves the new code and deletes the old copy once it passed', async () => {
   const app = await createApp('stg-happy');
   const first = await deploy(app.id);
   assert.equal(first.status, 'success', JSON.stringify(first));
@@ -151,8 +151,7 @@ test('staged deploy swaps the new build in, keeps the old code in .previous and 
   assert.equal(second.restoredPrevious, false);
 
   assert.ok(fs.existsSync(path.join(live('stg-happy'), 'v2-marker.txt')), 'live folder holds the new code');
-  assert.ok(!fs.existsSync(path.join(previous('stg-happy'), 'v2-marker.txt')), '.previous holds the old code');
-  assert.ok(fs.existsSync(path.join(previous('stg-happy'), 'server.js')));
+  assert.ok(!fs.existsSync(previous('stg-happy')), 'the old copy is deleted after the deploy fully passed: one copy at rest');
   assert.ok(!fs.existsSync(staging('stg-happy')), 'staging was promoted, not left behind');
   assert.ok(fs.existsSync(path.join(live('stg-happy'), '.git')));
 
@@ -164,16 +163,16 @@ test('staged deploy swaps the new build in, keeps the old code in .previous and 
   const log = await logText(second.id);
   assert.match(log, /staged deploy: building in stg-happy\.staging/);
   assert.match(log, /smoke test: GET \/ -> 200/);
-  assert.match(log, /promoted staged build \(previous version kept at stg-happy\.previous\)/);
-  assert.match(log, /kept the previous version at stg-happy\.previous \(.* on disk\)/);
+  assert.match(log, /promoted staged build \(previous version kept at stg-happy\.previous until the deploy passes\)/);
+  assert.match(log, /deleted the previous version \(freed .*\)/);
   // the real pm2 process was restarted from the live folder; the smoke process is gone
   assert.ok(pm2Entry('stg-happy'));
   assert.equal(server.shims.readPm2State()['app-stg-happy-smoke'], undefined);
 
-  // The next deploy clears the stale .previous before it stages.
+  // A later deploy again ends with a single copy.
   const third = await deploy(app.id);
   assert.equal(third.status, 'success', JSON.stringify(third));
-  assert.ok(fs.existsSync(path.join(previous('stg-happy'), 'v2-marker.txt')), '.previous now holds the v2 code (the app stays on the branch it was last deployed from)');
+  assert.ok(!fs.existsSync(previous('stg-happy')));
 });
 
 // --- failure before the swap -------------------------------------------------------------------
@@ -428,7 +427,7 @@ test('fresh mode builds in an empty staging folder and keeps the live app until 
   const ok = await deploy(app.id, { mode: 'fresh', branch: 'main' });
   assert.equal(ok.status, 'success', JSON.stringify(ok));
   assert.ok(!fs.existsSync(path.join(live('stg-fresh'), 'junk.txt')), 'a fresh clone has no leftovers');
-  assert.ok(fs.existsSync(path.join(previous('stg-fresh'), 'junk.txt')), 'the old folder is kept as .previous');
+  assert.ok(!fs.existsSync(previous('stg-fresh')), 'the old folder is deleted once the deploy passed');
   await fetchEventually(app.port, 'hello');
 });
 
@@ -491,7 +490,7 @@ test('a static app still publishes through a staged deploy', async () => {
   const second = await deploy(app.id);
   assert.equal(second.status, 'success', second.error);
   assert.equal(fs.readFileSync(path.join(current, 'index.html'), 'utf8'), '<h1>v2</h1>');
-  assert.equal(fs.readFileSync(path.join(previous('stg-site'), 'index.html'), 'utf8'), '<h1>v1</h1>', '.previous holds the old source');
+  assert.ok(!fs.existsSync(previous('stg-site')), 'the old source is deleted once the deploy passed');
   assert.equal((await getApp(app.id)).status, 'online');
 });
 
@@ -578,6 +577,7 @@ test('deleting an app removes its staging and previous folders too', async () =>
   assert.equal((await deploy(app.id)).status, 'success');
   assert.equal((await deploy(app.id)).status, 'success');
   writeFolder(staging('stg-delete'), { 'v.txt': 'x' });
+  writeFolder(previous('stg-delete'), { 'v.txt': 'old' }); // leftovers (e.g. from an interrupted deploy) are removed too
   assert.ok(fs.existsSync(previous('stg-delete')));
 
   const del = await server.agent.delete(`/api/apps/${app.id}`).send({ confirmName: 'stg-delete' });
