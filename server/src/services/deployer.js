@@ -569,7 +569,7 @@ export async function startDeployment(appId, config, opts = {}) {
     const updatedApp = await App.findByIdAndUpdate(
       appIdStr,
       { $inc: { deploySeq: 1 }, branch: branchUsed, status: 'deploying' },
-      { new: true },
+      { returnDocument: 'after' },
     );
     const number = updatedApp.deploySeq;
 
