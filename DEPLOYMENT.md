@@ -473,8 +473,12 @@ On **every server** (agent):
 cd ~/deployment_maintainer
 git pull
 npm ci
+npm run migrate:status -w server   # lists database migrations that are still pending
+npm run migrate:up -w server       # applies them (a no-op when there are none)
 pm2 reload deployment-maintainer
 ```
+Migrations back up the collections they touch to `server/backups/` first, are safe to run twice, and can be reverted with `npm run migrate:down -w server`. Do an Export (7.2) before the first one on a live server. See `server/migrations/README.md`.
+
 On **server 1**, also rebuild the UI and reload the control plane:
 ```bash
 npm run build
