@@ -255,6 +255,8 @@ Set these values:
 | `APP_PORT_START` | `4001` |
 | `DEFAULT_NODE_VERSION` | `20` |
 | `NGINX_ENABLED` | `true` |
+| `ANALYTICS_ENABLED` | `true` (optional; per-app request analytics, needs 3.10b) |
+| `ACCESS_LOG_DIR` | `/var/log/nginx/deployer` (optional; where the per-app Nginx access logs go, see 3.10b) |
 | `NODE_ENV` | `production` |
 | `GIT_REMOTE_BASE` | `https://github.com` (leave as is) |
 
@@ -294,6 +296,21 @@ sudo chown root:root /etc/sudoers.d/deployer
 sudo chmod 0440 /etc/sudoers.d/deployer
 sudo -n nginx -t && echo "sudo rule OK"
 ```
+
+### 3.10b Request logging for Analytics (optional)
+The dashboard's **Analytics** page counts requests per app from Nginx access logs. The agent only writes `access_log` lines into an app's route if the log directory exists, so create it once (as `ubuntu`, readable by the agent and writable by Nginx's `www-data`) and add log rotation:
+```bash
+sudo install -d -o root -g ubuntu -m 2755 /var/log/nginx/deployer
+sudo cp deploy/logrotate-deployer-nginx /etc/logrotate.d/deployer-nginx
+sudo logrotate -d /etc/logrotate.d/deployer-nginx    # dry run, should print no errors
+```
+Then restart the agent if needed (`pm2 reload deployment-maintainer`), open **Analytics** in the dashboard and press **Enable request logging**. That rewrites each app's Nginx route with an `access_log` line and reloads Nginx. (Redeploying an app does the same for that app.) To turn the feature off set `ANALYTICS_ENABLED=false` in `server/.env`.
+
+Things to know:
+- Counts come from Nginx, so they include bots, crawlers and 404s (the status mix shows how many). Health checks that go straight to the app's port are not counted.
+- The default `combined` log format has no latency, so there are no response-time charts.
+- The 1-hour range is coarse: it uses hourly buckets (the current and previous hour).
+- Hourly counters are kept in the agent's own MongoDB for 90 days; the raw logs are rotated weekly (4 kept).
 
 ### 3.11 HTTPS with certbot
 DNS from step 1.5 must already resolve to `YOUR_IP`.
@@ -457,7 +474,9 @@ Apps live on a specific server, so first open the server in the dashboard (pick 
 
 **Same repo, another branch:** create another app (e.g. `my-api-dev` on `dev`) with its own env, or use **Duplicate** on the app page.
 
-**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull in place) or **Fresh** (wipe and re-clone).
+**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull, rebuild, restart the PM2 process) or **Fresh** (re-clone from scratch and start a new process). By default both are *staged*: the new version is built and smoke-tested in `<app>.staging` while the live one keeps serving, and only swapped in if that passes; if it fails after the swap, the previous version is restored automatically (Overview → Staged deploys turns this off).
+
+**Monorepo?** In New App, **Root directory** lets you deploy a sub-folder (e.g. `apps/web`) of a repo; leave it at `/` for the whole repo. **Commits** on the app page shows the commits around the deployed one; **Analytics** (server menu) shows traffic per app (needs 3.10b).
 
 **Something broke?** Deployments → pick an earlier successful deploy → **Rollback to this**.
 
@@ -466,21 +485,35 @@ Apps live on a specific server, so first open the server in the dashboard (pick 
 ## Part 7: Day-2 operations
 
 ### 7.1 Update the dashboard and agents
-Updating is the same `git pull` everywhere, then a reload of whatever runs on that box.
+Updating is the same `git pull` everywhere, then a reload of whatever runs on that box. Agents also have database migrations, which you **rehearse on a copy of the real data before applying**.
 
 On **every server** (agent):
 ```bash
 cd ~/deployment_maintainer
 git pull
 npm ci
+
+# 1. Dry run: copies the live database into a throwaway one, migrates the copy, validates every
+#    document and tests down + up again. It only READS the real database and drops the copy at the end.
+npm run migrate:status -w server      # lists pending migrations (changes nothing)
+npm run migrate:dry-run -w server     # must end with: DRY RUN PASSED
+
+# 2. Only if the dry run passed: apply them for real (each one backs up what it touches to server/backups/)
+npm run migrate:up -w server
+npm run migrate:status -w server      # everything should now say the migration's applied date
+
 pm2 reload deployment-maintainer
 ```
-On **server 1**, also rebuild the UI and reload the control plane:
+If the dry run ends with `DRY RUN FAILED — do NOT migrate production`, stop: read the reasons, don't run `migrate:up`, and fix or report it (the old code keeps working; the new code reads new fields with defaults, so deploying it before migrating is safe). Do an **Export** (7.2) before the first migration on a live server. To undo the last migration: `npm run migrate:down -w server`. The dry run needs free disk for a second copy of the database. See `server/migrations/README.md`.
+
+On **server 1**, also rebuild the UI and reload the control plane (its database has no pending migrations today; `npm run migrate:dry-run` is agent-only):
 ```bash
 npm run build
 pm2 reload deployment-control
 ```
-Avoid updating while an app deploy is running. An interrupted deploy is marked failed; just redeploy it. Reloading the control plane only drops open log streams; reload the page and they resume.
+Avoid updating while an app deploy is running. An interrupted deploy is marked failed; just redeploy it (a half-built staging folder or a half-done folder swap is cleaned up/repaired when the agent starts). Reloading the control plane only drops open log streams; reload the page and they resume.
+
+Disk note: staged deploys (on by default, see Part 6) need room for a second copy of the app while a deploy runs (`<app>.staging`, then the old version as `<app>.previous` until the deploy has fully passed). Once it passes the old copy is deleted, so at rest each app takes its normal size. A deploy fails early with a clear message if there isn't enough free space.
 
 ### 7.2 Backups
 - **App configs:** open the server in the dashboard → Settings → Backup → **Export** (passphrase-encrypted JSON). Do it per server, and keep the file somewhere off the server.

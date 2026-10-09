@@ -108,7 +108,8 @@ Use these — never a one-off `div` with ad-hoc shadows. They live in `@layer co
 |---|---|
 | `.surface` | Cards (opaque fill, `--premium-border`, `--premium-shadow`). Pair with `rounded-2xl`. |
 | `.surface-inset` | Inset rows, chips, nested panels (`--surface-inset-bg`). Pair with `rounded-xl`. |
-| `.surface-overlay` | Floating layers: sidebar, mobile drawer, modals, dropdowns, toasts (`--overlay-bg`, `blur(6px)`). |
+| `.surface-overlay` | Floating layers: modals, dropdowns, toasts (`--overlay-bg`, `blur(6px)`). |
+| `.surface-sidebar` | The floating sidebar (inset `left-4 top-4 bottom-4`, `rounded-3xl`) and the mobile drawer: `--sidebar-bg` / `--sidebar-border` / `--sidebar-shadow` / `--sidebar-highlight`, `blur(20px)`. Dark mode is a navy gradient a step lighter than the page with an orange glow in the top-left corner. |
 | `.surface-interactive` | Adds a 2px lift + `shadow-lifted` on hover for clickable cards. |
 
 Dividers inside surfaces use `border-[var(--premium-border)]`.
@@ -123,7 +124,7 @@ All buttons go through [`Button`](web/src/components/ui/Button.jsx).
 - **`primary` = `.btn-primary-cta`**: animated orange gradient (`#9a3412 → #ea580c → #f97316 → #c2410c`, `300%` size, `primary-gradient-shift 2.2s linear infinite`, faster on hover, off when `:disabled`), inset top highlight and violet drop shadow. The primary CTA is never a flat fill.
 - **`ghost` = `.btn-quiet`**: `--surface-bg` fill, `--premium-border`, `--premium-shadow`; hover → `base-300`.
 - **`danger`**: `bg-error text-error-content`.
-- Selected/active states (tabs, sidebar item, step chips) use a flat `bg-[var(--brand)] text-white` — they are state indicators, not CTAs.
+- Selected/active states (tabs, step chips) use a flat `bg-[var(--brand)] text-white` — they are state indicators, not CTAs. The active sidebar item uses an orange gradient with a soft glow (`shadow-[0_8px_24px_-8px_rgba(251,146,60,.6)]`).
 
 ---
 

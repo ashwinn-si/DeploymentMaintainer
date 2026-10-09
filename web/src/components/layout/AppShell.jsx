@@ -33,7 +33,7 @@ export function AppShell({ deploying = false, outletContext }) {
       <Sidebar deploying={deploying} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <Navbar deploying={deploying} />
 
-      <div className={`relative z-10 transition-[padding] duration-300 ease-in-out ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
+      <div className={`relative z-10 transition-[padding] duration-300 ease-in-out ${collapsed ? 'lg:pl-[7rem]' : 'lg:pl-[19.5rem]'}`}>
         <div className="px-4 pt-4 sm:px-6 lg:px-8">
           <DiskBanner />
         </div>

@@ -54,7 +54,7 @@ const STEPS = [
   { id: 'install', label: 'Install dependencies', on: true },
   { id: 'build', label: 'Build', on: false },
   { id: 'custom', label: 'Custom: prisma migrate deploy', on: true },
-  { id: 'pm2', label: 'Start with PM2', on: true },
+  { id: 'pm2', label: 'Start or restart with PM2', on: true },
   { id: 'health', label: 'Health check', on: false },
   { id: 'nginx', label: 'Nginx routing  /shop-api', on: true },
 ];

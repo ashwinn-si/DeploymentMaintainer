@@ -14,6 +14,7 @@ import {
   validateHealthCheckPath,
   validateEnvFilename,
   validateStaticDir,
+  validateRootDir,
   refinable,
   RESERVED_APP_NAMES,
 } from '../src/lib/validate.js';
@@ -180,3 +181,32 @@ test('validateStaticDir rejects path traversal, absolute paths and injection', (
   }
 });
 
+
+test('validateRootDir normalises the repo root to an empty string', () => {
+  for (const root of ['', '/', '.', './']) assert.equal(validateRootDir(root), '');
+});
+
+test('validateRootDir accepts relative paths and strips leading ./ and trailing slashes', () => {
+  assert.equal(validateRootDir('apps/web'), 'apps/web');
+  assert.equal(validateRootDir('apps/web/'), 'apps/web');
+  assert.equal(validateRootDir('./apps/web'), 'apps/web');
+  assert.equal(validateRootDir('packages/@scope/my_pkg.v2-beta'), 'packages/@scope/my_pkg.v2-beta');
+  assert.equal(validateRootDir('.config'), '.config');
+});
+
+test('validateRootDir rejects traversal, absolute paths, spaces, backslashes and shell characters', () => {
+  const bad = [
+    '..', '../etc', 'a/../b', 'a/..', '/apps/web', '//', 'apps//web', 'apps/./web', 'apps\\web',
+    'a b', 'web;rm', 'web$(id)', 'web`id`', 'web|x', 'web&x', 'web\n', 'web\0', '~', 'a/*', 'a?b',
+    'a'.repeat(201), ' ', ' web', 'web ', 42, null, undefined, {},
+  ];
+  for (const value of bad) assert.throws(() => validateRootDir(value), HttpError, String(value));
+});
+
+test('validateRootDir composes with refinable and accepts a path of exactly 200 characters', () => {
+  const predicate = refinable(validateRootDir);
+  assert.equal(predicate(undefined), true);
+  assert.equal(predicate('apps/web'), true);
+  assert.equal(predicate('../x'), false);
+  assert.equal(validateRootDir('a'.repeat(200)), 'a'.repeat(200));
+});

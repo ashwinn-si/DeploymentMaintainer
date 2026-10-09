@@ -12,6 +12,8 @@ import {
   validateEnvKey,
   validateEnvValue,
   validateRef,
+  validateRootDir,
+  refinable,
 } from '../lib/validate.js';
 import { serializeAppSummary, serializeAppDetail, serializeDeploymentSummary } from '../lib/serializers.js';
 import { defaultSteps, normalizeSteps } from '../steps/index.js';
@@ -23,7 +25,7 @@ import { assertRoutePathFree } from '../services/routePaths.js';
 import { removeAppRoute } from '../services/nginx.js';
 import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
-import { getCommitsBehind } from '../services/github.js';
+import { getCommitsBehind, getCommitWindow, getLatestCommits } from '../services/github.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
 
 const envEntrySchema = z.object({ key: z.string(), value: z.string() });
@@ -33,11 +35,14 @@ const stepInputSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 });
 
+const rootDirSchema = z.string().optional().refine(refinable(validateRootDir), { message: 'Invalid root directory' });
+
 const createAppSchema = z.object({
   name: z.string(),
   kind: z.enum(['node', 'static']).optional(),
   repoFullName: z.string().min(1),
   branch: z.string().min(1),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1),
   env: z.array(envEntrySchema).default([]),
@@ -47,10 +52,12 @@ const createAppSchema = z.object({
 
 const patchAppSchema = z.object({
   branch: z.string().min(1).optional(),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1).optional(),
   env: z.array(envEntrySchema).optional(),
   steps: z.array(stepInputSchema).optional(),
+  stagedDeploys: z.boolean().optional(),
 });
 
 const deleteAppSchema = z.object({ confirmName: z.string() });
@@ -58,6 +65,7 @@ const deleteAppSchema = z.object({ confirmName: z.string() });
 const duplicateAppSchema = z.object({
   name: z.string(),
   branch: z.string().min(1),
+  rootDir: rootDirSchema,
   port: z.number().int().optional(),
   nodeVersion: z.string().min(1).optional(),
   copyEnv: z.boolean(),
@@ -78,6 +86,21 @@ function envArrayToObject(envArray) {
     obj[key] = value;
   }
   return obj;
+}
+
+// A PORT set in the env editor is the app's port: adopted when no explicit port is given,
+// and rejected when it contradicts one (nginx and health checks use app.port, not the env).
+function reconcilePort(requested, envObj) {
+  const raw = envObj.PORT;
+  if (raw === undefined || raw === '') return requested;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+    throw new HttpError(400, `PORT in environment variables must be an integer between 1024 and 65535, got "${raw}"`);
+  }
+  if (requested !== undefined && requested !== n) {
+    throw new HttpError(400, `PORT in environment variables (${n}) does not match the port field (${requested}); make them match or remove PORT`);
+  }
+  return n;
 }
 
 function envObjectToArray(obj) {
@@ -147,6 +170,25 @@ async function findAppOr404(id) {
   return app;
 }
 
+// Most recent deployment per commit sha for this app: Map<sha, { id, number, status }>.
+async function latestDeploymentsBySha(app, shas) {
+  const map = new Map();
+  if (shas.length === 0) return map;
+  const deployments = await Deployment.find({ appId: app._id, commitSha: { $in: shas } })
+    .sort({ createdAt: -1 })
+    .select('number status commitSha')
+    .lean();
+  for (const d of deployments) {
+    if (!map.has(d.commitSha)) map.set(d.commitSha, { id: String(d._id), number: d.number, status: d.status });
+  }
+  return map;
+}
+
+async function annotateWithDeployments(app, commits) {
+  const byCommit = await latestDeploymentsBySha(app, commits.map((c) => c.sha));
+  return commits.map((c) => ({ ...c, deployment: byCommit.get(c.sha) ?? null }));
+}
+
 export function createAppsRouter(config) {
   const router = Router();
   router.use(requireAuth(config));
@@ -176,10 +218,10 @@ export function createAppsRouter(config) {
     if (existing) throw new HttpError(409, `An app named "${body.name}" already exists`);
 
     const kind = body.kind ?? 'node';
-    const port = await resolvePort(config, kind, body.port);
+    const envObj = envArrayToObject(body.env ?? []);
+    const port = await resolvePort(config, kind, kind === 'static' ? body.port : reconcilePort(body.port, envObj));
 
     validateNodeVersion(body.nodeVersion);
-    const envObj = envArrayToObject(body.env ?? []);
     const steps = normalizeSteps(body.steps?.length ? body.steps : defaultSteps(body.name, kind), { kind });
     await assertRoutePathFree(body.name, steps);
 
@@ -187,6 +229,7 @@ export function createAppsRouter(config) {
       name: body.name,
       repoFullName: body.repoFullName,
       branch: body.branch,
+      rootDir: body.rootDir === undefined ? '' : validateRootDir(body.rootDir),
       kind,
       port,
       nodeVersion: body.nodeVersion,
@@ -216,23 +259,32 @@ export function createAppsRouter(config) {
       validateRef(body.branch);
       app.branch = body.branch;
     }
-    if (body.port !== undefined) {
+    if (body.rootDir !== undefined) {
+      // Applies from the next deploy; a running one keeps the value it started with.
+      app.rootDir = validateRootDir(body.rootDir);
+    }
+    const envObj = body.env !== undefined ? envArrayToObject(body.env) : undefined;
+    const newPort = envObj && app.kind !== 'static' ? reconcilePort(body.port, envObj) : body.port;
+    if (newPort !== undefined) {
       if (app.kind === 'static') throw new HttpError(400, 'Static apps do not use a port');
-      validatePort(body.port);
-      if (body.port !== app.port) await assertPortAvailable(body.port, app._id);
-      app.port = body.port;
+      validatePort(newPort);
+      if (newPort !== app.port) await assertPortAvailable(newPort, app._id);
+      app.port = newPort;
     }
     if (body.nodeVersion !== undefined) {
       validateNodeVersion(body.nodeVersion);
       app.nodeVersion = body.nodeVersion;
     }
-    if (body.env !== undefined) {
-      app.envEncrypted = encryptJSON(config, envArrayToObject(body.env));
+    if (envObj) {
+      app.envEncrypted = encryptJSON(config, envObj);
     }
     if (body.steps !== undefined) {
       const steps = normalizeSteps(body.steps, { kind: app.kind });
       await assertRoutePathFree(app.name, steps, { excludeId: app._id });
       app.steps = steps;
+    }
+    if (body.stagedDeploys !== undefined) {
+      app.stagedDeploys = body.stagedDeploys;
     }
 
     await app.save();
@@ -290,7 +342,12 @@ export function createAppsRouter(config) {
     const nodeVersion = body.nodeVersion ?? source.nodeVersion;
     validateNodeVersion(nodeVersion);
 
-    const envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
+    let envEncrypted = body.copyEnv ? source.envEncrypted : encryptJSON(config, {});
+    if (body.copyEnv && kind !== 'static') {
+      // The copy gets its own port, so a PORT carried over from the original must follow it.
+      const copied = decryptAppEnv(config, source.envEncrypted);
+      if ('PORT' in copied) envEncrypted = encryptJSON(config, { ...copied, PORT: String(port) });
+    }
     const steps = normalizeSteps(JSON.parse(JSON.stringify(source.steps)), { kind });
     // A copy must not inherit the original's URL path, or Nginx would serve only one of them.
     for (const step of steps) {
@@ -302,6 +359,7 @@ export function createAppsRouter(config) {
       name: body.name,
       repoFullName: source.repoFullName,
       branch: body.branch,
+      rootDir: body.rootDir === undefined ? (source.rootDir ?? '') : validateRootDir(body.rootDir),
       kind,
       port,
       nodeVersion,
@@ -356,19 +414,46 @@ export function createAppsRouter(config) {
     res.json(await getCommitsBehind(config, owner, repo, app.currentCommitSha, app.branch));
   });
 
+  // Commit timeline around the deployed commit, each commit annotated with its latest deployment (if any).
+  router.get('/:id/commits', async (req, res) => {
+    const app = await findAppOr404(req.params.id);
+    const [owner, repo] = app.repoFullName.split('/');
+
+    if (!app.currentCommitSha) {
+      const older = await getLatestCommits(config, owner, repo, app.branch, 10);
+      const annotated = await annotateWithDeployments(app, older);
+      return res.json({ deployed: null, missing: false, neverDeployed: true, newer: [], newerTotal: 0, older: annotated });
+    }
+
+    const window = await getCommitWindow(config, owner, repo, app.currentCommitSha, app.branch);
+    const allShas = [window.deployed, ...window.newer, ...window.older].filter(Boolean).map((c) => c.sha);
+    const byCommit = await latestDeploymentsBySha(app, allShas);
+    const annotate = (c) => ({ ...c, deployment: byCommit.get(c.sha) ?? null });
+    res.json({
+      deployed: window.deployed ? annotate(window.deployed) : null,
+      missing: Boolean(window.missing),
+      neverDeployed: false,
+      newer: window.newer.map(annotate),
+      newerTotal: window.newerTotal,
+      older: window.older.map(annotate),
+    });
+  });
+
   router.get('/:id/logs', async (req, res) => {
     const app = await findAppOr404(req.params.id);
     const lines = Number(req.query.lines) > 0 ? Number(req.query.lines) : 200;
     if (app.kind === 'static') {
-      return res.json({ text: '(static site: no runtime process, so no runtime logs)' });
+      const text = '(static site: no runtime process, so no runtime logs)';
+      return res.json({ text, out: text, err: '' });
     }
-    let text = '';
     try {
-      text = await pm2Service.logs(pm2Service.pm2Name(app.name), lines);
+      const raw = await pm2Service.logs(pm2Service.pm2Name(app.name), lines);
+      const { out, err } = pm2Service.splitLogs(raw);
+      res.json({ text: raw, out, err });
     } catch (err) {
-      text = `(unable to read logs: ${err.message})`;
+      const text = `(unable to read logs: ${err.message})`;
+      res.json({ text, out: text, err: '' });
     }
-    res.json({ text });
   });
 
   router.get('/:id/deployments', async (req, res) => {

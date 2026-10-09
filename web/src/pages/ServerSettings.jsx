@@ -288,7 +288,7 @@ function ImportPanel() {
                     <div>
                       <p className="text-sm font-medium text-[var(--text-primary)]">{row.name}</p>
                       <p className="text-xs text-[var(--text-muted)]">
-                        {row.repoFullName} @ {row.branch} · port {row.port}
+                        {row.repoFullName} @ {row.branch}{row.rootDir ? ` · /${row.rootDir}` : ''} · port {row.port}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

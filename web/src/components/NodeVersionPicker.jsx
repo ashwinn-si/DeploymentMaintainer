@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input } from './ui/Input.jsx';
 import { useServer } from '../context/ServerContext.jsx';
 
-export function NodeVersionPicker({ repoFullName, branch, value, onChange }) {
+export function NodeVersionPicker({ repoFullName, branch, rootDir = '', value, onChange }) {
   const { api } = useServer();
   const [installed, setInstalled] = useState([]);
   const [detected, setDetected] = useState(null);
+  // The last value this picker filled in itself; a changed repo/branch/root may replace it, but never a user's edit.
+  const autoValue = useRef('');
 
   useEffect(() => {
     api.node
@@ -26,18 +28,21 @@ export function NodeVersionPicker({ repoFullName, branch, value, onChange }) {
     let cancelled = false;
     const [owner, repo] = repoFullName.split('/');
     api.repos
-      .nodeVersion(owner, repo, branch)
+      .nodeVersion(owner, repo, branch, rootDir)
       .then((data) => {
         if (cancelled) return;
         setDetected(data);
-        if (data.version && !value) onChange(data.version);
+        if (data.version && (!value || value === autoValue.current)) {
+          autoValue.current = data.version;
+          onChange(data.version);
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoFullName, branch]);
+  }, [repoFullName, branch, rootDir]);
 
   return (
     <div className="space-y-2">

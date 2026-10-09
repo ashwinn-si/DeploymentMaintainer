@@ -119,8 +119,10 @@ export function serverApi(serverId) {
     repos: {
       list: (q, refresh) => get(`/repos${toQuery({ q, refresh: refresh ? 1 : undefined })}`),
       branches: (owner, repo) => get(`/repos/${owner}/${repo}/branches`),
-      nodeVersion: (owner, repo, ref) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref })}`),
-      detectProject: (owner, repo, ref) => get(`/repos/${owner}/${repo}/detect-project${toQuery({ ref })}`),
+      // `root` is the app's root directory inside the repo; toQuery omits it when empty.
+      nodeVersion: (owner, repo, ref, root) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref, root })}`),
+      detectProject: (owner, repo, ref, root) => get(`/repos/${owner}/${repo}/detect-project${toQuery({ ref, root })}`),
+      tree: (owner, repo, branch, path) => get(`/repos/${owner}/${repo}/tree${toQuery({ branch, path })}`),
     },
     apps: {
       list: () => get('/apps'),
@@ -134,6 +136,7 @@ export function serverApi(serverId) {
       restart: (id) => post(`/apps/${id}/restart`),
       stop: (id) => post(`/apps/${id}/stop`),
       updates: (id) => get(`/apps/${id}/updates`),
+      commits: (id) => get(`/apps/${id}/commits`),
       logs: (id, lines = 200) => get(`/apps/${id}/logs${toQuery({ lines })}`),
       deployments: (id, { limit, before } = {}) => get(`/apps/${id}/deployments${toQuery({ limit, before })}`),
     },
@@ -149,6 +152,10 @@ export function serverApi(serverId) {
     },
     ports: {
       list: () => get('/ports'),
+    },
+    analytics: {
+      get: (range, appIds) => get(`/analytics${toQuery({ range, apps: appIds?.length ? appIds.join(',') : undefined })}`),
+      setup: () => post('/analytics/setup'),
     },
     node: {
       versions: () => get('/node/versions'),

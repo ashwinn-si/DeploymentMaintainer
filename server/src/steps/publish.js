@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { validateStaticDir } from '../lib/validate.js';
+import { appWorkDir } from '../lib/appEnv.js';
 
 export const type = 'publish';
 
@@ -41,6 +42,34 @@ export async function checkPublished(config, appName, checkPath = '/') {
     }
   }
   return { ok: false, statusCode: 404 };
+}
+
+// The release `current` points at right now, or null (never published). Used to undo a publish.
+export async function readCurrentRelease(config, appName) {
+  try {
+    return await fs.readlink(getPublishedAppCurrentDir(config, appName));
+  } catch {
+    return null;
+  }
+}
+
+// Points `current` back at an earlier release (atomic symlink swap). Returns false when that release was pruned.
+export async function restoreCurrentRelease(config, appName, releaseDir) {
+  try {
+    await fs.access(releaseDir);
+  } catch {
+    return false;
+  }
+  const appPublishedDir = getPublishedAppDir(config, appName);
+  const tmpSymlink = path.join(appPublishedDir, `.current.tmp-${Date.now()}`);
+  try {
+    await fs.symlink(releaseDir, tmpSymlink);
+    await fs.rename(tmpSymlink, getPublishedAppCurrentDir(config, appName));
+  } catch (err) {
+    await fs.rm(tmpSymlink, { force: true }).catch(() => {});
+    throw err;
+  }
+  return true;
 }
 
 export async function removePublishedApp(config, appName) {
@@ -119,7 +148,7 @@ export async function run(ctx) {
   const configured = step?.config?.staticDir || '.';
   validateStaticDir(configured);
 
-  const appDir = path.resolve(config.APPS_DIR, app.name);
+  const appDir = path.resolve(appWorkDir(config, app));
   const buildEnabled = Boolean(app.steps?.some((s) => s.type === 'build' && s.enabled));
   const staticDir = await resolveStaticDir(appDir, configured, { buildEnabled });
   if (staticDir !== configured) log.info(`auto-detected output directory: ${staticDir}`, stepId);

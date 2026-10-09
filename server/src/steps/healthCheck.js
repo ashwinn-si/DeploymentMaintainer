@@ -4,15 +4,15 @@ import { checkPublished } from './publish.js';
 
 export const type = 'healthCheck';
 
-const MIN_OK_STATUS = 200;
-const MAX_OK_STATUS = 399;
+export const MIN_OK_STATUS = 200;
+export const MAX_OK_STATUS = 399;
 const CRASH_LOOP_RESTART_DELTA = 3;
 
 export function label(config) {
   return `Health check ${config?.path || '/'}`;
 }
 
-function requestOnce(port, requestPath) {
+export function requestOnce(port, requestPath) {
   return new Promise((resolve) => {
     const req = http.get({ host: '127.0.0.1', port, path: requestPath, timeout: 5000 }, (res) => {
       res.resume();
@@ -26,7 +26,7 @@ function requestOnce(port, requestPath) {
   });
 }
 
-function sleep(ms, signal) {
+export function sleep(ms, signal) {
   return new Promise((resolve) => {
     if (ms <= 0) return resolve();
     const timer = setTimeout(resolve, ms);
@@ -39,9 +39,9 @@ function sleep(ms, signal) {
 }
 
 // Surfaces the app's own output so a crash is diagnosable from the deploy log.
-async function logAppOutput(app, log, stepId) {
+export async function logAppOutput(app, log, stepId, processName = pm2Service.pm2Name(app.name)) {
   try {
-    const out = await pm2Service.logs(pm2Service.pm2Name(app.name), 30);
+    const out = await pm2Service.logs(processName, 30);
     const text = out.replace(/\x1b\[[0-9;]*m/g, '').trim();
     if (text) log.error(`app output (last 30 lines):\n${text}`, stepId);
   } catch (err) {

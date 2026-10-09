@@ -5,7 +5,10 @@ import {
   listBranches,
   detectNodeVersion,
   detectProjectType,
+  listDirectories,
   getTokenInfo,
+  getCommitWindow,
+  getLatestCommits,
   GitHubError,
   setFetchImpl,
   __resetCache,
@@ -282,4 +285,225 @@ test('detectProjectType treats a malformed package.json as absent', async () => 
     ? mockResponse({ text: '{ not json' })
     : mockResponse({ status: 404, json: { message: 'Not Found' } })));
   assert.equal((await detectProjectType(freshConfig(), 'octo', 'bad', 'main')).type, 'unknown');
+});
+
+function fakeCommit(n) {
+  const sha = String(n).padStart(40, '0');
+  return {
+    sha,
+    commit: { message: `commit ${n}\n\nbody line`, author: { name: `author-${n}`, date: `2024-01-${String(n % 28 + 1).padStart(2, '0')}T00:00:00Z` } },
+  };
+}
+const sha = (n) => String(n).padStart(40, '0');
+
+// Mocks a linear history 1..total (higher = newer). Deployed commit is `deployedN`.
+function historyFetch({ total, deployedN, calls = [] }) {
+  return async (url) => {
+    calls.push(url);
+    if (url.includes('/compare/')) {
+      const commits = [];
+      for (let n = deployedN + 1; n <= total; n += 1) commits.push(fakeCommit(n));
+      return mockResponse({ json: { ahead_by: commits.length, commits } });
+    }
+    const u = new URL(url);
+    const perPage = Number(u.searchParams.get('per_page'));
+    const start = u.searchParams.get('sha') === sha(deployedN) ? deployedN : total;
+    const commits = [];
+    for (let n = start; n >= 1 && commits.length < perPage; n -= 1) commits.push(fakeCommit(n));
+    return mockResponse({ json: commits });
+  };
+}
+
+test('getCommitWindow splits newer/deployed/older, newest first, with "more" total', async () => {
+  const config = freshConfig();
+  setFetchImpl(historyFetch({ total: 20, deployedN: 10 }));
+  const win = await getCommitWindow(config, 'octo', 'repo', sha(10), 'main');
+  assert.equal(win.deployed.sha, sha(10));
+  assert.equal(win.deployed.message, 'commit 10');
+  assert.equal(win.deployed.author, 'author-10');
+  assert.deepEqual(win.newer.map((c) => c.sha), [15, 14, 13, 12, 11].map(sha));
+  assert.equal(win.newerTotal, 10);
+  assert.deepEqual(win.older.map((c) => c.sha), [9, 8, 7, 6, 5].map(sha));
+  assert.equal(win.missing, undefined);
+});
+
+test('getCommitWindow with the deployed commit at the branch head has no newer commits and few older ones', async () => {
+  setFetchImpl(historyFetch({ total: 3, deployedN: 3 }));
+  const win = await getCommitWindow(freshConfig(), 'octo', 'repo', sha(3), 'main');
+  assert.deepEqual(win.newer, []);
+  assert.equal(win.newerTotal, 0);
+  assert.deepEqual(win.older.map((c) => c.sha), [2, 1].map(sha));
+});
+
+test('getCommitWindow returns missing:true with latest commits when the deployed sha is unknown to GitHub', async () => {
+  const calls = [];
+  setFetchImpl(async (url) => {
+    calls.push(url);
+    if (url.includes('/compare/')) return mockResponse({ status: 404, json: { message: 'Not Found' } });
+    if (url.includes(`sha=${sha(99)}`)) return mockResponse({ status: 422, json: { message: 'No commit found for SHA' } });
+    assert.match(url, /commits\?sha=main&per_page=10/);
+    return mockResponse({ json: [fakeCommit(5), fakeCommit(4)] });
+  });
+  const win = await getCommitWindow(freshConfig(), 'octo', 'repo', sha(99), 'main');
+  assert.equal(win.missing, true);
+  assert.equal(win.deployed, null);
+  assert.deepEqual(win.newer, []);
+  assert.equal(win.newerTotal, 0);
+  assert.deepEqual(win.older.map((c) => c.sha), [5, 4].map(sha));
+});
+
+test('getCommitWindow still propagates real GitHub errors', async () => {
+  setFetchImpl(async () => mockResponse({ status: 403, headers: { 'x-ratelimit-remaining': '0' }, json: {} }));
+  await assert.rejects(() => getCommitWindow(freshConfig(), 'octo', 'repo', sha(1), 'main'), (err) => {
+    assert.ok(err instanceof GitHubError);
+    assert.equal(err.status, 503);
+    return true;
+  });
+  // A 404 on the commits list (repo gone) is a real 404, not "missing".
+  setFetchImpl(async () => mockResponse({ status: 404, json: { message: 'Not Found' } }));
+  await assert.rejects(() => getCommitWindow(freshConfig(), 'octo', 'gone', sha(1), 'main'), (err) => err instanceof GitHubError && err.status === 404);
+});
+
+test('getCommitWindow caches results briefly and __resetCache clears them', async () => {
+  const config = freshConfig();
+  const calls = [];
+  setFetchImpl(historyFetch({ total: 8, deployedN: 4, calls }));
+  const first = await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  const callsAfterFirst = calls.length;
+  assert.equal(callsAfterFirst, 2);
+  first.newer.pop(); // mutating a result must not poison the cache
+  const second = await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  assert.equal(calls.length, callsAfterFirst);
+  assert.equal(second.newer.length, 4);
+
+  await getCommitWindow(config, 'octo', 'repo', sha(4), 'other-branch');
+  assert.ok(calls.length > callsAfterFirst, 'different branch is a different cache key');
+
+  __resetCache();
+  const before = calls.length;
+  await getCommitWindow(config, 'octo', 'repo', sha(4), 'main');
+  assert.ok(calls.length > before);
+});
+
+test('getLatestCommits maps the first line of each message', async () => {
+  setFetchImpl(async (url) => {
+    assert.match(url, /commits\?sha=main&per_page=10/);
+    return mockResponse({ json: [fakeCommit(2), fakeCommit(1)] });
+  });
+  const commits = await getLatestCommits(freshConfig(), 'octo', 'repo', 'main');
+  assert.deepEqual(commits.map((c) => c.message), ['commit 2', 'commit 1']);
+});
+
+// A fake contents API: `tree` maps a folder path ('' = root) to its entries; missing folders 404.
+function contentsFetch(tree, { fail = new Set() } = {}) {
+  const calls = [];
+  const impl = async (url) => {
+    calls.push(url);
+    const match = /\/contents\/?([^?]*)\?ref=(.+)$/.exec(url);
+    const folder = decodeURIComponent(match[1]);
+    if (fail.has(folder)) return mockResponse({ status: 500, text: 'boom' });
+    if (!(folder in tree)) return mockResponse({ status: 404, text: '' });
+    return mockResponse({ json: tree[folder] });
+  };
+  return { impl, calls };
+}
+
+const dir = (name, parent = '') => ({ type: 'dir', name, path: parent ? `${parent}/${name}` : name });
+const file = (name, parent = '') => ({ type: 'file', name, path: parent ? `${parent}/${name}` : name });
+
+test('listDirectories returns only directories, sorted, flagged by what each contains', async () => {
+  const { impl, calls } = contentsFetch({
+    '': [file('README.md'), dir('web'), dir('api'), dir('docs'), file('package.json')],
+    api: [file('package.json', 'api'), file('server.js', 'api')],
+    web: [file('index.html', 'web'), file('package.json', 'web')],
+    docs: [file('intro.md', 'docs')],
+  });
+  setFetchImpl(impl);
+
+  const result = await listDirectories(freshConfig(), 'me', 'repo', 'main');
+  assert.deepEqual(result, [
+    { name: 'api', path: 'api', hasPackageJson: true, hasIndexHtml: false },
+    { name: 'docs', path: 'docs', hasPackageJson: false, hasIndexHtml: false },
+    { name: 'web', path: 'web', hasPackageJson: true, hasIndexHtml: true },
+  ]);
+  assert.match(calls[0], /\/repos\/me\/repo\/contents\?ref=main$/);
+  assert.equal(calls.length, 4, 'one listing for the folder plus one per returned directory');
+});
+
+test('listDirectories lists a nested folder, encodes each path segment and caches for 60s', async () => {
+  const { impl, calls } = contentsFetch({
+    'apps/web': [dir('src', 'apps/web'), dir('public', 'apps/web')],
+    'apps/web/src': [file('index.html', 'apps/web/src')],
+    'apps/web/public': [],
+  });
+  setFetchImpl(impl);
+  const config = freshConfig();
+
+  const first = await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web/');
+  assert.deepEqual(first.map((d) => d.path), ['apps/web/public', 'apps/web/src']);
+  assert.equal(first[1].hasIndexHtml, true);
+  assert.match(calls[0], /\/contents\/apps\/web\?ref=feat%2Fx$/);
+
+  const before = calls.length;
+  await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web');
+  assert.equal(calls.length, before, 'second call is served from the cache');
+
+  __resetCache();
+  await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web');
+  assert.ok(calls.length > before, '__resetCache clears the folder cache');
+});
+
+test('listDirectories skips failed flag lookups silently and caps the lookups at 30 folders', async () => {
+  const names = Array.from({ length: 35 }, (_, i) => `pkg${String(i).padStart(2, '0')}`);
+  const tree = { '': names.map((n) => dir(n)) };
+  for (const n of names) tree[n] = [file('package.json', n)];
+  const { impl, calls } = contentsFetch(tree, { fail: new Set(['pkg01']) });
+  setFetchImpl(impl);
+
+  const result = await listDirectories(freshConfig(), 'me', 'repo', 'main');
+  assert.equal(result.length, 35, 'every directory is returned');
+  assert.equal(result[0].hasPackageJson, true);
+  assert.equal(result[1].hasPackageJson, false, 'a failed lookup leaves the flags false');
+  assert.equal(result[29].hasPackageJson, true);
+  assert.equal(result[30].hasPackageJson, false, 'folders beyond the cap are not looked into');
+  assert.equal(calls.length, 1 + 30);
+});
+
+test('listDirectories maps a missing folder to 404, rejects bad input and needs a token', async () => {
+  setFetchImpl(contentsFetch({ '': [] }).impl);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', 'nope'), (err) => err.status === 404);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', '../etc'), (err) => err.status === 400);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', '--bad'), (err) => err.status === 400);
+  await assert.rejects(() => listDirectories({ GITHUB_TOKEN: undefined }, 'me', 'repo', 'main'), (err) => err.status === 503);
+  // A path that is a file (the API answers with an object) is not a folder.
+  setFetchImpl(async () => mockResponse({ json: { type: 'file', name: 'x' } }));
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', 'x'), (err) => err.status === 404);
+});
+
+test('detectNodeVersion and detectProjectType read files inside the root directory', async () => {
+  const requested = [];
+  setFetchImpl(async (url) => {
+    requested.push(url);
+    if (url.includes('/contents/apps/web/package.json')) {
+      return mockResponse({ text: JSON.stringify({ engines: { node: '>=22' }, scripts: { build: 'vite build' }, devDependencies: { vite: '^5' } }) });
+    }
+    return mockResponse({ status: 404, text: '' });
+  });
+  const config = freshConfig();
+
+  const version = await detectNodeVersion(config, 'me', 'repo', 'main', 'apps/web');
+  assert.deepEqual(version, { version: '22', source: 'engines' });
+  assert.ok(requested.some((u) => u.includes('/contents/apps/web/.nvmrc?')));
+  assert.ok(!requested.some((u) => /\/contents\/(\.nvmrc|package\.json)\?/.test(u)), 'the repo root files are not read');
+
+  requested.length = 0;
+  const project = await detectProjectType(config, 'me', 'repo', 'main', 'apps/web');
+  assert.ok(project, 'classified from the sub-folder package.json');
+  assert.ok(requested.some((u) => u.includes('/contents/apps/web/index.html?')));
+
+  await assert.rejects(() => detectNodeVersion(config, 'me', 'repo', 'main', '../x'), (err) => err.status === 400);
+  // Default stays the repo root.
+  requested.length = 0;
+  await detectNodeVersion(config, 'me', 'repo', 'main');
+  assert.ok(requested.every((u) => /\/contents\/(\.nvmrc|package\.json)\?/.test(u)));
 });

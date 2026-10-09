@@ -23,6 +23,9 @@ export function DeploymentRow({ deployment, showApp = false }) {
             {deployment.rollbackOf ? (
               <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">rollback</span>
             ) : null}
+            {deployment.restoredPrevious ? (
+              <span className="rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-600 dark:text-teal-400">previous restored</span>
+            ) : null}
             {deployment.autoRollbackOf ? (
               <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400">auto-rollback</span>
             ) : null}

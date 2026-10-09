@@ -13,6 +13,7 @@ import {
   validateRef,
   validateOwner,
   validateRepo,
+  validateRootDir,
 } from '../lib/validate.js';
 import { serializeAppSummary, serializeDeploymentSummary } from '../lib/serializers.js';
 import { normalizeSteps } from '../steps/index.js';
@@ -22,7 +23,8 @@ import { encryptJSON, decryptAppEnv, encryptWithPassphrase, decryptWithPassphras
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
 
 const FORMAT = 'deployment-maintainer';
-const VERSION = 1;
+// Version 2 added per-app rootDir and stagedDeploys; version 1 files are still accepted (defaults fill in).
+const VERSION = 2;
 
 // --- Shared file shape -------------------------------------------------------
 
@@ -43,6 +45,8 @@ const exportedAppSchema = z.object({
   name: z.string().min(1),
   repoFullName: z.string().min(1),
   branch: z.string().min(1),
+  rootDir: z.string().optional(),
+  stagedDeploys: z.boolean().optional(),
   kind: z.enum(['node', 'static']).optional(),
   port: z.number().int().nullable().optional(),
   nodeVersion: z.string().min(1),
@@ -52,7 +56,7 @@ const exportedAppSchema = z.object({
 
 const fileSchema = z.object({
   format: z.literal(FORMAT),
-  version: z.literal(VERSION),
+  version: z.union([z.literal(1), z.literal(2)]),
   exportedAt: z.string(),
   apps: z.array(exportedAppSchema),
 });
@@ -108,6 +112,7 @@ async function computeConflictRows(exportedApps) {
       name: a.name,
       repoFullName: a.repoFullName,
       branch: a.branch,
+      rootDir: a.rootDir ?? '',
       kind: a.kind ?? 'node',
       port: a.port ?? null,
       conflict,
@@ -185,6 +190,7 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
     validateOwner(owner);
     validateRepo(repo);
     validateRef(fileApp.branch);
+    const rootDir = validateRootDir(fileApp.rootDir ?? '');
     validateNodeVersion(fileApp.nodeVersion);
     const kind = fileApp.kind ?? 'node';
     const steps = normalizeSteps(fileApp.steps, { kind });
@@ -224,6 +230,8 @@ async function validateImportRows(file, rows, decryptedEnvByName, config) {
       finalName,
       repoFullName: fileApp.repoFullName,
       branch: fileApp.branch,
+      rootDir,
+      stagedDeploys: fileApp.stagedDeploys ?? true,
       kind,
       port,
       nodeVersion: fileApp.nodeVersion,
@@ -247,6 +255,8 @@ export function createConfigIoRouter(config) {
       name: app.name,
       repoFullName: app.repoFullName,
       branch: app.branch,
+      rootDir: app.rootDir ?? '',
+      stagedDeploys: app.stagedDeploys ?? true,
       kind: app.kind ?? 'node',
       port: app.port ?? null,
       nodeVersion: app.nodeVersion,
@@ -289,6 +299,8 @@ export function createConfigIoRouter(config) {
         name: spec.finalName,
         repoFullName: spec.repoFullName,
         branch: spec.branch,
+        rootDir: spec.rootDir,
+        stagedDeploys: spec.stagedDeploys,
         kind: spec.kind,
         port: spec.port,
         nodeVersion: spec.nodeVersion,

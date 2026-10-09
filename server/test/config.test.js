@@ -21,6 +21,8 @@ const ALL_CONFIG_KEYS = [
   'APP_PORT_START',
   'DEFAULT_NODE_VERSION',
   'NGINX_ENABLED',
+  'ANALYTICS_ENABLED',
+  'ACCESS_LOG_DIR',
   'NODE_ENV',
   'GITHUB_TOKEN',
   'GIT_REMOTE_BASE',
@@ -110,5 +112,18 @@ test('loadConfig respects a narrower require list (e.g. for clear-db)', () => {
 test('a narrower require list still validates the format of vars that are present', () => {
   withEnv({ MONGO_URI: VALID_ENV.MONGO_URI, SERVER_ID: 'bad id' }, () => {
     assert.throws(() => loadConfig({ require: ['MONGO_URI'] }), /SERVER_ID/);
+  });
+});
+
+test('analytics settings default to enabled with the standard nginx log directory and can be overridden', () => {
+  withEnv(VALID_ENV, () => {
+    const config = loadConfig();
+    assert.equal(config.ANALYTICS_ENABLED, true);
+    assert.equal(config.ACCESS_LOG_DIR, '/var/log/nginx/deployer');
+  });
+  withEnv({ ...VALID_ENV, ANALYTICS_ENABLED: 'false', ACCESS_LOG_DIR: '/srv/logs' }, () => {
+    const config = loadConfig();
+    assert.equal(config.ANALYTICS_ENABLED, false);
+    assert.equal(config.ACCESS_LOG_DIR, '/srv/logs');
   });
 });

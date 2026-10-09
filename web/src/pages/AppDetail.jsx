@@ -6,6 +6,7 @@ import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Button } from '../components/ui/Button.jsx';
 import { Tabs } from '../components/ui/Tabs.jsx';
+import { Toggle } from '../components/ui/Toggle.jsx';
 import { StatusPill, statusTone } from '../components/ui/StatusPill.jsx';
 import { Loader } from '../components/ui/Loader.jsx';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx';
@@ -13,7 +14,9 @@ import { EnvEditor } from '../components/EnvEditor.jsx';
 import { StepsEditor } from '../components/StepsEditor.jsx';
 import { DeployDialog } from '../components/DeployDialog.jsx';
 import { DuplicateDialog } from '../components/DuplicateDialog.jsx';
+import { RootDirModal, displayRootDir } from '../components/RootDirPicker.jsx';
 import { DeploymentRow } from '../components/DeploymentRow.jsx';
+import { CommitHistory } from '../components/CommitHistory.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
 import { formatBytes, formatDuration, formatRelativeTime, shortSha, githubCommitUrl } from '../lib/format.js';
@@ -23,6 +26,7 @@ const TABS = [
   { value: 'environment', label: 'Environment' },
   { value: 'steps', label: 'Steps' },
   { value: 'deployments', label: 'Deployments' },
+  { value: 'commits', label: 'Commits' },
   { value: 'logs', label: 'Runtime logs' },
 ];
 // Static sites have no process, so no runtime logs.
@@ -37,7 +41,7 @@ function Field({ label, children }) {
   );
 }
 
-function OverviewTab({ app }) {
+function OverviewTab({ app, onEditRootDir, editingRootDir, onToggleStaged, togglingStaged }) {
   const commitUrl = githubCommitUrl(app.repoFullName, app.currentCommitSha);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -48,6 +52,34 @@ function OverviewTab({ app }) {
         </a>
       </Field>
       <Field label="Branch">{app.branch}</Field>
+      <Field label="Root directory">
+        <span className="flex items-center gap-2">
+          <span className="font-mono">{displayRootDir(app.rootDir)}</span>
+          <button
+            type="button"
+            onClick={onEditRootDir}
+            disabled={editingRootDir}
+            className="text-xs font-semibold text-[var(--brand)] hover:underline disabled:opacity-50"
+          >
+            Edit
+          </button>
+        </span>
+      </Field>
+      <Field label="Staged deploys">
+        <span className="flex flex-col gap-1">
+          <Toggle
+            checked={app.stagedDeploys !== false}
+            onChange={onToggleStaged}
+            disabled={togglingStaged}
+            label={app.stagedDeploys !== false ? 'On' : 'Off'}
+          />
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {app.stagedDeploys !== false
+              ? 'Builds and tests in a separate folder; the live version is swapped out only if that passes.'
+              : 'Deploys run in the live folder (a failed build can leave it broken).'}
+          </span>
+        </span>
+      </Field>
       <Field label="Commit">
         {commitUrl ? (
           <a href={commitUrl} target="_blank" rel="noreferrer" className="font-mono text-[var(--brand)] hover:underline">
@@ -125,10 +157,15 @@ export function AppDetail() {
   const [deployOpen, setDeployOpen] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [rootDirOpen, setRootDirOpen] = useState(false);
   const [deployments, setDeployments] = useState([]);
-  const [runtimeLogs, setRuntimeLogs] = useState('');
+  const [runtimeLogs, setRuntimeLogs] = useState({ out: '', err: '' });
+  const [logStream, setLogStream] = useState('out');
   const [logsLoading, setLogsLoading] = useState(false);
   const [updates, setUpdates] = useState(null);
+  const [commits, setCommits] = useState(null);
+  const [commitsLoading, setCommitsLoading] = useState(false);
+  const [commitsError, setCommitsError] = useState(null);
 
   const tab = TABS.some((t) => t.value === searchParams.get('tab')) ? searchParams.get('tab') : 'overview';
   const setTab = (value) => setSearchParams((prev) => ({ ...Object.fromEntries(prev), tab: value }));
@@ -170,14 +207,28 @@ export function AppDetail() {
     setLogsLoading(true);
     api.apps
       .logs(id)
-      .then((data) => setRuntimeLogs(data.text))
-      .catch(() => setRuntimeLogs('Could not load runtime logs.'))
+      .then((data) => setRuntimeLogs({ out: data.out ?? data.text ?? '', err: data.err ?? '' }))
+      .catch(() => setRuntimeLogs({ out: 'Could not load runtime logs.', err: '' }))
       .finally(() => setLogsLoading(false));
   }, [api, id]);
 
   useEffect(() => {
     if (tab === 'logs') loadLogs();
   }, [tab, loadLogs]);
+
+  const loadCommits = useCallback(() => {
+    setCommitsLoading(true);
+    setCommitsError(null);
+    api.apps
+      .commits(id)
+      .then(setCommits)
+      .catch((err) => setCommitsError(err instanceof ApiError ? err.message : 'Could not load commits.'))
+      .finally(() => setCommitsLoading(false));
+  }, [api, id]);
+
+  useEffect(() => {
+    if (tab === 'commits') loadCommits();
+  }, [tab, loadCommits]);
 
   const runAction = async (action, fn) => {
     setBusy(action);
@@ -200,6 +251,20 @@ export function AppDetail() {
     await api.apps.update(id, { steps });
     toast.success('Steps saved — takes effect on the next deploy');
   });
+
+  const handleSaveRootDir = (rootDir) => {
+    if (rootDir === (app.rootDir ?? '')) return;
+    return runAction('rootDir', async () => {
+      await api.apps.update(id, { rootDir });
+      toast.success('Saved — redeploy to apply');
+    });
+  };
+
+  const handleToggleStaged = (enabled) =>
+    runAction('staged', async () => {
+      await api.apps.update(id, { stagedDeploys: enabled });
+      toast.success(enabled ? 'Staged deploys on' : 'Staged deploys off — deploys run in the live folder');
+    });
 
   const handleDelete = async () => {
     setBusy('delete');
@@ -281,7 +346,7 @@ export function AppDetail() {
       <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 
       <GlassCard variant="mid">
-        {tab === 'overview' ? <OverviewTab app={app} /> : null}
+        {tab === 'overview' ? <OverviewTab app={app} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} onToggleStaged={handleToggleStaged} togglingStaged={busy === 'staged'} /> : null}
         {tab === 'environment' ? (
           <div className="space-y-4">
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
@@ -297,16 +362,35 @@ export function AppDetail() {
             )}
           </div>
         ) : null}
-        {tab === 'logs' ? (
+        {tab === 'commits' ? (
           <div className="space-y-3">
             <div className="flex justify-end">
+              <Button size="sm" variant="ghost" loading={commitsLoading} onClick={loadCommits}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
+            <CommitHistory data={commits} loading={commitsLoading} error={commitsError} repoFullName={app.repoFullName} branch={app.branch} />
+          </div>
+        ) : null}
+        {tab === 'logs' ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <Tabs
+                tabs={[
+                  { value: 'out', label: 'Output' },
+                  { value: 'err', label: runtimeLogs.err ? 'Errors •' : 'Errors' },
+                ]}
+                value={logStream}
+                onChange={setLogStream}
+              />
               <Button size="sm" variant="ghost" loading={logsLoading} onClick={loadLogs}>
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
             </div>
             <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-black/40">
-              {runtimeLogs || 'No output yet.'}
+              {runtimeLogs[logStream] || (logStream === 'err' ? 'No errors logged.' : 'No output yet.')}
             </pre>
           </div>
         ) : null}
@@ -314,6 +398,14 @@ export function AppDetail() {
 
       <DeployDialog open={deployOpen} onClose={() => setDeployOpen(false)} app={app} />
       <DuplicateDialog open={duplicateOpen} onClose={() => setDuplicateOpen(false)} app={app} />
+      <RootDirModal
+        open={rootDirOpen}
+        onClose={() => setRootDirOpen(false)}
+        repoFullName={app.repoFullName}
+        branch={app.branch}
+        value={app.rootDir ?? ''}
+        onSelect={handleSaveRootDir}
+      />
       <ConfirmDialog
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}

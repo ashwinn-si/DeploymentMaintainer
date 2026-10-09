@@ -1,7 +1,6 @@
-import path from 'node:path';
 import { run as shellRun, tokenizeCommand } from '../services/shell.js';
 import { withNode } from '../services/node.js';
-import { portEnv } from '../lib/appEnv.js';
+import { portEnv, appWorkDir } from '../lib/appEnv.js';
 
 export const type = 'custom';
 
@@ -16,7 +15,7 @@ export async function run(ctx) {
     throw new Error('custom step is missing a command');
   }
 
-  const dir = state.appDir ?? path.join(config.APPS_DIR, app.name);
+  const dir = state.appDir ?? appWorkDir(config, app);
   const [bin, ...args] = tokenizeCommand(command);
   const [cmd, argv] = withNode(app.nodeVersion, bin, args);
 

@@ -53,7 +53,7 @@ export function Navbar({ deploying = false }) {
               onClick={() => setOpen(false)}
             />
             <motion.div
-              className="surface-overlay absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-[var(--premium-border)] shadow-2xl backdrop-blur-2xl"
+              className="surface-sidebar absolute inset-y-0 left-0 w-72 max-w-[85vw] rounded-r-3xl"
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={{ left: 0.4, right: 0 }}

@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Info,
+  BarChart3,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
@@ -35,6 +36,7 @@ const SERVER_NAV_GROUPS = [
     heading: 'This server',
     items: [
       { path: '/ports', label: 'Ports & routes', desc: 'Port and URL path per app', icon: Plug },
+      { path: '/analytics', label: 'Analytics', desc: 'Traffic per app', icon: BarChart3 },
       { path: '/server', label: 'Resources', desc: 'CPU, memory and disk', icon: Server },
       { path: '/settings', label: 'Server settings', desc: 'Connection, backup, cleanup', icon: Settings },
     ],
@@ -57,10 +59,10 @@ const DOT = {
 
 function navClass({ isActive }) {
   return [
-    'flex items-center gap-3 rounded-2xl transition-colors duration-200',
+    'flex items-center gap-3 rounded-2xl transition-all duration-200',
     isActive
-      ? 'bg-[var(--brand)] text-white font-semibold shadow-sm'
-      : 'text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5',
+      ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white font-semibold shadow-[0_8px_24px_-8px_rgba(251,146,60,.6)]'
+      : 'text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5',
   ].join(' ');
 }
 
@@ -131,7 +133,7 @@ function ServerSwitcher({ onNavigate, collapsed }) {
         <button
           type="button"
           onClick={() => navigate('/dashboard')}
-          className="flex h-10 w-10 items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] text-[var(--brand)] hover:bg-black/5 dark:hover:bg-white/10"
+          className="flex h-10 w-10 items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] text-[var(--brand)] transition-colors hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.04] dark:hover:bg-white/10"
         >
           <Server className="h-5 w-5" />
         </button>
@@ -188,9 +190,9 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
           ? SERVER_NAV_GROUPS.map((group) => (
               <div key={group.heading} className="space-y-1">
                 {!collapsed ? (
-                  <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{group.heading}</p>
+                  <p className="px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]/80">{group.heading}</p>
                 ) : (
-                  <div className="mx-auto my-2 h-px w-6 bg-[var(--premium-border)]" />
+                  <div className="mx-auto my-2 h-px w-6 bg-[var(--premium-border)] dark:bg-white/10" />
                 )}
                 {group.items.map((item) => (
                   <NavItem key={item.path} item={item} to={ctx.serverPath(item.path)} collapsed={collapsed} onNavigate={onNavigate} pulse={item.dot && deploying} />
@@ -200,8 +202,8 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
           : null}
       </nav>
 
-      <div className="mt-4 space-y-1 border-t border-[var(--premium-border)] pt-4">
-        {!collapsed ? <p className="px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Workspace</p> : null}
+      <div className="mt-4 space-y-1 border-t border-[var(--premium-border)] pt-4 dark:border-white/10">
+        {!collapsed ? <p className="px-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]/80">Workspace</p> : null}
         {ACCOUNT_NAV.map((item) => (
           <NavItem key={item.label} item={item} to={item.path} collapsed={collapsed} onNavigate={onNavigate} />
         ))}
@@ -210,11 +212,11 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
       <div className="mt-4 space-y-3">
         {!collapsed ? (
           <>
-            <div className="surface-inset flex items-center justify-between rounded-2xl border border-[var(--premium-border)] px-4 py-3 shadow-xs">
+            <div className="surface-inset flex items-center justify-between rounded-2xl border border-[var(--premium-border)] px-4 py-3 shadow-xs dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
               <span className="text-sm font-medium text-[var(--text-secondary)]">Theme</span>
               <ThemeToggle />
             </div>
-            <div className="surface-inset space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 shadow-xs">
+            <div className="surface-inset space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 shadow-xs dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
               <p className="truncate text-sm font-medium text-[var(--text-primary)]">{user?.email}</p>
               <button
                 type="button"
@@ -247,7 +249,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
 export function Sidebar({ deploying = false, collapsed = false, onToggleCollapse }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-20 hidden surface-overlay border-r border-[var(--premium-border)] lg:flex transition-all duration-300 ${
+      className={`fixed bottom-4 left-4 top-4 z-20 hidden overflow-hidden rounded-3xl surface-sidebar lg:flex transition-all duration-300 ${
         collapsed ? 'w-20' : 'w-72'
       }`}
     >

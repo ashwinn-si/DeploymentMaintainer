@@ -1,0 +1,16 @@
+# Rotation for the per-app Nginx access logs that feed the Analytics page.
+# Install: sudo cp deploy/logrotate-deployer-nginx /etc/logrotate.d/deployer-nginx
+# (see DEPLOYMENT.md 3.10b). The agent detects rotation by inode / size and carries on from the new file.
+/var/log/nginx/deployer/*.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 www-data ubuntu
+    sharedscripts
+    postrotate
+        [ -s /run/nginx.pid ] && kill -USR1 `cat /run/nginx.pid`
+    endscript
+}

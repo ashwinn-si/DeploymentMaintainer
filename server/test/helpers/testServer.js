@@ -13,12 +13,12 @@ import { connectTestDB } from './db.js';
 // which fetch() in tests would otherwise refuse with "bad port".
 const PORT_BASE = 7000 + (process.pid % 2000);
 
-export async function setupTestServer({ nginxEnabled = false } = {}) {
+export async function setupTestServer({ nginxEnabled = false, fixtureOptions } = {}) {
   await connectTestDB();
   const shims = await createShims();
   const restoreEnv = patchProcessEnv(shims);
 
-  const fixture = await createGitFixture();
+  const fixture = await createGitFixture(fixtureOptions);
   const appsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-apps-'));
   const nginxAppsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-nginx-'));
   const publishedDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'dm-published-'));

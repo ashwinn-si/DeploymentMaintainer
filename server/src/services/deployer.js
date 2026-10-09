@@ -1,3 +1,5 @@
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import App from '../models/App.js';
 import Deployment from '../models/Deployment.js';
 import { HttpError } from '../lib/httpError.js';
@@ -5,6 +7,23 @@ import { validateRef } from '../lib/validate.js';
 import { decryptAppEnv } from './crypto.js';
 import { createDeployLog, deployEvents } from './deployLog.js';
 import { REGISTRY, ALWAYS_INVOKE } from '../steps/index.js';
+import { readCurrentRelease, restoreCurrentRelease } from '../steps/publish.js';
+import { appWorkDir } from '../lib/appEnv.js';
+import * as pm2Service from './pm2.js';
+import { runSmokeTest } from './smoke.js';
+import { getFolderSizeBytes } from './system.js';
+import {
+  liveDir,
+  previousDir,
+  formatBytes,
+  assertDiskForStaging,
+  prepareStaging,
+  promoteStaging,
+  restorePrevious,
+  removeStaging,
+  removePrevious,
+  repairInterruptedSwap,
+} from './staging.js';
 
 const KEEP_DEPLOYMENTS_PER_APP = 50;
 const COMMON_ENV_VALUES = new Set([
@@ -95,8 +114,11 @@ async function pruneOldDeployments(appId) {
 
 // currentIndex is where the abort was observed; stepWasRunning distinguishes
 // "the step at currentIndex had already been marked running" from "we never got that far".
-async function handleCancellation(app, deployment, log, stepDefs, currentIndex, stepWasRunning, pm2Reached, previousAppStatus) {
+// `cleanup` (staged deploys, cancelled before the swap) removes the staging folder. A cancel after the swap keeps
+// today's behaviour: nothing is swapped back, and the log says the new version may already be live.
+async function handleCancellation(app, deployment, log, stepDefs, currentIndex, stepWasRunning, pm2Reached, previousAppStatus, cleanup = null) {
   const finishedAt = new Date();
+  if (cleanup) await cleanup();
 
   if (stepWasRunning) {
     const meta = deployment.steps[currentIndex];
@@ -140,10 +162,17 @@ async function finalizeSuccess(app, deployment, log) {
   return { autoRollback: null };
 }
 
-async function finalizeFailure(app, deployment, log, { error, pm2Reached, previousAppStatus, healthCheckFailure }) {
+// `restoredPrevious`: a staged deploy failed after the swap and the previous version is serving again, so the app
+// goes back to the status it had before the deploy and the rebuild-based auto-rollback is not needed.
+async function finalizeFailure(app, deployment, log, { error, pm2Reached, previousAppStatus, healthCheckFailure, restoredPrevious = false }) {
   const finishedAt = new Date();
-  await Deployment.updateOne({ _id: deployment._id }, { status: 'failed', error, finishedAt });
-  const newAppStatus = pm2Reached ? 'failed' : previousAppStatus;
+  const update = { status: 'failed', error, finishedAt };
+  if (restoredPrevious) {
+    update.restoredPrevious = true;
+    deployment.restoredPrevious = true;
+  }
+  await Deployment.updateOne({ _id: deployment._id }, update);
+  const newAppStatus = pm2Reached && !restoredPrevious ? 'failed' : previousAppStatus;
   await App.updateOne({ _id: app._id }, { status: newAppStatus });
   emitStatusEvent(deployment._id, 'failed', deployment.commitSha, error, finishedAt);
 
@@ -157,7 +186,7 @@ async function finalizeFailure(app, deployment, log, { error, pm2Reached, previo
   let autoRollback = null;
   // Never chain a rollback off a failed rollback — that would walk further and
   // further back through history instead of just leaving the last-known-good version up.
-  if (healthCheckFailure && deployment.mode !== 'rollback') {
+  if (healthCheckFailure && !restoredPrevious && deployment.mode !== 'rollback') {
     const hcConfig = app.steps.find((s) => s.type === 'healthCheck')?.config ?? {};
     const autoRollbackEnabled = hcConfig.autoRollback !== false;
     if (autoRollbackEnabled) {
@@ -176,7 +205,75 @@ async function finalizeFailure(app, deployment, log, { error, pm2Reached, previo
 // what make the app reachable at all, so failing them can't be papered over.
 const FORCEABLE_STEPS = new Set(['install', 'build', 'custom', 'healthCheck']);
 
+async function skipSteps(deployment, stepDefs, from) {
+  for (let j = from; j < stepDefs.length; j += 1) {
+    const meta = deployment.steps[j];
+    await setStepStatus(deployment._id, j, 'skipped');
+    emitStepEvent(deployment._id, meta.id, 'skipped');
+  }
+}
+
+async function dirExists(dir) {
+  try {
+    return (await fsp.stat(dir)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+// Staged deploy, failure after the swap: put the previous folder (and process / published release) back.
+// Returns true when the old version is serving again; false means the caller falls back to today's failure handling.
+async function restoreAfterPromote(app, config, deployment, log, state, previousAppStatus) {
+  const startedAt = Date.now();
+  const onLine = log.onLine(null);
+  try {
+    log.info('restoring the previous version…', null, { force: true });
+    const isStatic = app.kind === 'static';
+    // Stop the new process before its folder is swapped away.
+    if (!isStatic) await pm2Service.deleteQuiet(pm2Service.pm2Name(app.name), { onLine });
+    await restorePrevious(config, app.name);
+
+    if (isStatic) {
+      // The publish step already pointed `current` at the new release; point it back.
+      if (state.previousRelease && !(await restoreCurrentRelease(config, app.name, state.previousRelease))) {
+        throw new Error('the previous published release no longer exists');
+      }
+    } else if (previousAppStatus === 'stopped') {
+      log.info('the app was stopped before this deploy; leaving it stopped', null, { force: true });
+    } else {
+      const ecoPath = pm2Service.ecosystemPath(appWorkDir(config, app));
+      if (await pm2Service.readEcosystem(ecoPath)) {
+        log.cmd(`pm2 start ${ecoPath} --update-env`, null, { force: true });
+        await pm2Service.start(ecoPath, { onLine });
+        await pm2Service.save({ onLine });
+      } else {
+        log.error(`warning: ${ecoPath} not found in the restored version, so its process was not started`, null, { force: true });
+      }
+    }
+    log.info(
+      `restored the previous version (${deployment.previousSha ?? 'unknown commit'}) in ${Date.now() - startedAt}ms`,
+      null,
+      { force: true },
+    );
+    return true;
+  } catch (err) {
+    log.error(`could not restore the previous version: ${err.message}`, null, { force: true });
+    return false;
+  }
+}
+
 async function runPipeline(app, deployment, config, controller, opts, log) {
+  const state = {};
+  try {
+    return await runPipelineSteps(app, deployment, config, controller, opts, log, state);
+  } catch (err) {
+    // An internal error before the swap must not leave a half-built staging folder behind.
+    if (app.stagedDeploys !== false && !state.promoted) await removeStaging(config, app.name);
+    throw err;
+  }
+}
+
+async function runPipelineSteps(app, deployment, config, controller, opts, log, state) {
   const { branch: branchUsed, mode, sha, rollbackOf, env, previousAppStatus, force } = opts;
 
   log.info(`${app.name} — ${app.repoFullName}@${branchUsed} (${mode})`, null, { force: true });
@@ -187,12 +284,99 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
   }
 
   const stepDefs = app.steps;
-  const state = {};
   let pm2Reached = false;
+
+  // Staged deploys: everything before the first enabled pm2/publish step runs in `<name>.staging`; the folder is
+  // swapped in (after a smoke test for node apps) right before that step. `stagedDeploys: false` = in place.
+  const staged = app.stagedDeploys !== false;
+  const promoteIndex = staged
+    ? (() => {
+        const idx = stepDefs.findIndex((s) => (s.type === 'pm2' || s.type === 'publish') && s.enabled);
+        return idx === -1 ? stepDefs.length : idx;
+      })()
+    : -1;
+  const cancelCleanup = () => (staged && !state.promoted ? () => removeStaging(config, app.name) : null);
+
+  if (staged) {
+    try {
+      await assertDiskForStaging(config, app.name);
+    } catch (err) {
+      // Nothing has been touched yet: the live folder and process keep serving as they were.
+      log.error(err.message, null, { force: true });
+      await skipSteps(deployment, stepDefs, 0);
+      return finalizeFailure(app, deployment, log, {
+        error: err.message,
+        pm2Reached: false,
+        previousAppStatus,
+        healthCheckFailure: false,
+      });
+    }
+    state.repoDir = await prepareStaging(config, app.name);
+    if (mode !== 'fresh' && (await dirExists(liveDir(config, app.name)))) state.seedFrom = liveDir(config, app.name);
+    log.info(`staged deploy: building in ${path.basename(state.repoDir)}; the live version keeps serving until it passes`, null, { force: true });
+  }
+
+  // Runs once, right before the first pm2/publish step: smoke test, then swap staging in as the live folder.
+  // Returns an outcome to end the pipeline with, or null to carry on.
+  async function smokeAndPromote(i) {
+    const fail = async (error) => {
+      await removeStaging(config, app.name);
+      await skipSteps(deployment, stepDefs, i);
+      return finalizeFailure(app, deployment, log, { error, pm2Reached: false, previousAppStatus, healthCheckFailure: false });
+    };
+
+    const healthStep = stepDefs.find((s) => s.type === 'healthCheck' && s.enabled);
+    if (stepDefs[i]?.type === 'pm2' && app.kind !== 'static' && healthStep) {
+      const result = await runSmokeTest(app, {
+        config,
+        env,
+        binDir: state.binDir,
+        stagingPath: state.repoDir,
+        healthConfig: healthStep.config ?? {},
+        log,
+        signal: controller.signal,
+        stepId: deployment.steps[i].id,
+      });
+      if (controller.signal.aborted) {
+        return handleCancellation(app, deployment, log, stepDefs, i, false, false, previousAppStatus, cancelCleanup());
+      }
+      if (!result.ok) {
+        const message = `Smoke test failed: ${result.reason}`;
+        log.error(message, deployment.steps[i].id, { force: true });
+        if (!force) return fail(message);
+        log.info(`force deploy: ignoring the failed smoke test (${result.reason}) and promoting anyway`, null, { force: true });
+      }
+    }
+
+    if (stepDefs[i]?.type === 'publish') state.previousRelease = await readCurrentRelease(config, app.name);
+
+    let hadPrevious;
+    try {
+      ({ hadPrevious } = await promoteStaging(config, app.name));
+    } catch (err) {
+      log.error(`could not swap in the staged build: ${err.message}`, null, { force: true });
+      return fail(`Promoting the staged build failed: ${err.message}`);
+    }
+    state.repoDir = liveDir(config, app.name);
+    state.appDir = path.join(state.repoDir, app.rootDir || '');
+    state.promoted = true;
+    state.hadPrevious = hadPrevious;
+    log.info(
+      `promoted staged build (previous version kept at ${path.basename(previousDir(config, app.name))} until the deploy passes)`,
+      null,
+      { force: true },
+    );
+    return null;
+  }
 
   for (let i = 0; i < stepDefs.length; i += 1) {
     if (controller.signal.aborted) {
-      return handleCancellation(app, deployment, log, stepDefs, i, false, pm2Reached, previousAppStatus);
+      return handleCancellation(app, deployment, log, stepDefs, i, false, pm2Reached, previousAppStatus, cancelCleanup());
+    }
+
+    if (staged && !state.promoted && i === promoteIndex) {
+      const outcome = await smokeAndPromote(i);
+      if (outcome) return outcome;
     }
 
     const stepDef = stepDefs[i];
@@ -215,7 +399,7 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
       app, deployment, env, config, log,
       signal: controller.signal,
       state, step: stepDef, stepId: stepMeta.id,
-      branch: branchUsed, sha, fresh: mode === 'fresh',
+      branch: branchUsed, sha, fresh: mode === 'fresh', mode,
     };
 
     let result;
@@ -233,7 +417,7 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
 
     if (stepError) {
       if (controller.signal.aborted) {
-        return handleCancellation(app, deployment, log, stepDefs, i, true, pm2Reached, previousAppStatus);
+        return handleCancellation(app, deployment, log, stepDefs, i, true, pm2Reached, previousAppStatus, cancelCleanup());
       }
       const endedAt = new Date();
       await setStepStatus(deployment._id, i, 'failed', { endedAt });
@@ -243,11 +427,29 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
         log.info(`force deploy: ignoring failure of ${stepMeta.label} (${stepError.message}) and continuing`, stepMeta.id, { force: true });
         continue;
       }
+      const error = `${stepMeta.label} failed: ${stepError.message}`;
+
+      if (staged && !state.promoted) {
+        // The live folder and process were never touched: drop the staging folder, no rollback of any kind.
+        await removeStaging(config, app.name);
+        await skipSteps(deployment, stepDefs, i + 1);
+        return finalizeFailure(app, deployment, log, { error, pm2Reached: false, previousAppStatus, healthCheckFailure: false });
+      }
+
+      let restoredPrevious = false;
+      if (staged) {
+        await skipSteps(deployment, stepDefs, i + 1);
+        // Only a version that deployed successfully is worth swapping back to.
+        if (state.hadPrevious && deployment.previousSha) {
+          restoredPrevious = await restoreAfterPromote(app, config, deployment, log, state, previousAppStatus);
+        }
+      }
       return finalizeFailure(app, deployment, log, {
-        error: `${stepMeta.label} failed: ${stepError.message}`,
+        error,
         pm2Reached,
         previousAppStatus,
         healthCheckFailure: Boolean(stepError.healthCheckFailure),
+        restoredPrevious,
       });
     }
 
@@ -264,6 +466,25 @@ async function runPipeline(app, deployment, config, controller, opts, log) {
     log.info(`✔ ${stepMeta.label} (${endedAt.getTime() - startedAt.getTime()}ms)`, stepMeta.id, { force: true });
   }
 
+  // A pipeline with no pm2/publish step promotes once every step has passed.
+  if (staged && !state.promoted) {
+    const outcome = await smokeAndPromote(stepDefs.length);
+    if (outcome) return outcome;
+  }
+
+  if (staged && state.hadPrevious) {
+    // Every step, including the live health check, has passed: the old version has done its job (it only exists to
+    // be swapped back if something after the swap fails), so free its disk instead of keeping a second copy.
+    let bytes = null;
+    try {
+      bytes = await getFolderSizeBytes(previousDir(config, app.name));
+    } catch {
+      // size is informational only
+    }
+    if (await removePrevious(config, app.name)) {
+      log.info(`deleted the previous version${bytes === null ? '' : ` (freed ${formatBytes(bytes)})`}`, null, { force: true });
+    }
+  }
   return finalizeSuccess(app, deployment, log);
 }
 
@@ -425,9 +646,24 @@ export async function rollbackTo(deploymentId, config) {
   });
 }
 
-export async function recoverInterruptedDeployments() {
+// With `config`, also cleans up after the interrupted deploy's staged folders: a half-built `<name>.staging` is
+// removed, and a swap cut between its two renames (live folder missing, `.previous` present) is repaired.
+export async function recoverInterruptedDeployments(config = null) {
   const stuck = await Deployment.find({ status: { $in: ['queued', 'running'] } });
   await Promise.all(stuck.map(async (dep) => {
+    if (config) {
+      try {
+        const app = await App.findById(dep.appId).select('name stagedDeploys').lean();
+        if (app) {
+          if (app.stagedDeploys !== false && (await repairInterruptedSwap(config, app.name))) {
+            console.log(`deployer: restored ${app.name} from ${app.name}.previous after an interrupted swap`);
+          }
+          await removeStaging(config, app.name);
+        }
+      } catch (err) {
+        console.error(`deployer: staging cleanup failed for deployment ${dep._id}: ${err.message}`);
+      }
+    }
     const finishedAt = new Date();
     await Deployment.updateOne(
       { _id: dep._id },

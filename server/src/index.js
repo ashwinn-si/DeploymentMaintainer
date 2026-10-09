@@ -11,11 +11,13 @@ import { createNodeRouter } from './routes/node.js';
 import { createSystemRouter } from './routes/system.js';
 import { createSettingsRouter } from './routes/settings.js';
 import { createConfigIoRouter } from './routes/config-io.js';
+import { createAnalyticsRouter } from './routes/analytics.js';
 import { loadConfig } from './config.js';
 import { connectDB, disconnectDB } from './db.js';
 import { HttpError } from './lib/httpError.js';
 import { recoverInterruptedDeployments } from './services/deployer.js';
 import { startMonitor, stopMonitor } from './services/monitor.js';
+import { startAnalytics, stopAnalytics } from './services/analytics.js';
 
 export function createApp(config) {
   const app = express();
@@ -37,6 +39,7 @@ export function createApp(config) {
   app.use('/api/system', createSystemRouter(config));
   app.use('/api/settings', createSettingsRouter(config));
   app.use('/api/config', createConfigIoRouter(config));
+  app.use('/api/analytics', createAnalyticsRouter(config));
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -69,11 +72,12 @@ export async function main() {
   }
 
   await connectDB(config.MONGO_URI);
-  const recovered = await recoverInterruptedDeployments();
+  const recovered = await recoverInterruptedDeployments(config);
   if (recovered > 0) {
     console.log(`Recovered ${recovered} deployment(s) interrupted by a restart.`);
   }
   startMonitor(config);
+  startAnalytics(config);
 
   const app = createApp(config);
   const server = app.listen(config.PORT, () => {
@@ -87,6 +91,7 @@ export async function main() {
     shuttingDown = true;
     console.log(`${signal} received, shutting down...`);
     stopMonitor();
+    stopAnalytics();
     await new Promise((resolve) => {
       server.close(resolve);
       // Idle keep-alive sockets would otherwise hold close() open indefinitely.

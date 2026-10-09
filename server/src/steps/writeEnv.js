@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { validateEnvFilename } from '../lib/validate.js';
-import { portEnv } from '../lib/appEnv.js';
+import { portEnv, appWorkDir } from '../lib/appEnv.js';
 
 export const type = 'writeEnv';
 
@@ -23,7 +23,7 @@ function formatEnvValue(value) {
 export async function run(ctx) {
   const { app, env, config, log, state, step, stepId } = ctx;
   const filename = validateEnvFilename(step?.config?.filename || '.env');
-  const dir = state.appDir ?? path.join(config.APPS_DIR, app.name);
+  const dir = state.appDir ?? appWorkDir(config, app);
   const allVars = { ...env, ...portEnv(app) };
   const contents = `${Object.entries(allVars).map(([k, v]) => `${k}=${formatEnvValue(v)}`).join('\n')}\n`;
 
