@@ -3,6 +3,25 @@ import { auth, ApiError, onSessionExpired, isConnectionError } from '../api.js';
 
 const AuthContext = createContext(null);
 
+// Remembers (per browser) that someone signed in here, so the home route can skip the auth-check spinner
+// for first-time and signed-out visitors and show the landing page straight away.
+const HINT_KEY = 'dm:signed-in';
+export function hasSignedInHint() {
+  try {
+    return localStorage.getItem(HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+function setSignedInHint(on) {
+  try {
+    if (on) localStorage.setItem(HINT_KEY, '1');
+    else localStorage.removeItem(HINT_KEY);
+  } catch {
+    // storage unavailable; the hint is only an optimisation
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -13,9 +32,11 @@ export function AuthProvider({ children }) {
     try {
       const data = await auth.me();
       setUser(data.user);
+      setSignedInHint(true);
       setBackendDown(false);
     } catch (err) {
       setUser(null);
+      if (!isConnectionError(err)) setSignedInHint(false);
       setBackendDown(isConnectionError(err));
     }
   }, []);
@@ -24,11 +45,15 @@ export function AuthProvider({ children }) {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
 
-  useEffect(() => onSessionExpired(() => setUser(null)), []);
+  useEffect(() => onSessionExpired(() => {
+      setUser(null);
+      setSignedInHint(false);
+    }), []);
 
   const login = useCallback(async (email, password) => {
     const data = await auth.login(email, password);
     setUser(data.user);
+    setSignedInHint(true);
     return data.user;
   }, []);
 
@@ -39,6 +64,7 @@ export function AuthProvider({ children }) {
       // ignore network errors on logout, still clear local state
     }
     setUser(null);
+    setSignedInHint(false);
   }, []);
 
   return (
