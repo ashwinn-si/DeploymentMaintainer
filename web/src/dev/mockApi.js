@@ -272,7 +272,7 @@ function seedEntriesFor(dep) {
     push(step.id, 'info', `▶ ${step.label}`);
     if (step.type === 'gitSync') push(step.id, 'cmd', '$ git fetch origin ' + dep.branch);
     if (step.type === 'install') push(step.id, 'cmd', '$ npm ci');
-    if (step.type === 'pm2') push(step.id, 'cmd', '$ pm2 startOrReload ecosystem.config.cjs');
+    if (step.type === 'pm2') push(step.id, 'cmd', '$ pm2 start ecosystem.config.cjs --update-env');
     if (step.type === 'healthCheck') push(step.id, 'stdout', `GET /health → 200 (attempt 1)`);
     push(step.id, step.status === 'failed' ? 'stderr' : 'stdout', step.status === 'failed' ? 'Error: connect ECONNREFUSED' : 'ok');
     push(

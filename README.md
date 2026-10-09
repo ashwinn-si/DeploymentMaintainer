@@ -36,7 +36,7 @@ deployed apps through its own Nginx. Adding a server in the dashboard generates 
 - Manage many servers from one dashboard: add, rename, change URL, rotate a secret, remove; per-server
   status (online, offline, secret rejected) and a server switcher
 - GitHub repo/branch picker, per-app Node version (via [fnm](https://github.com/Schniz/fnm))
-- Configurable deploy pipeline: git sync, install, build, PM2 start, health check, Nginx routing,
+- Configurable deploy pipeline: git sync, install, build, PM2 start or restart, health check, Nginx routing,
   plus arbitrary custom steps
 - Three app types, auto-detected from the repo: Node servers (PM2), frontend apps (Vite, React, Astro... built then served by Nginx) and plain static HTML. Static types need no process or port and are served from `PUBLISHED_DIR`
 - Deploy any branch on demand (update in place or fresh re-clone); duplicate an app to run another branch side by side
@@ -106,7 +106,7 @@ plane on server 1, adding more servers, and deploying your first app.
 ## Known limitations
 
 - **Control plane shares server 1's box**: if server 1 is down, the dashboard is too, even though other servers keep running their apps.
-- **Changed start command on redeploy**: `pm2 startOrReload` doesn't apply a new start command to an already-running app. Delete and redeploy the app, or run `pm2 delete app-<name>` before redeploying. (Deferred; fix belongs in `server/src/services/pm2.js`.)
+- **Restart on update**: the PM2 step starts a new process on a new app or fresh deploy, and restarts the existing one on an update or rollback. If the start command, working directory or Node version changed since the last deploy, it deletes and recreates the process instead, so the new definition applies (the deploy log says which).
 - **Single process only**: the deploy lock is in memory, so never run the agent (or the control plane) in pm2 cluster mode or as multiple instances.
 - **Not yet verified on a real server**: pipeline tests use fake `pm2`/`fnm`/`sudo`, and several pages were only checked against the dev mock. Treat the first EC2 deploy as the integration test.
 - **Secrets**: app env is encrypted in MongoDB but written in plaintext (mode 600) to each app's `.env`, its `ecosystem.config.cjs`, and pm2's dump. Log redaction is best-effort: values shorter than 4 chars and common values like `true` or `production` aren't masked. Custom step commands run arbitrary code by design.

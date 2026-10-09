@@ -15,7 +15,7 @@ const LABELS = {
   writeEnv: 'Write environment file',
   install: 'Install dependencies',
   build: 'Build',
-  pm2: 'Start with PM2',
+  pm2: 'Start or restart with PM2',
   healthCheck: 'Health check',
   nginx: 'Nginx routing',
   publish: 'Publish static files',

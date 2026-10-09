@@ -37,6 +37,28 @@ export async function writeEcosystem(app, { env = {}, binDir, appsDir, startComm
   return filePath;
 }
 
+// Parses an ecosystem file written by writeEcosystem and returns its first app, or null if missing/unparseable.
+export async function readEcosystem(filePath) {
+  try {
+    const text = await fs.readFile(filePath, 'utf8');
+    const json = text.trim().replace(/^module\.exports\s*=\s*/, '').replace(/;$/, '');
+    return JSON.parse(json).apps?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Compares two ecosystem app definitions; returns a short reason when they differ (null if equivalent).
+export function describeDefinitionChange(prev, next) {
+  if (!prev || !next) return 'previous definition unavailable';
+  if (prev.script !== next.script || JSON.stringify(prev.args ?? []) !== JSON.stringify(next.args ?? [])) {
+    return 'start command changed';
+  }
+  if (prev.cwd !== next.cwd) return 'working directory changed';
+  if (prev.env?.PATH !== next.env?.PATH) return 'node version changed';
+  return null;
+}
+
 async function pm2(args, options = {}) {
   const result = await run('pm2', args, options);
   if (result.code !== 0) {
@@ -49,12 +71,22 @@ export function startOrReload(ecoPath, options) {
   return pm2(['startOrReload', ecoPath, '--update-env'], options);
 }
 
+export function start(ecoPath, options) {
+  return pm2(['start', ecoPath, '--update-env'], options);
+}
+
 export function stop(name, options) {
   return pm2(['stop', name], options);
 }
 
 export function restart(name, options) {
   return pm2(['restart', name], options);
+}
+
+// Restarting by ecosystem file re-reads its env block (a plain `restart <name> --update-env` would
+// inject the dashboard's own environment into the app instead).
+export function restartFromEcosystem(ecoPath, options) {
+  return pm2(['restart', ecoPath, '--update-env'], options);
 }
 
 export function remove(name, options) {

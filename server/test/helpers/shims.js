@@ -97,16 +97,8 @@ function waitForDeath(pid, timeoutMs) {
 
 const [sub, ...rest] = args;
 
-if (sub === 'startOrReload') {
-  const ecoPath = rest[0];
-  delete require.cache[require.resolve(ecoPath)];
-  const cfg = require(ecoPath);
-  const appCfg = cfg.apps[0];
-
-  // Real pm2 stops the old process before starting the new one; without this a
-  // crashing new version can be masked by the still-running previous process.
-  const preState = readState();
-  const previous = preState[appCfg.name];
+// Kills the recorded pid (if alive) and waits for it to exit.
+function killPrevious(previous) {
   if (previous && previous.pid && isAlive(previous.pid)) {
     try {
       process.kill(previous.pid, 'SIGKILL');
@@ -115,6 +107,17 @@ if (sub === 'startOrReload') {
     }
     waitForDeath(previous.pid, 2000);
   }
+}
+
+// Spawns the first app in the ecosystem file and records it (with ecoPath, so restart can re-read it).
+function spawnFromEcosystem(ecoPath, previous) {
+  delete require.cache[require.resolve(ecoPath)];
+  const cfg = require(ecoPath);
+  const appCfg = cfg.apps[0];
+
+  // Real pm2 stops the old process before starting the new one; without this a
+  // crashing new version can be masked by the still-running previous process.
+  killPrevious(previous || readState()[appCfg.name]);
 
   const child = spawn(appCfg.script, appCfg.args || [], {
     cwd: appCfg.cwd,
@@ -124,14 +127,20 @@ if (sub === 'startOrReload') {
   });
   child.unref();
   const state = readState();
-  const prevRestartTime = previous?.pm2_env?.restart_time ?? -1;
+  const prevRestartTime = (previous || state[appCfg.name])?.pm2_env?.restart_time ?? -1;
   state[appCfg.name] = {
     name: appCfg.name,
     pid: child.pid,
+    ecoPath,
     pm2_env: { status: 'online', restart_time: prevRestartTime + 1 },
   };
   writeState(state);
-  process.stdout.write('started ' + appCfg.name + ' pid ' + child.pid + '\\n');
+  return { name: appCfg.name, pid: child.pid };
+}
+
+if (sub === 'startOrReload' || sub === 'start') {
+  const started = spawnFromEcosystem(rest[0]);
+  process.stdout.write('started ' + started.name + ' pid ' + started.pid + '\\n');
   process.exit(0);
 }
 
@@ -161,11 +170,15 @@ if (sub === 'stop' || sub === 'delete') {
 }
 
 if (sub === 'restart') {
-  const name = rest[0];
-  const state = readState();
-  if (state[name]) {
-    state[name].pm2_env.restart_time = (state[name].pm2_env.restart_time || 0) + 1;
-    writeState(state);
+  // Restart accepts a process name or an ecosystem file path (the deploy step uses the latter).
+  let name = rest[0];
+  if (name.endsWith('.cjs')) name = require(name).apps[0].name;
+  const proc = readState()[name];
+  if (proc && proc.ecoPath) {
+    // Real "restart --update-env" re-reads the caller's env, not the ecosystem file; the shim
+    // re-reads the stored ecosystem file so a redeploy's changed env/command is picked up.
+    const started = spawnFromEcosystem(proc.ecoPath, proc);
+    process.stdout.write('restarted ' + started.name + ' pid ' + started.pid + '\\n');
   }
   process.exit(0);
 }
