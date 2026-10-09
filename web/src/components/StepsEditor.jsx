@@ -21,14 +21,13 @@ const LABELS = {
   publish: 'Publish static files',
 };
 
-function healthPrompt(path, port) {
-  const portText = port ? `port ${port} (read it from process.env.PORT)` : 'the port in process.env.PORT';
-  return `Add a health endpoint to this app: GET ${path} must respond with HTTP 200 (e.g. { "status": "ok" }) without needing auth or a database. Make sure the server listens on ${portText}, so the deployer can reach http://127.0.0.1:<port>${path}.`;
+function healthPrompt(path) {
+  return `Add a health endpoint to this app: GET ${path} must respond with HTTP 200 (e.g. { "status": "ok" }) without needing auth, a database, CORS or any other dependency, so external services can call it.`;
 }
 
 function HealthEndpointHint({ path, port }) {
   const [copied, setCopied] = useState(false);
-  const prompt = healthPrompt(path || '/health', port);
+  const prompt = healthPrompt(path || '/health');
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(prompt);
