@@ -1,10 +1,9 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
 import { lazyWithReload } from './lib/lazyWithReload.js';
 import { Routes, Route, Outlet, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { onSessionExpired } from './api.js';
 import { RequireAuth } from './components/RequireAuth.jsx';
-import { useAuth, hasSignedInHint } from './context/AuthContext.jsx';
 import { AppShell } from './components/layout/AppShell.jsx';
 import { Loader } from './components/ui/Loader.jsx';
 import { ServersProvider } from './context/ServersContext.jsx';
@@ -35,34 +34,6 @@ function PageFallback() {
   );
 }
 
-// "/" is the public landing page for visitors and the server list for signed-in users.
-function HomeGate() {
-  const { user, loading } = useAuth();
-  const [waitedTooLong, setWaitedTooLong] = useState(false);
-  // Only returning users get the spinner; everyone else sees the landing page immediately.
-  const [expectSignedIn] = useState(hasSignedInHint);
-
-  // Signed-in users get a brief spinner instead of a flash of the landing page. But if the backend is slow
-  // or hung, show the landing page rather than an endless spinner; it switches to the dashboard if you are signed in.
-  useEffect(() => {
-    if (!loading) return undefined;
-    const t = setTimeout(() => setWaitedTooLong(true), 1500);
-    return () => clearTimeout(t);
-  }, [loading]);
-
-  if (loading && expectSignedIn && !waitedTooLong) return <PageFallback />;
-  if (!user) {
-    return (
-      <About />
-    );
-  }
-  return (
-    <ServersProvider>
-      <AppShell />
-    </ServersProvider>
-  );
-}
-
 function Lazy({ children }) {
   return <Suspense fallback={<PageFallback />}>{children}</Suspense>;
 }
@@ -82,15 +53,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={<HomeGate />}>
-        <Route index element={<Servers />} />
-      </Route>
-      <Route
-        path="/about"
-        element={
-          <About />
-        }
-      />
+      <Route path="/" element={<About />} />
+      <Route path="/about" element={<About />} />
       <Route
         element={
           <RequireAuth>
@@ -101,6 +65,7 @@ export default function App() {
         }
       >
         <Route element={<AppShell />}>
+          <Route path="/dashboard" element={<Servers />} />
           <Route
             path="/settings"
             element={

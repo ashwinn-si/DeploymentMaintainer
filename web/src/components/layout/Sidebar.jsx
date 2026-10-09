@@ -42,7 +42,7 @@ const SERVER_NAV_GROUPS = [
 ];
 
 const ACCOUNT_NAV = [
-  { path: '/', label: 'All servers', desc: 'Switch or add servers', icon: Layers, end: true },
+  { path: '/dashboard', label: 'All servers', desc: 'Switch or add servers', icon: Layers, end: true },
   { path: '/settings', label: 'Account', desc: 'Your login and password', icon: UserCog },
   { path: '/about', label: 'About', desc: 'The project, GitHub, developer', icon: Info },
 ];
@@ -121,7 +121,7 @@ function ServerSwitcher({ onNavigate, collapsed }) {
 
   const handleChange = (value) => {
     onNavigate?.();
-    if (value === ALL_SERVERS) navigate('/');
+    if (value === ALL_SERVERS) navigate('/dashboard');
     else if (value !== ctx?.server.id) navigate(`/s/${value}`);
   };
 
@@ -130,7 +130,7 @@ function ServerSwitcher({ onNavigate, collapsed }) {
       <div className="mb-4 flex justify-center" title={`Current Server: ${ctx?.server.name || 'Select Server'}`}>
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/dashboard')}
           className="flex h-10 w-10 items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] text-[var(--brand)] hover:bg-black/5 dark:hover:bg-white/10"
         >
           <Server className="h-5 w-5" />
@@ -159,7 +159,7 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
   return (
     <div className={`flex h-full flex-col transition-all duration-300 ${collapsed ? 'p-3' : 'p-6'}`}>
       <div className={`mb-6 flex items-center justify-between gap-2 ${collapsed ? 'px-0 flex-col gap-3' : 'px-1'}`}>
-        <Link to="/" onClick={onNavigate} aria-label="Go to home" className="flex items-center gap-2">
+        <Link to="/dashboard" onClick={onNavigate} aria-label="Go to dashboard" className="flex items-center gap-2">
           <Logo className="h-9 w-auto shrink-0" />
           {!collapsed ? (
             <span className="font-heading text-lg leading-tight">

@@ -25,7 +25,7 @@ const DEV = {
 // Guests are sent to sign in; signed-in users go straight to their servers.
 function useDashboardPath() {
   const { user } = useAuth();
-  return user ? '/' : '/login';
+  return user ? '/dashboard' : '/login';
 }
 
 const CLONE_CMD = `git clone ${REPO_URL}.git`;

@@ -92,7 +92,7 @@ export function ServerLayout() {
           </p>
           <div className="flex flex-col gap-2">
             {notFound ? null : <Button onClick={load}>Retry</Button>}
-            <Link to="/">
+            <Link to="/dashboard">
               <Button variant={notFound ? 'primary' : 'ghost'} className="w-full">
                 Back to Servers
               </Button>

@@ -25,7 +25,7 @@ export function Login() {
     try {
       await login(email, password);
       const next = searchParams.get('next');
-      navigate(next && next.startsWith('/') ? next : '/', { replace: true });
+      navigate(next && next.startsWith('/') ? next : '/dashboard', { replace: true });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Something went wrong. Try again.';
       setError(message);
