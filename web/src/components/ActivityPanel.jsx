@@ -97,9 +97,9 @@ export function ActivityPanel({ active = [] }) {
     let cancelled = false;
     async function load() {
       try {
-        const data = await api.deployments.list({ limit: 10 });
+        const data = await api.deployments.list({ limit: 30 });
         if (!cancelled) {
-          setFinished(data.deployments.filter((d) => d.status !== 'running' && d.status !== 'queued').slice(0, 10));
+          setFinished(data.deployments.filter((d) => d.status !== 'running' && d.status !== 'queued').slice(0, 30));
         }
       } catch {
         // leave previous list on error
@@ -141,7 +141,7 @@ export function ActivityPanel({ active = [] }) {
       ) : null}
 
       {finished.length > 0 ? (
-        <div className="space-y-2">{finished.map((d) => <FinishedRow key={d.id} deployment={d} />)}</div>
+        <div className="custom-scrollbar max-h-[28rem] space-y-2 overflow-y-auto pr-1">{finished.map((d) => <FinishedRow key={d.id} deployment={d} />)}</div>
       ) : active.length === 0 ? (
         <EmptyState icon={Rocket} title="No activity yet" description="Deployments will show up here as they happen." />
       ) : null}
