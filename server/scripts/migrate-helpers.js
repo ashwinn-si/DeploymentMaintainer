@@ -4,9 +4,20 @@ import { fileURLToPath } from 'node:url';
 
 const BACKUP_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'backups');
 
+// Splits MONGO_URI into the server part and the database name migrate-mongo wants separately.
+export function parseMongoUri(uri) {
+  const match = /^(mongodb(?:\+srv)?:\/\/[^/]+)\/([^/?]+)/.exec(uri ?? '');
+  if (!match) {
+    throw new Error('MONGO_URI must look like mongodb://host:27017/<database> to run migrations');
+  }
+  return { url: uri, databaseName: match[2] };
+}
+
 // Writes every document of `collectionName` to backups/<timestamp>-<label>.json before a migration touches it.
 // Returns the file path (or null for an empty collection, which has nothing to lose).
+// A dry run (MIGRATE_DRY_RUN=1) works on a throwaway copy of the data, so it never writes a backup: returns null.
 export async function backupCollection(db, collectionName, label) {
+  if (process.env.MIGRATE_DRY_RUN === '1') return null;
   const docs = await db.collection(collectionName).find({}).toArray();
   if (docs.length === 0) return null;
   await fs.mkdir(BACKUP_DIR, { recursive: true });

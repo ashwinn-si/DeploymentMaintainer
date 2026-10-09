@@ -11,6 +11,9 @@ export async function up(db) {
   await backfill(db, 'apps', { stagedDeploys: { $exists: false } }, { $set: { stagedDeploys: true } });
 }
 
+// Only reverts what `up` backfilled (the default values), so a later `up` can't lose settings users chose since:
+// an app with a real rootDir or stagedDeploys: false keeps it.
 export async function down(db) {
-  await db.collection('apps').updateMany({}, { $unset: { rootDir: '', stagedDeploys: '' } });
+  await db.collection('apps').updateMany({ rootDir: '' }, { $unset: { rootDir: '' } });
+  await db.collection('apps').updateMany({ stagedDeploys: true }, { $unset: { stagedDeploys: '' } });
 }

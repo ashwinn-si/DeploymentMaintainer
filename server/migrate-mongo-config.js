@@ -1,13 +1,5 @@
 import 'dotenv/config';
-
-// Splits MONGO_URI into the server part and the database name migrate-mongo wants separately.
-function parseMongoUri(uri) {
-  const match = /^(mongodb(?:\+srv)?:\/\/[^/]+)\/([^/?]+)/.exec(uri ?? '');
-  if (!match) {
-    throw new Error('MONGO_URI must look like mongodb://host:27017/<database> to run migrations');
-  }
-  return { url: uri, databaseName: match[2] };
-}
+import { parseMongoUri } from './scripts/migrate-helpers.js';
 
 const { url, databaseName } = parseMongoUri(process.env.MONGO_URI);
 

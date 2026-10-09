@@ -11,6 +11,7 @@
     "start": "node src/index.js",
     "seed": "node scripts/seed.js",
     "clear-db": "node scripts/clear-db.js",
+    "drift:check": "node scripts/drift-check.js",
     "test": "node --test test/"
   },
   "dependencies": {

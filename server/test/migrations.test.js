@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { config as migrateConfig, database, up, down, status } from 'migrate-mongo';
 import { loadConfig } from '../src/config.js';
-import { backfill, backupCollection } from '../scripts/migrate-helpers.js';
+import { backfill, backupCollection, parseMongoUri } from '../scripts/migrate-helpers.js';
 
 // Runs real migrate-mongo against a throwaway database and a temp migrations folder.
 // `migrationsDir` points migrate-mongo at an existing folder (the real server/migrations) instead of a temp one.
@@ -136,11 +136,17 @@ test('the real app-root-dir-and-staged-deploys migration backfills legacy apps, 
     assert.deepEqual(await apps.find({}).sort({ name: 1 }).toArray(), afterFirst, 'a second run changes nothing');
 
     await migration.down(db);
-    for (const doc of await apps.find({}).toArray()) {
-      assert.equal(doc.rootDir, undefined, `${doc.name} rootDir removed`);
-      assert.equal(doc.stagedDeploys, undefined, `${doc.name} stagedDeploys removed`);
-      assert.ok(doc.repoFullName, `${doc.name} keeps its other fields`);
+    // Only the backfilled defaults are reverted; values users chose are kept.
+    for (const name of ['legacy-a', 'legacy-b']) {
+      const doc = await byName(name);
+      assert.equal(doc.rootDir, undefined, `${name} rootDir removed`);
+      assert.equal(doc.stagedDeploys, undefined, `${name} stagedDeploys removed`);
+      assert.ok(doc.repoFullName, `${name} keeps its other fields`);
     }
+    assert.equal((await byName('modern')).rootDir, 'apps/web');
+    assert.equal((await byName('modern')).stagedDeploys, false);
+    assert.equal((await byName('half')).stagedDeploys, false);
+    assert.equal((await byName('half')).rootDir, undefined, 'half only had the default rootDir backfilled');
   }));
 });
 
@@ -165,7 +171,7 @@ test('migrate-mongo discovers and applies the real migrations folder', async () 
 
 // --- request-stat-indexes ------------------------------------------------------------------
 
-const STATS_MIGRATION = '20261010000000-request-stat-indexes.js';
+const STATS_MIGRATION = '20261009000100-request-stat-indexes.js';
 
 async function indexNames(db, collection) {
   return (await db.collection(collection).indexes()).map((i) => i.name);
@@ -214,4 +220,32 @@ test('migrate-mongo applies the request-stat-indexes migration from the real fol
     assert.ok(applied.includes(STATS_MIGRATION));
     assert.ok((await indexNames(db, 'requeststats')).includes('expireAt_1'));
   }, { migrationsDir: REAL_MIGRATIONS_DIR }));
+});
+
+// --- dry run support -------------------------------------------------------------------------
+
+test('backupCollection is a no-op returning null while MIGRATE_DRY_RUN=1', async () => {
+  await withMigrationEnv({}, async ({ db }) => {
+    await db.collection('apps').insertMany([{ name: 'a' }, { name: 'b' }]);
+    const before = new Set(await fs.readdir(BACKUPS_DIR).catch(() => []));
+    const previous = process.env.MIGRATE_DRY_RUN;
+    process.env.MIGRATE_DRY_RUN = '1';
+    try {
+      assert.equal(await backupCollection(db, 'apps', 'unit-test-dry-run'), null);
+    } finally {
+      if (previous === undefined) delete process.env.MIGRATE_DRY_RUN;
+      else process.env.MIGRATE_DRY_RUN = previous;
+    }
+    assert.deepEqual(new Set(await fs.readdir(BACKUPS_DIR).catch(() => [])), before, 'no backup file was written');
+  });
+});
+
+test('parseMongoUri splits the server url from the database name', () => {
+  assert.deepEqual(parseMongoUri('mongodb://127.0.0.1:27017/deployment_maintainer?retryWrites=true'), {
+    url: 'mongodb://127.0.0.1:27017/deployment_maintainer?retryWrites=true',
+    databaseName: 'deployment_maintainer',
+  });
+  assert.equal(parseMongoUri('mongodb+srv://u:p@cluster.example.net/prod').databaseName, 'prod');
+  assert.throws(() => parseMongoUri('mongodb://127.0.0.1:27017'), /MONGO_URI must look like/);
+  assert.throws(() => parseMongoUri(undefined), /MONGO_URI must look like/);
 });

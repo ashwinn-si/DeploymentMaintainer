@@ -15,8 +15,10 @@
     "migrate:up": "migrate-mongo up",
     "migrate:down": "migrate-mongo down",
     "migrate:create": "migrate-mongo create",
+    "migrate:dry-run": "node scripts/migrate-dry-run.js",
     "drift:snapshot": "mongoose-drift snapshot -p server --version",
-    "drift:diff": "mongoose-drift diff -p server"
+    "drift:diff": "mongoose-drift diff -p server",
+    "drift:check": "node scripts/drift-check.js"
   },
   "dependencies": {
     "dotenv": "^18.0.4",
