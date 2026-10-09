@@ -51,6 +51,7 @@ const patchAppSchema = z.object({
   nodeVersion: z.string().min(1).optional(),
   env: z.array(envEntrySchema).optional(),
   steps: z.array(stepInputSchema).optional(),
+  stagedDeploys: z.boolean().optional(),
 });
 
 const deleteAppSchema = z.object({ confirmName: z.string() });
@@ -233,6 +234,9 @@ export function createAppsRouter(config) {
       const steps = normalizeSteps(body.steps, { kind: app.kind });
       await assertRoutePathFree(app.name, steps, { excludeId: app._id });
       app.steps = steps;
+    }
+    if (body.stagedDeploys !== undefined) {
+      app.stagedDeploys = body.stagedDeploys;
     }
 
     await app.save();

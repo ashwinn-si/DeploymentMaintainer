@@ -10,7 +10,8 @@ export function label() {
 export async function run(ctx) {
   const { app, config, log, signal, state, stepId, branch, sha, fresh } = ctx;
   const targetBranch = branch ?? app.branch;
-  const dir = path.join(config.APPS_DIR, app.name);
+  // The deployer pre-sets state.appDir to the staging dir for staged deploys.
+  const dir = state.appDir ?? path.join(config.APPS_DIR, app.name);
 
   log.cmd(`git sync ${app.repoFullName}@${targetBranch}${sha ? ` -> ${sha}` : ''}`, stepId);
   const resolvedSha = await syncRepo({
@@ -19,6 +20,7 @@ export async function run(ctx) {
     branch: targetBranch,
     sha,
     fresh: Boolean(fresh),
+    seedFrom: state.seedFrom,
     config,
     onLine: log.onLine(stepId),
     signal,

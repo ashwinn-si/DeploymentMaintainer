@@ -12,26 +12,27 @@ export function ecosystemPath(appsDir, appName) {
   return path.join(appsDir, appName, ECOSYSTEM_FILENAME);
 }
 
-export async function writeEcosystem(app, { env = {}, binDir, appsDir, startCommand }) {
+// dir/name/port/filename override the live-app defaults so a staged build can be run as a throwaway process.
+export async function writeEcosystem(app, { env = {}, binDir, appsDir, startCommand, dir, name, port, filename }) {
   const [script, ...args] = tokenizeCommand(startCommand || 'npm start');
-  const appDir = path.join(appsDir, app.name);
+  const appDir = dir ?? path.join(appsDir, app.name);
   const pathPrefix = binDir ? `${binDir}${path.delimiter}` : '';
 
   const ecosystem = {
     apps: [
       {
-        name: pm2Name(app.name),
+        name: name ?? pm2Name(app.name),
         script,
         args,
         interpreter: 'none',
         cwd: appDir,
-        env: { ...env, PORT: String(app.port), PATH: `${pathPrefix}${process.env.PATH ?? ''}` },
+        env: { ...env, PORT: String(port ?? app.port), PATH: `${pathPrefix}${process.env.PATH ?? ''}` },
         autorestart: true,
       },
     ],
   };
 
-  const filePath = ecosystemPath(appsDir, app.name);
+  const filePath = filename ? path.join(appDir, filename) : ecosystemPath(appsDir, app.name);
   await fs.writeFile(filePath, `module.exports = ${JSON.stringify(ecosystem, null, 2)};\n`, { mode: 0o600 });
   return filePath;
 }
@@ -58,6 +59,15 @@ export function restart(name, options) {
 
 export function remove(name, options) {
   return pm2(['delete', name], options);
+}
+
+// Delete that treats an unknown process as success (teardown paths must not fail on it).
+export async function deleteQuiet(name, options) {
+  try {
+    await remove(name, options);
+  } catch (err) {
+    if (!/not (found|exist)|doesn't exist/i.test(err.message)) throw err;
+  }
 }
 
 export function save(options) {

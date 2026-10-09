@@ -14,8 +14,10 @@ export function isPortFree(port) {
   });
 }
 
-export async function allocatePort(config) {
+// `exclude` lets callers (e.g. the staged-deploy smoke test) reserve ports that aren't in the DB yet.
+export async function allocatePort(config, { exclude = [] } = {}) {
   const used = new Set((await App.find({}, 'port').lean()).map((a) => a.port));
+  for (const port of exclude) used.add(port);
   for (let port = config.APP_PORT_START; port <= MAX_PORT; port += 1) {
     if (!used.has(port) && (await isPortFree(port))) {
       return port;

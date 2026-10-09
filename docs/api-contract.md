@@ -91,6 +91,7 @@ One per managed server. Served by `server/` on `:3000` behind Nginx on that serv
 ```ts
 AppSummary = {
   id, name, repoFullName, branch, port, nodeVersion,
+  stagedDeploys: boolean,         // true (default): build/test in <name>.staging and swap in only on success; false: deploy in place
   path: string | null,            // nginx path if nginx step enabled, else null ("localhost only")
   status: 'not_deployed'|'deploying'|'online'|'stopped'|'failed',
   pm2: { status: string|null, cpu: number|null, memory: number|null /*bytes*/, restarts: number|null, uptimeMs: number|null } ,
@@ -126,7 +127,7 @@ Paths below are relative to `/api` on the agent.
 - `GET /apps/defaults?name=` → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
 - `POST /apps` body `{ name, repoFullName, branch, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
 - `GET /apps/:id` → `{ app: AppDetail }`
-- `PATCH /apps/:id` body any of `{ branch, port, nodeVersion, env, steps }` → `{ app: AppDetail }` (name immutable)
+- `PATCH /apps/:id` body any of `{ branch, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable)
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
 - `POST /apps/:id/duplicate` body `{ name, branch, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)

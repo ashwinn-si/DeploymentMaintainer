@@ -43,6 +43,8 @@ const appSchema = new mongoose.Schema(
     health: { type: healthSchema, default: () => ({}) },
     currentCommitSha: { type: String, default: null },
     lastDeployedAt: { type: Date, default: null },
+    // Build/test in a separate folder and swap it in only on success; off = deploy in place.
+    stagedDeploys: { type: Boolean, default: true },
     // Atomically incremented (findOneAndUpdate $inc) to hand out per-app deployment numbers.
     deploySeq: { type: Number, default: 0 },
   },

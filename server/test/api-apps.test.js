@@ -103,6 +103,30 @@ test('create, get, patch, list an app', async () => {
   }
 });
 
+test('stagedDeploys defaults to true and can be turned off via PATCH', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, { name: 'staged-app', port: config.APP_PORT_START + 70, steps: stepsFor('staged-app') }));
+    assert.equal(createRes.status, 201, JSON.stringify(createRes.body));
+    assert.equal(createRes.body.app.stagedDeploys, true);
+
+    const patchRes = await agent.patch(`/api/apps/${createRes.body.app.id}`).send({ stagedDeploys: false });
+    assert.equal(patchRes.status, 200, JSON.stringify(patchRes.body));
+    assert.equal(patchRes.body.app.stagedDeploys, false);
+
+    const getRes = await agent.get(`/api/apps/${createRes.body.app.id}`);
+    assert.equal(getRes.body.app.stagedDeploys, false);
+
+    const bad = await agent.patch(`/api/apps/${createRes.body.app.id}`).send({ stagedDeploys: 'nope' });
+    assert.equal(bad.status, 400);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
 test('GET /apps/defaults returns steps, a free port and the server default node version', async () => {
   const server = await setupTestServer();
   try {
