@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { validateStaticDir } from '../lib/validate.js';
+import { appWorkDir } from '../lib/appEnv.js';
 
 export const type = 'publish';
 
@@ -119,7 +120,7 @@ export async function run(ctx) {
   const configured = step?.config?.staticDir || '.';
   validateStaticDir(configured);
 
-  const appDir = path.resolve(config.APPS_DIR, app.name);
+  const appDir = path.resolve(appWorkDir(config, app));
   const buildEnabled = Boolean(app.steps?.some((s) => s.type === 'build' && s.enabled));
   const staticDir = await resolveStaticDir(appDir, configured, { buildEnabled });
   if (staticDir !== configured) log.info(`auto-detected output directory: ${staticDir}`, stepId);

@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { config as migrateConfig, database, up, down, status } from 'migrate-mongo';
 import { loadConfig } from '../src/config.js';
 import { backfill, backupCollection } from '../scripts/migrate-helpers.js';
 
 // Runs real migrate-mongo against a throwaway database and a temp migrations folder.
-async function withMigrationEnv(files, fn) {
+// `migrationsDir` points migrate-mongo at an existing folder (the real server/migrations) instead of a temp one.
+async function withMigrationEnv(files, fn, { migrationsDir } = {}) {
   const mongoUri = loadConfig({ require: ['MONGO_URI'] }).MONGO_URI;
   const databaseName = `dm_migrate_test_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'dm-migrations-'));
@@ -16,7 +18,7 @@ async function withMigrationEnv(files, fn) {
 
   migrateConfig.set({
     mongodb: { url: mongoUri, databaseName },
-    migrationsDir: dir,
+    migrationsDir: migrationsDir ?? dir,
     changelogCollectionName: 'migrations_changelog',
     migrationFileExtension: '.js',
     useFileHash: false,
@@ -78,4 +80,85 @@ test('backupCollection writes every document to a json file, and skips empty col
       await fs.rm(file, { force: true });
     }
   });
+});
+
+// --- the real migrations ------------------------------------------------------------
+
+const SERVER_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REAL_MIGRATIONS_DIR = path.join(SERVER_DIR, 'migrations');
+const BACKUPS_DIR = path.join(SERVER_DIR, 'backups');
+const ROOT_DIR_MIGRATION = '20261009000000-app-root-dir-and-staged-deploys.js';
+
+// The migration backs the collection up into server/backups; remove only what a test run added.
+async function withBackupCleanup(fn) {
+  const before = new Set(await fs.readdir(BACKUPS_DIR).catch(() => []));
+  try {
+    await fn();
+  } finally {
+    for (const name of await fs.readdir(BACKUPS_DIR).catch(() => [])) {
+      if (!before.has(name)) await fs.rm(path.join(BACKUPS_DIR, name), { force: true });
+    }
+  }
+}
+
+function legacyApps() {
+  // Shaped like documents written before rootDir / stagedDeploys existed, plus ones that already have them.
+  return [
+    { name: 'legacy-a', repoFullName: 'me/a', branch: 'main', port: 4001 },
+    { name: 'legacy-b', repoFullName: 'me/b', branch: 'main', port: 4002 },
+    { name: 'modern', repoFullName: 'me/c', branch: 'main', port: 4003, rootDir: 'apps/web', stagedDeploys: false },
+    { name: 'half', repoFullName: 'me/d', branch: 'main', port: 4004, stagedDeploys: false },
+  ];
+}
+
+test('the real app-root-dir-and-staged-deploys migration backfills legacy apps, is idempotent and reverts', async () => {
+  await withBackupCleanup(() => withMigrationEnv({}, async ({ db }) => {
+    const migration = await import(pathToFileURL(path.join(REAL_MIGRATIONS_DIR, ROOT_DIR_MIGRATION)).href);
+    assert.equal(typeof migration.up, 'function');
+    assert.equal(typeof migration.down, 'function');
+    const apps = db.collection('apps');
+    await apps.insertMany(legacyApps());
+    const byName = async (name) => apps.findOne({ name });
+
+    await migration.up(db);
+    assert.equal((await byName('legacy-a')).rootDir, '');
+    assert.equal((await byName('legacy-a')).stagedDeploys, true);
+    assert.equal((await byName('legacy-b')).rootDir, '');
+    assert.equal((await byName('legacy-b')).stagedDeploys, true);
+    // Values that were already set survive.
+    assert.equal((await byName('modern')).rootDir, 'apps/web');
+    assert.equal((await byName('modern')).stagedDeploys, false);
+    assert.equal((await byName('half')).rootDir, '');
+    assert.equal((await byName('half')).stagedDeploys, false);
+
+    const afterFirst = await apps.find({}).sort({ name: 1 }).toArray();
+    await migration.up(db);
+    assert.deepEqual(await apps.find({}).sort({ name: 1 }).toArray(), afterFirst, 'a second run changes nothing');
+
+    await migration.down(db);
+    for (const doc of await apps.find({}).toArray()) {
+      assert.equal(doc.rootDir, undefined, `${doc.name} rootDir removed`);
+      assert.equal(doc.stagedDeploys, undefined, `${doc.name} stagedDeploys removed`);
+      assert.ok(doc.repoFullName, `${doc.name} keeps its other fields`);
+    }
+  }));
+});
+
+test('migrate-mongo discovers and applies the real migrations folder', async () => {
+  await withBackupCleanup(() => withMigrationEnv({}, async ({ db }) => {
+    await db.collection('apps').insertMany(legacyApps().slice(0, 2));
+
+    const pending = await status(db);
+    assert.ok(pending.some((m) => m.fileName === ROOT_DIR_MIGRATION && m.appliedAt === 'PENDING'));
+
+    const applied = await up(db, db.client);
+    assert.ok(applied.includes(ROOT_DIR_MIGRATION));
+    assert.equal((await db.collection('apps').findOne({ name: 'legacy-a' })).rootDir, '');
+    assert.ok((await status(db)).every((m) => m.appliedAt !== 'PENDING'));
+    assert.equal((await up(db, db.client)).length, 0, 'nothing left to apply');
+
+    // Revert whatever ran last-to-first back to the ones that touch apps, leaving the collection legacy-shaped.
+    for (let i = 0; i < applied.length; i += 1) await down(db, db.client);
+    assert.equal((await db.collection('apps').findOne({ name: 'legacy-a' })).rootDir, undefined);
+  }, { migrationsDir: REAL_MIGRATIONS_DIR }));
 });

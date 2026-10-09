@@ -91,6 +91,7 @@ One per managed server. Served by `server/` on `:3000` behind Nginx on that serv
 ```ts
 AppSummary = {
   id, name, repoFullName, branch, port, nodeVersion,
+  rootDir: string,                // sub-folder of the repo the app lives in, no leading/trailing slash; '' = repo root (shown as '/')
   stagedDeploys: boolean,         // true (default): build/test in <name>.staging and swap in only on success; false: deploy in place
   path: string | null,            // nginx path if nginx step enabled, else null ("localhost only")
   status: 'not_deployed'|'deploying'|'online'|'stopped'|'failed',
@@ -122,14 +123,16 @@ Paths below are relative to `/api` on the agent.
 
 - `GET /repos?q=&refresh=1` → `{ repos: [{ fullName, name, owner, private, defaultBranch, pushedAt, description, htmlUrl }] }`
 - `GET /repos/:owner/:repo/branches` → `{ branches: string[] }` (default first)
-- `GET /repos/:owner/:repo/node-version?ref=` → `{ version: string|null, source }`
+- `GET /repos/:owner/:repo/node-version?ref=&root=` → `{ version: string|null, source }` (`root` optional: read `.nvmrc` / `package.json` inside that sub-folder instead of the repo root)
+- `GET /repos/:owner/:repo/detect-project?ref=&root=` → project classification (`classifyProject` result); `root` optional, same meaning
+- `GET /repos/:owner/:repo/tree?branch=&path=` → `{ path: string /*normalised, '' = repo root*/, directories: [{ name, path /*from repo root*/, hasPackageJson, hasIndexHtml }] }` (directories only, sorted by name; only the first 30 get the two flags, the rest report false; cached ~60s; 400 on an invalid `path`, 404 when the folder does not exist on that branch)
 - `GET /apps` → `{ apps: AppSummary[] }`
 - `GET /apps/defaults?name=` → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
-- `POST /apps` body `{ name, repoFullName, branch, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
+- `POST /apps` body `{ name, repoFullName, branch, rootDir?: string /*default ''*/, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
 - `GET /apps/:id` → `{ app: AppDetail }`
-- `PATCH /apps/:id` body any of `{ branch, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable)
+- `PATCH /apps/:id` body any of `{ branch, rootDir, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable; a changed `rootDir` applies from the next deploy)
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
-- `POST /apps/:id/duplicate` body `{ name, branch, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
+- `POST /apps/:id/duplicate` body `{ name, branch, rootDir? /*default: the source app's*/, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
 - `POST /apps/:id/restart` | `/stop` → `{ app: AppSummary }`
 - `GET /apps/:id/updates` → `{ behindBy: number, commits: [{ sha, message, author, date }] }` (newest first, max 5; commits on the app branch newer than the deployed commit)
@@ -153,6 +156,6 @@ Paths below are relative to `/api` on the agent.
 - `GET /system` → `{ current: SystemSample, history: SystemSample[], info: { hostname, platform, uptimeSec, nodeVersion, pm2Version, nginxVersion, cpuCount }, disks: [{ mount, total, used, free }], apps: [{ appId, appName, pm2Status, cpu, memory, restarts, uptimeMs, diskBytes, health }] }`
   - `SystemSample = { t, cpuPct, memUsed, memTotal, swapUsed, swapTotal, load1, load5, load15, diskUsedPct }`
 - `GET /settings/info` → `{ github: { login, scopes, rateLimitRemaining } | { error }, appsDir, nginxEnabled, domainHint: null, serverId, hostname }`
-- `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment)
-- `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, port, conflict: null|'name'|'port', suggestedName }] }`
+- `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment). File `version: 2`: each app also carries `rootDir` and `stagedDeploys`; version 1 files (without them) still import, defaulting to `''` and `true`
+- `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, rootDir, port, conflict: null|'name'|'port', suggestedName }] }`
 - `POST /config/import` body `{ file, passphrase, rows: [{ name /*original*/, action: 'skip'|'create', newName? }], deploy?: boolean }` → `{ created: AppSummary[], deployments: DeploymentSummary[] }`

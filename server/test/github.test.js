@@ -5,6 +5,7 @@ import {
   listBranches,
   detectNodeVersion,
   detectProjectType,
+  listDirectories,
   getTokenInfo,
   GitHubError,
   setFetchImpl,
@@ -282,4 +283,118 @@ test('detectProjectType treats a malformed package.json as absent', async () => 
     ? mockResponse({ text: '{ not json' })
     : mockResponse({ status: 404, json: { message: 'Not Found' } })));
   assert.equal((await detectProjectType(freshConfig(), 'octo', 'bad', 'main')).type, 'unknown');
+});
+
+// A fake contents API: `tree` maps a folder path ('' = root) to its entries; missing folders 404.
+function contentsFetch(tree, { fail = new Set() } = {}) {
+  const calls = [];
+  const impl = async (url) => {
+    calls.push(url);
+    const match = /\/contents\/?([^?]*)\?ref=(.+)$/.exec(url);
+    const folder = decodeURIComponent(match[1]);
+    if (fail.has(folder)) return mockResponse({ status: 500, text: 'boom' });
+    if (!(folder in tree)) return mockResponse({ status: 404, text: '' });
+    return mockResponse({ json: tree[folder] });
+  };
+  return { impl, calls };
+}
+
+const dir = (name, parent = '') => ({ type: 'dir', name, path: parent ? `${parent}/${name}` : name });
+const file = (name, parent = '') => ({ type: 'file', name, path: parent ? `${parent}/${name}` : name });
+
+test('listDirectories returns only directories, sorted, flagged by what each contains', async () => {
+  const { impl, calls } = contentsFetch({
+    '': [file('README.md'), dir('web'), dir('api'), dir('docs'), file('package.json')],
+    api: [file('package.json', 'api'), file('server.js', 'api')],
+    web: [file('index.html', 'web'), file('package.json', 'web')],
+    docs: [file('intro.md', 'docs')],
+  });
+  setFetchImpl(impl);
+
+  const result = await listDirectories(freshConfig(), 'me', 'repo', 'main');
+  assert.deepEqual(result, [
+    { name: 'api', path: 'api', hasPackageJson: true, hasIndexHtml: false },
+    { name: 'docs', path: 'docs', hasPackageJson: false, hasIndexHtml: false },
+    { name: 'web', path: 'web', hasPackageJson: true, hasIndexHtml: true },
+  ]);
+  assert.match(calls[0], /\/repos\/me\/repo\/contents\?ref=main$/);
+  assert.equal(calls.length, 4, 'one listing for the folder plus one per returned directory');
+});
+
+test('listDirectories lists a nested folder, encodes each path segment and caches for 60s', async () => {
+  const { impl, calls } = contentsFetch({
+    'apps/web': [dir('src', 'apps/web'), dir('public', 'apps/web')],
+    'apps/web/src': [file('index.html', 'apps/web/src')],
+    'apps/web/public': [],
+  });
+  setFetchImpl(impl);
+  const config = freshConfig();
+
+  const first = await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web/');
+  assert.deepEqual(first.map((d) => d.path), ['apps/web/public', 'apps/web/src']);
+  assert.equal(first[1].hasIndexHtml, true);
+  assert.match(calls[0], /\/contents\/apps\/web\?ref=feat%2Fx$/);
+
+  const before = calls.length;
+  await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web');
+  assert.equal(calls.length, before, 'second call is served from the cache');
+
+  __resetCache();
+  await listDirectories(config, 'me', 'repo', 'feat/x', 'apps/web');
+  assert.ok(calls.length > before, '__resetCache clears the folder cache');
+});
+
+test('listDirectories skips failed flag lookups silently and caps the lookups at 30 folders', async () => {
+  const names = Array.from({ length: 35 }, (_, i) => `pkg${String(i).padStart(2, '0')}`);
+  const tree = { '': names.map((n) => dir(n)) };
+  for (const n of names) tree[n] = [file('package.json', n)];
+  const { impl, calls } = contentsFetch(tree, { fail: new Set(['pkg01']) });
+  setFetchImpl(impl);
+
+  const result = await listDirectories(freshConfig(), 'me', 'repo', 'main');
+  assert.equal(result.length, 35, 'every directory is returned');
+  assert.equal(result[0].hasPackageJson, true);
+  assert.equal(result[1].hasPackageJson, false, 'a failed lookup leaves the flags false');
+  assert.equal(result[29].hasPackageJson, true);
+  assert.equal(result[30].hasPackageJson, false, 'folders beyond the cap are not looked into');
+  assert.equal(calls.length, 1 + 30);
+});
+
+test('listDirectories maps a missing folder to 404, rejects bad input and needs a token', async () => {
+  setFetchImpl(contentsFetch({ '': [] }).impl);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', 'nope'), (err) => err.status === 404);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', '../etc'), (err) => err.status === 400);
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', '--bad'), (err) => err.status === 400);
+  await assert.rejects(() => listDirectories({ GITHUB_TOKEN: undefined }, 'me', 'repo', 'main'), (err) => err.status === 503);
+  // A path that is a file (the API answers with an object) is not a folder.
+  setFetchImpl(async () => mockResponse({ json: { type: 'file', name: 'x' } }));
+  await assert.rejects(() => listDirectories(freshConfig(), 'me', 'repo', 'main', 'x'), (err) => err.status === 404);
+});
+
+test('detectNodeVersion and detectProjectType read files inside the root directory', async () => {
+  const requested = [];
+  setFetchImpl(async (url) => {
+    requested.push(url);
+    if (url.includes('/contents/apps/web/package.json')) {
+      return mockResponse({ text: JSON.stringify({ engines: { node: '>=22' }, scripts: { build: 'vite build' }, devDependencies: { vite: '^5' } }) });
+    }
+    return mockResponse({ status: 404, text: '' });
+  });
+  const config = freshConfig();
+
+  const version = await detectNodeVersion(config, 'me', 'repo', 'main', 'apps/web');
+  assert.deepEqual(version, { version: '22', source: 'engines' });
+  assert.ok(requested.some((u) => u.includes('/contents/apps/web/.nvmrc?')));
+  assert.ok(!requested.some((u) => /\/contents\/(\.nvmrc|package\.json)\?/.test(u)), 'the repo root files are not read');
+
+  requested.length = 0;
+  const project = await detectProjectType(config, 'me', 'repo', 'main', 'apps/web');
+  assert.ok(project, 'classified from the sub-folder package.json');
+  assert.ok(requested.some((u) => u.includes('/contents/apps/web/index.html?')));
+
+  await assert.rejects(() => detectNodeVersion(config, 'me', 'repo', 'main', '../x'), (err) => err.status === 400);
+  // Default stays the repo root.
+  requested.length = 0;
+  await detectNodeVersion(config, 'me', 'repo', 'main');
+  assert.ok(requested.every((u) => /\/contents\/(\.nvmrc|package\.json)\?/.test(u)));
 });

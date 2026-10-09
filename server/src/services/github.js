@@ -1,5 +1,5 @@
 import { HttpError } from '../lib/httpError.js';
-import { validateOwner, validateRepo, validateRef, validateCommitSha } from '../lib/validate.js';
+import { validateOwner, validateRepo, validateRef, validateCommitSha, validateRootDir } from '../lib/validate.js';
 import { classifyProject } from '../lib/frontend.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -22,9 +22,12 @@ export function setFetchImpl(fn) {
 // Keyed by token so a config change (unlikely, but cheap to support) doesn't
 // serve stale data from a different token.
 let repoListCache = new Map();
+// Folder listings, keyed by token + repo + ref + path.
+let treeCache = new Map();
 
 export function __resetCache() {
   repoListCache = new Map();
+  treeCache = new Map();
 }
 
 function requireToken(config) {
@@ -158,8 +161,18 @@ export async function listBranches(config, owner, repo) {
   return names;
 }
 
+// Encodes each path segment separately so the slashes between them survive.
+function encodePath(p) {
+  return p.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+}
+
+function contentsUrl(owner, repo, dirOrFilePath, ref) {
+  const suffix = dirOrFilePath ? `/${encodePath(dirOrFilePath)}` : '';
+  return `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents${suffix}?ref=${encodeURIComponent(ref)}`;
+}
+
 async function fetchRawFile(token, owner, repo, filePath, ref) {
-  const url = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(ref)}`;
+  const url = contentsUrl(owner, repo, filePath, ref);
   const res = await fetchImpl(url, { headers: authHeaders(token, 'application/vnd.github.raw+json') });
   if (res.status === 404) return null;
   if (!res.ok) {
@@ -182,19 +195,25 @@ function extractEngineMajor(range) {
   return match ? match[1] : null;
 }
 
-export async function detectNodeVersion(config, owner, repo, ref) {
+// `rootDir` is the app's sub-folder in the repo ('' = repo root); files are read relative to it.
+function inRoot(rootDir, file) {
+  return rootDir ? `${rootDir}/${file}` : file;
+}
+
+export async function detectNodeVersion(config, owner, repo, ref, rootDir = '') {
   const token = requireToken(config);
   const validOwner = validateOwner(owner);
   const validRepo = validateRepo(repo);
   const validRef = validateRef(ref);
+  const validRoot = validateRootDir(rootDir);
 
-  const nvmrc = await fetchRawFile(token, validOwner, validRepo, '.nvmrc', validRef);
+  const nvmrc = await fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, '.nvmrc'), validRef);
   if (nvmrc !== null) {
     const version = normalizeNvmrc(nvmrc);
     if (version) return { version, source: '.nvmrc' };
   }
 
-  const pkgJsonText = await fetchRawFile(token, validOwner, validRepo, 'package.json', validRef);
+  const pkgJsonText = await fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'package.json'), validRef);
   if (pkgJsonText !== null) {
     try {
       const pkg = JSON.parse(pkgJsonText);
@@ -211,15 +230,16 @@ export async function detectNodeVersion(config, owner, repo, ref) {
   return { version: null, source: null };
 }
 
-export async function detectProjectType(config, owner, repo, ref) {
+export async function detectProjectType(config, owner, repo, ref, rootDir = '') {
   const token = requireToken(config);
   const validOwner = validateOwner(owner);
   const validRepo = validateRepo(repo);
   const validRef = validateRef(ref);
+  const validRoot = validateRootDir(rootDir);
 
   const [pkgText, indexHtml] = await Promise.all([
-    fetchRawFile(token, validOwner, validRepo, 'package.json', validRef),
-    fetchRawFile(token, validOwner, validRepo, 'index.html', validRef),
+    fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'package.json'), validRef),
+    fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'index.html'), validRef),
   ]);
 
   let pkg = null;
@@ -231,6 +251,57 @@ export async function detectProjectType(config, owner, repo, ref) {
     }
   }
   return classifyProject({ pkg, hasIndexHtml: indexHtml !== null });
+}
+
+const MAX_FLAG_LOOKUPS = 30;
+
+// One folder listing (JSON); null on any failure so callers can treat "unknown" as "no".
+async function listFolderEntries(token, owner, repo, ref, dirPath) {
+  const res = await githubFetch(token, contentsUrl(owner, repo, dirPath, ref), {
+    notFoundMessage: 'Folder not found on this branch',
+  });
+  const body = await res.json();
+  return Array.isArray(body) ? body : null;
+}
+
+// Sub-folders of `dirPath` ('' = repo root) on `ref`, for the root-directory picker. Each carries hints about
+// what is inside it; only the first 30 folders get the extra lookup (the rest report false) to bound API calls.
+export async function listDirectories(config, owner, repo, ref, dirPath = '') {
+  const token = requireToken(config);
+  const validOwner = validateOwner(owner);
+  const validRepo = validateRepo(repo);
+  const validRef = validateRef(ref);
+  const validPath = validateRootDir(dirPath);
+
+  const cacheKey = `${token}\u0000${validOwner}/${validRepo}@${validRef}:${validPath}`;
+  const cached = treeCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const entries = await listFolderEntries(token, validOwner, validRepo, validRef, validPath);
+  if (!entries) throw new GitHubError(404, 'Path is not a folder');
+
+  const dirs = entries
+    .filter((e) => e.type === 'dir')
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const data = await Promise.all(dirs.map(async (dir, index) => {
+    const result = { name: dir.name, path: dir.path, hasPackageJson: false, hasIndexHtml: false };
+    if (index >= MAX_FLAG_LOOKUPS) return result;
+    try {
+      const inner = await listFolderEntries(token, validOwner, validRepo, validRef, dir.path);
+      for (const entry of inner ?? []) {
+        if (entry.type !== 'file') continue;
+        if (entry.name === 'package.json') result.hasPackageJson = true;
+        if (entry.name === 'index.html') result.hasIndexHtml = true;
+      }
+    } catch {
+      // flags are a nicety; a failed lookup just leaves them false
+    }
+    return result;
+  }));
+
+  treeCache.set(cacheKey, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+  return data;
 }
 
 export async function getTokenInfo(config) {

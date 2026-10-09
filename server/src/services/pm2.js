@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { run, tokenizeCommand } from './shell.js';
+import { appWorkDir } from '../lib/appEnv.js';
 
 const ECOSYSTEM_FILENAME = 'ecosystem.config.cjs';
 
@@ -8,14 +9,16 @@ export function pm2Name(appName) {
   return `app-${appName}`;
 }
 
-export function ecosystemPath(appsDir, appName) {
-  return path.join(appsDir, appName, ECOSYSTEM_FILENAME);
+// The ecosystem file lives in the app's work dir (repo folder + root directory).
+export function ecosystemPath(workDir) {
+  return path.join(workDir, ECOSYSTEM_FILENAME);
 }
 
-// dir/name/port/filename override the live-app defaults so a staged build can be run as a throwaway process.
+// `dir` is the work dir the process runs in (default: the live work dir under appsDir); name/port/filename
+// override the live-app defaults so a staged build can be run as a throwaway process.
 export async function writeEcosystem(app, { env = {}, binDir, appsDir, startCommand, dir, name, port, filename }) {
   const [script, ...args] = tokenizeCommand(startCommand || 'npm start');
-  const appDir = dir ?? path.join(appsDir, app.name);
+  const appDir = dir ?? appWorkDir({ APPS_DIR: appsDir }, app);
   const pathPrefix = binDir ? `${binDir}${path.delimiter}` : '';
 
   const ecosystem = {
@@ -32,7 +35,7 @@ export async function writeEcosystem(app, { env = {}, binDir, appsDir, startComm
     ],
   };
 
-  const filePath = filename ? path.join(appDir, filename) : ecosystemPath(appsDir, app.name);
+  const filePath = filename ? path.join(appDir, filename) : ecosystemPath(appDir);
   await fs.writeFile(filePath, `module.exports = ${JSON.stringify(ecosystem, null, 2)};\n`, { mode: 0o600 });
   return filePath;
 }

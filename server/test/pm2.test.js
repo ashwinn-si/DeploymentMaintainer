@@ -20,7 +20,8 @@ async function withShims(fn) {
 
 test('pm2Name and ecosystemPath', () => {
   assert.equal(pm2Service.pm2Name('my-app'), 'app-my-app');
-  assert.equal(pm2Service.ecosystemPath('/apps', 'my-app'), '/apps/my-app/ecosystem.config.cjs');
+  assert.equal(pm2Service.ecosystemPath('/apps/my-app'), '/apps/my-app/ecosystem.config.cjs');
+  assert.equal(pm2Service.ecosystemPath('/apps/my-app/apps/web'), '/apps/my-app/apps/web/ecosystem.config.cjs');
 });
 
 test('writeEcosystem tokenizes the start command and writes mode-600 JSON-ish cjs', async () => {
@@ -49,6 +50,20 @@ test('writeEcosystem tokenizes the start command and writes mode-600 JSON-ish cj
   assert.match(text, /node-versions\/v20\/installation\/bin/);
 
   await fs.rm(appsDir, { recursive: true, force: true });
+});
+
+test('writeEcosystem runs inside the app root directory and lands the file there', async () => {
+  const appsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dm-appsdir-'));
+  const workDir = path.join(appsDir, 'mono', 'apps', 'web');
+  await fs.mkdir(workDir, { recursive: true });
+  try {
+    const app = { name: 'mono', port: 4002, rootDir: 'apps/web' };
+    const filePath = await pm2Service.writeEcosystem(app, { appsDir, startCommand: 'node server.js' });
+    assert.equal(filePath, path.join(workDir, 'ecosystem.config.cjs'));
+    assert.equal((await pm2Service.readEcosystem(filePath)).cwd, workDir);
+  } finally {
+    await fs.rm(appsDir, { recursive: true, force: true });
+  }
 });
 
 test('readEcosystem round-trips what writeEcosystem wrote and returns null for missing or garbage files', async () => {

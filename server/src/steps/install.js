@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { run as shellRun, tokenizeCommand } from '../services/shell.js';
 import { withNode } from '../services/node.js';
-import { portEnv } from '../lib/appEnv.js';
+import { portEnv, appWorkDir } from '../lib/appEnv.js';
 
 export const type = 'install';
 
@@ -12,7 +12,7 @@ export function label(config) {
 
 export async function run(ctx) {
   const { app, env, config, log, signal, state, step, stepId } = ctx;
-  const dir = state.appDir ?? path.join(config.APPS_DIR, app.name);
+  const dir = state.appDir ?? appWorkDir(config, app);
   const configured = step?.config?.command;
   const hasLockfile = fs.existsSync(path.join(dir, 'package-lock.json'));
   const command = configured || (hasLockfile ? 'npm ci' : 'npm install');

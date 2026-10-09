@@ -20,7 +20,9 @@ export async function runSmokeTest(app, { config, env, binDir, stagingPath, heal
   const timeoutMs = (healthConfig.timeoutSec ?? DEFAULT_TIMEOUT_SEC) * 1000;
   const intervalMs = (healthConfig.intervalSec ?? DEFAULT_INTERVAL_SEC) * 1000;
   const startCommand = (app.steps || []).find((s) => s.type === 'pm2')?.config?.command || 'npm start';
-  const ecoPath = path.join(stagingPath, SMOKE_ECOSYSTEM_FILENAME);
+  // stagingPath is the whole staged repo folder; the app runs inside its root directory.
+  const workPath = path.join(stagingPath, app.rootDir || '');
+  const ecoPath = path.join(workPath, SMOKE_ECOSYSTEM_FILENAME);
 
   try {
     const port = await allocatePort(config, { exclude: app.port ? [app.port] : [] });
@@ -28,7 +30,7 @@ export async function runSmokeTest(app, { config, env, binDir, stagingPath, heal
       env,
       binDir,
       startCommand,
-      dir: stagingPath,
+      dir: workPath,
       name,
       port,
       filename: SMOKE_ECOSYSTEM_FILENAME,

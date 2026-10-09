@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { run as shellRun, tokenizeCommand } from '../services/shell.js';
 import { withNode } from '../services/node.js';
-import { portEnv } from '../lib/appEnv.js';
+import { portEnv, appWorkDir } from '../lib/appEnv.js';
 import { planStaticBuild } from '../lib/frontend.js';
 
 export const type = 'build';
@@ -21,7 +21,7 @@ async function readPackageJson(dir) {
 
 export async function run(ctx) {
   const { app, env, config, log, signal, state, step, stepId } = ctx;
-  const dir = state.appDir ?? path.join(config.APPS_DIR, app.name);
+  const dir = state.appDir ?? appWorkDir(config, app);
   let command = step?.config?.command || 'npm run build';
   let extraEnv = {};
 
