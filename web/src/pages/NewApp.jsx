@@ -244,6 +244,7 @@ export function NewApp() {
       </Section>
 
       <Section step={3} title="Project type" description="How this app is built and served.">
+        <div className="space-y-3">
         <DetectionBanner detected={detected} status={detectStatus} preset={preset} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {PRESETS.map(({ value, icon: Icon, title, text }) => (
@@ -265,6 +266,7 @@ export function NewApp() {
               </span>
             </button>
           ))}
+        </div>
         </div>
       </Section>
 
