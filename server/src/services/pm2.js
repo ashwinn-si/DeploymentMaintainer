@@ -77,6 +77,35 @@ export async function jlist(options) {
   return byName;
 }
 
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const LOG_HEADER_RE = /^(\S.*\.log) last \d+ lines:\s*$/;
+// pm2 prefixes every line with "<id>|<name> | ".
+const LINE_PREFIX_RE = /^\d+\|[^|]*\| ?/;
+
+// `pm2 logs --nostream` prints one "<file>.log last N lines:" section per log file.
+// Splits those into stdout and stderr (the *-error.log file) and cleans the lines up.
+// Output without recognisable sections is returned as all stdout.
+export function splitLogs(raw) {
+  const out = [];
+  const err = [];
+  let target = null;
+  for (const rawLine of String(raw ?? '').replace(ANSI_RE, '').split(/\r?\n/)) {
+    const header = rawLine.match(LOG_HEADER_RE);
+    if (header) {
+      target = /(^|[-_./])(error|err)\.log$/i.test(header[1]) ? err : out;
+      continue;
+    }
+    if (target === null) {
+      if (/^\[TAILING\]/.test(rawLine)) continue;
+      if (!rawLine.trim()) continue;
+      out.push(rawLine.replace(LINE_PREFIX_RE, ''));
+      continue;
+    }
+    if (rawLine.trim()) target.push(rawLine.replace(LINE_PREFIX_RE, ''));
+  }
+  return { out: out.join('\n'), err: err.join('\n') };
+}
+
 export async function logs(name, lines = 200, options) {
   const result = await pm2(['logs', name, '--lines', String(lines), '--nostream'], options);
   return result.stdout;

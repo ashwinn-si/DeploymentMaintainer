@@ -206,6 +206,8 @@ test('GET /apps/:id/logs tolerates whatever pm2 returns', async () => {
     const res = await agent.get(`/api/apps/${app.id}/logs?lines=50`);
     assert.equal(res.status, 200);
     assert.equal(typeof res.body.text, 'string');
+    assert.equal(typeof res.body.out, 'string');
+    assert.equal(typeof res.body.err, 'string');
   } finally {
     await server.cleanup();
     await clearTestDB();

@@ -360,15 +360,17 @@ export function createAppsRouter(config) {
     const app = await findAppOr404(req.params.id);
     const lines = Number(req.query.lines) > 0 ? Number(req.query.lines) : 200;
     if (app.kind === 'static') {
-      return res.json({ text: '(static site: no runtime process, so no runtime logs)' });
+      const text = '(static site: no runtime process, so no runtime logs)';
+      return res.json({ text, out: text, err: '' });
     }
-    let text = '';
     try {
-      text = await pm2Service.logs(pm2Service.pm2Name(app.name), lines);
+      const raw = await pm2Service.logs(pm2Service.pm2Name(app.name), lines);
+      const { out, err } = pm2Service.splitLogs(raw);
+      res.json({ text: raw, out, err });
     } catch (err) {
-      text = `(unable to read logs: ${err.message})`;
+      const text = `(unable to read logs: ${err.message})`;
+      res.json({ text, out: text, err: '' });
     }
-    res.json({ text });
   });
 
   router.get('/:id/deployments', async (req, res) => {

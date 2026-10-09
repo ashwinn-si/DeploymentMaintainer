@@ -132,7 +132,7 @@ Paths below are relative to `/api` on the agent.
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
 - `POST /apps/:id/restart` | `/stop` → `{ app: AppSummary }`
 - `GET /apps/:id/updates` → `{ behindBy: number, commits: [{ sha, message, author, date }] }` (newest first, max 5; commits on the app branch newer than the deployed commit)
-- `GET /apps/:id/logs?lines=200` → `{ text: string }` (pm2 runtime logs)
+- `GET /apps/:id/logs?lines=200` → `{ text: string, out: string, err: string }` (pm2 runtime logs: `text` is the raw pm2 output; `out`/`err` are the stdout and stderr log files, split, ANSI colours and pm2 line prefixes stripped)
 - `GET /apps/:id/deployments?limit=&before=` → `{ deployments: DeploymentSummary[] }`
 - `GET /deployments?app=<id>&status=&branch=&mode=&limit=50&before=<iso>` → `{ deployments: DeploymentSummary[], nextBefore: string|null }`
 - `GET /deployments/active` → `{ deployments: DeploymentSummary[] }` (queued/running, for sidebar dot + activity panel)

@@ -906,13 +906,13 @@ function agentRoute(pathname, method, body, query) {
   const logsMatch = pathname.match(/^\/api\/apps\/([^/]+)\/logs$/);
   if (logsMatch && method === 'GET') {
     const app = findApp(logsMatch[1]);
-    return {
-      text: [
-        `0|app-${app.name}  | [mock] pm2 runtime logs`,
-        `0|app-${app.name}  | Server listening on port ${app.port}`,
-        `0|app-${app.name}  | GET /health 200 3ms`,
-      ].join('\n'),
-    };
+    const out = [
+      '[mock] pm2 runtime logs',
+      `Server listening on port ${app.port}`,
+      'GET /health 200 3ms',
+    ].join('\n');
+    const err = 'Error: [mock] connect ECONNREFUSED 127.0.0.1:27017';
+    return { text: `${out}\n${err}`, out, err };
   }
 
   const appDeploysMatch = pathname.match(/^\/api\/apps\/([^/]+)\/deployments$/);

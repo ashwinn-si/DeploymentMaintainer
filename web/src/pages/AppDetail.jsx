@@ -126,7 +126,8 @@ export function AppDetail() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deployments, setDeployments] = useState([]);
-  const [runtimeLogs, setRuntimeLogs] = useState('');
+  const [runtimeLogs, setRuntimeLogs] = useState({ out: '', err: '' });
+  const [logStream, setLogStream] = useState('out');
   const [logsLoading, setLogsLoading] = useState(false);
   const [updates, setUpdates] = useState(null);
 
@@ -170,8 +171,8 @@ export function AppDetail() {
     setLogsLoading(true);
     api.apps
       .logs(id)
-      .then((data) => setRuntimeLogs(data.text))
-      .catch(() => setRuntimeLogs('Could not load runtime logs.'))
+      .then((data) => setRuntimeLogs({ out: data.out ?? data.text ?? '', err: data.err ?? '' }))
+      .catch(() => setRuntimeLogs({ out: 'Could not load runtime logs.', err: '' }))
       .finally(() => setLogsLoading(false));
   }, [api, id]);
 
@@ -299,14 +300,22 @@ export function AppDetail() {
         ) : null}
         {tab === 'logs' ? (
           <div className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <Tabs
+                tabs={[
+                  { value: 'out', label: 'Output' },
+                  { value: 'err', label: runtimeLogs.err ? 'Errors •' : 'Errors' },
+                ]}
+                value={logStream}
+                onChange={setLogStream}
+              />
               <Button size="sm" variant="ghost" loading={logsLoading} onClick={loadLogs}>
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
             </div>
             <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-black/40">
-              {runtimeLogs || 'No output yet.'}
+              {runtimeLogs[logStream] || (logStream === 'err' ? 'No errors logged.' : 'No output yet.')}
             </pre>
           </div>
         ) : null}
