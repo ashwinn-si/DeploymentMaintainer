@@ -50,7 +50,7 @@ test('POST /apps validation: reserved name, duplicate name, taken port, bad env 
     const badEnvKey = await agent.post('/api/apps').send(createAppBody(fixture, {
       name: 'bad-env-app',
       port: config.APP_PORT_START + 52,
-      env: [{ key: 'not-a-valid-key', value: 'x' }],
+      env: [{ key: 'BAD=KEY', value: 'x' }],
     }));
     assert.equal(badEnvKey.status, 400);
 

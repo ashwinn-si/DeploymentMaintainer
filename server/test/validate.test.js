@@ -89,14 +89,17 @@ test('validateNodeVersion rejects garbage', () => {
   }
 });
 
-test('validateEnvKey accepts upper, lower and mixed case', () => {
+test('validateEnvKey accepts any key, whatever its format', () => {
   assert.equal(validateEnvKey('API_KEY'), 'API_KEY');
   assert.equal(validateEnvKey('_PRIVATE'), '_PRIVATE');
   assert.equal(validateEnvKey('mailID'), 'mailID');
+  assert.equal(validateEnvKey('1KEY'), '1KEY');
+  assert.equal(validateEnvKey('KEY-NAME'), 'KEY-NAME');
+  assert.equal(validateEnvKey('my key.v2'), 'my key.v2');
 });
 
-test('validateEnvKey rejects leading digits and stray characters', () => {
-  for (const bad of ['1KEY', 'KEY-NAME', '']) {
+test('validateEnvKey rejects only keys that would corrupt the file', () => {
+  for (const bad of ['', 'A=B', 'A\nB']) {
     assert.throws(() => validateEnvKey(bad), HttpError);
   }
 });

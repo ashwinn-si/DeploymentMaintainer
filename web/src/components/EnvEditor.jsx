@@ -6,8 +6,6 @@ import { Button } from './ui/Button.jsx';
 import { Modal } from './ui/Modal.jsx';
 import { Textarea } from './ui/Textarea.jsx';
 
-const KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
 export function parseDotEnv(text) {
   const rows = [];
   for (const rawLine of text.split('\n')) {
@@ -118,7 +116,7 @@ export function EnvEditor({ value = [], onChange }) {
         {value.map((row, idx) => {
           // Rows still being typed (empty key) stay visible so they don't vanish mid-edit.
           if (needle && row.key && !row.key.toLowerCase().includes(needle)) return null;
-          const keyError = row.key && !KEY_RE.test(row.key) ? 'Letters, digits and _ only; cannot start with a digit' : null;
+          const keyError = row.key && /[=\r\n]/.test(row.key) ? 'Key cannot contain "="' : null;
           const dupError = !keyError && row.key && keyCounts[row.key] > 1 ? 'Duplicate key' : null;
           return (
             <div key={idx} className="flex items-start gap-2">
