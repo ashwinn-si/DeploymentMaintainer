@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { reloadOnceForNewBuild } from './lib/lazyWithReload.js';
 import { BrowserRouter, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 import { Toaster } from 'react-hot-toast';
@@ -18,6 +19,11 @@ function RoutedBoundary() {
     </ErrorBoundary>
   );
 }
+
+// Vite emits this when a preloaded chunk 404s, i.e. the tab predates the latest deploy.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForNewBuild()) event.preventDefault();
+});
 
 function renderApp() {
   // main.jsx is not a hot-reload boundary, so re-running it must reuse the existing root. A second

@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { lazyWithReload } from './lib/lazyWithReload.js';
 import { Routes, Route, Outlet, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { onSessionExpired } from './api.js';
@@ -17,14 +18,14 @@ import { NotFound } from './pages/NotFound.jsx';
 // Route-split everything past the home pages: keeps the initial bundle under
 // Vite's 500KB chunk warning and means a first paint doesn't pay for the
 // steps editor, log viewer, rings/sparklines, etc. until they're visited.
-const Account = lazy(() => import('./pages/Account.jsx').then((m) => ({ default: m.Account })));
-const NewApp = lazy(() => import('./pages/NewApp.jsx').then((m) => ({ default: m.NewApp })));
-const AppDetail = lazy(() => import('./pages/AppDetail.jsx').then((m) => ({ default: m.AppDetail })));
-const Deployments = lazy(() => import('./pages/Deployments.jsx').then((m) => ({ default: m.Deployments })));
-const DeploymentDetail = lazy(() => import('./pages/DeploymentDetail.jsx').then((m) => ({ default: m.DeploymentDetail })));
-const Ports = lazy(() => import('./pages/Ports.jsx').then((m) => ({ default: m.Ports })));
-const Server = lazy(() => import('./pages/Server.jsx').then((m) => ({ default: m.Server })));
-const ServerSettings = lazy(() => import('./pages/ServerSettings.jsx').then((m) => ({ default: m.ServerSettings })));
+const Account = lazyWithReload(() => import('./pages/Account.jsx').then((m) => ({ default: m.Account })));
+const NewApp = lazyWithReload(() => import('./pages/NewApp.jsx').then((m) => ({ default: m.NewApp })));
+const AppDetail = lazyWithReload(() => import('./pages/AppDetail.jsx').then((m) => ({ default: m.AppDetail })));
+const Deployments = lazyWithReload(() => import('./pages/Deployments.jsx').then((m) => ({ default: m.Deployments })));
+const DeploymentDetail = lazyWithReload(() => import('./pages/DeploymentDetail.jsx').then((m) => ({ default: m.DeploymentDetail })));
+const Ports = lazyWithReload(() => import('./pages/Ports.jsx').then((m) => ({ default: m.Ports })));
+const Server = lazyWithReload(() => import('./pages/Server.jsx').then((m) => ({ default: m.Server })));
+const ServerSettings = lazyWithReload(() => import('./pages/ServerSettings.jsx').then((m) => ({ default: m.ServerSettings })));
 
 function PageFallback() {
   return (
