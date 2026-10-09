@@ -88,3 +88,25 @@ test('startOrReload launches the fixture app and jlist reports it online', async
     }
   });
 });
+
+test('splitLogs separates stdout from stderr and strips ANSI colours and pm2 prefixes', () => {
+  const raw = [
+    '\x1b[90m[TAILING] Tailing last 200 lines for [app-x] process\x1b[39m',
+    '/home/u/.pm2/logs/app-x-out.log last 200 lines:',
+    '\x1b[32m3|app-x  | \x1b[39mServer is running on port 5001',
+    '\x1b[32m3|app-x  | \x1b[39mconnected to database',
+    '',
+    '/home/u/.pm2/logs/app-x-error.log last 200 lines:',
+    '\x1b[32m3|app-x  | \x1b[39mError: boom',
+    '',
+  ].join('\n');
+  assert.deepEqual(pm2Service.splitLogs(raw), {
+    out: 'Server is running on port 5001\nconnected to database',
+    err: 'Error: boom',
+  });
+});
+
+test('splitLogs treats output without log sections as stdout', () => {
+  assert.deepEqual(pm2Service.splitLogs('just some text\n'), { out: 'just some text', err: '' });
+  assert.deepEqual(pm2Service.splitLogs(''), { out: '', err: '' });
+});
