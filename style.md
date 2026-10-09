@@ -1,6 +1,6 @@
 # UI Style Contract
 
-The design system for the Deployment Maintainer dashboard: a **premium, white-first SaaS UI** built with TailwindCSS v4 + DaisyUI v5 and a violet/purple brand. Reuse the tokens and utility classes below; don't invent one-off styles.
+The design system for the Deployment Maintainer dashboard: a **premium, white-first SaaS UI** built with TailwindCSS v4 + DaisyUI v5 and a orange brand. Reuse the tokens and utility classes below; don't invent one-off styles.
 
 Source of truth: [`web/src/index.css`](web/src/index.css) (DaisyUI themes, tokens, surfaces, buttons, inputs, keyframes), [`web/src/components/ui/`](web/src/components/ui/) (GlassCard, Button, Input, Modal, PageHeader, SelectSheet, Meter, Loader, …), [`web/src/components/layout/`](web/src/components/layout/) (AppShell, Sidebar, Navbar), [`web/src/main.jsx`](web/src/main.jsx) (toasts).
 
@@ -14,10 +14,10 @@ Source of truth: [`web/src/index.css`](web/src/index.css) (DaisyUI themes, token
 
 | Token | Hex | Purpose |
 |---|---|---|
-| `primary` | `#6D28D9` | CTAs, active states, accent borders |
+| `primary` | `#EA580C` | CTAs, active states, accent borders |
 | `primary-content` | `#FFFFFF` | Text on primary bg |
-| `secondary` | `#1E1B4B` | Deep indigo, secondary surfaces |
-| `accent` | `#6366F1` | Highlights, secondary accents |
+| `secondary` | `#7C2D12` | Deep burnt orange, secondary surfaces |
+| `accent` | `#F97316` | Highlights, secondary accents |
 | `neutral` | `#0F172A` | Near-black text, icon fills |
 | `base-100` | `#FFFFFF` | Main page background |
 | `base-200` | `#F8FAFC` | Card/sidebar backgrounds |
@@ -32,9 +32,9 @@ Source of truth: [`web/src/index.css`](web/src/index.css) (DaisyUI themes, token
 
 | Token | Hex | Purpose |
 |---|---|---|
-| `primary` | `#8B5CF6` | Brighter purple for WCAG contrast |
-| `secondary` | `#6366F1` | Indigo |
-| `accent` | `#A5B4FC` | Soft lavender |
+| `primary` | `#FB923C` | Brighter orange for WCAG contrast |
+| `secondary` | `#C2410C` | Burnt orange |
+| `accent` | `#FDBA74` | Soft peach |
 | `base-100` | `#0F172A` | Main bg — deep navy/slate |
 | `base-200` | `#1E293B` | Cards, modals |
 | `base-300` | `#334155` | Hover states, dividers |
@@ -49,13 +49,13 @@ Dark mode is switched with the `data-theme` attribute on `<html>` (`light` / `da
 
 | Variable | Light | Dark | Purpose |
 |---|---|---|---|
-| `--premium-ring` | `rgba(55,48,163,0.30)` | `rgba(165,180,252,0.45)` | Focus outline |
-| `--premium-border` | `rgba(109,40,217,0.20)` | `rgba(139,92,246,0.28)` | Card / input / divider borders |
+| `--premium-ring` | `rgba(55,48,163,0.30)` | `rgba(253,186,116,0.45)` | Focus outline |
+| `--premium-border` | `rgba(234,88,12,0.20)` | `rgba(251,146,60,0.28)` | Card / input / divider borders |
 | `--premium-shadow` | `0 0 0 1px rgba(15,23,42,.06), 0 2px 8px rgba(15,23,42,.04)` | dark equivalent | Resting elevation |
 | `--surface-bg` | `#FFFFFF` | `#1E293B` | `.surface` fill |
 | `--surface-inset-bg` | `#F8FAFC` | `#0F172A` | `.surface-inset` fill |
 | `--overlay-bg` | `rgba(255,255,255,.9)` | `rgba(30,41,59,.92)` | Modals, nav, dropdowns, toasts, inputs |
-| `--brand` / `--brand-soft` | `#6D28D9` / 10% | `#8B5CF6` / 20% | Brand tint used by components (`text-[var(--brand)]`) |
+| `--brand` / `--brand-soft` | `#EA580C` / 10% | `#FB923C` / 20% | Brand tint used by components (`text-[var(--brand)]`) |
 | `--text-primary` / `-secondary` / `-muted` | `#0F172A` / `#334155` / `#64748B` | `#F8FAFC` / `#CBD5E1` / `#94A3B8` | Text |
 | `--data-*` | amber, blue, pink, purple, teal | lighter variants | Chart / meter accents |
 
@@ -91,7 +91,7 @@ Dark mode:
 
 ```css
 background-image:
-  radial-gradient(circle at 8% 0%,  rgba(139, 92, 246, 0.20), transparent 38%),
+  radial-gradient(circle at 8% 0%,  rgba(251, 146, 60, 0.20), transparent 38%),
   radial-gradient(circle at 96% 0%, rgba(56, 189, 248, 0.12), transparent 34%),
   linear-gradient(180deg, #020617 0%, #0f172a 50%, #1e293b 100%);
 ```
@@ -120,7 +120,7 @@ Dividers inside surfaces use `border-[var(--premium-border)]`.
 All buttons go through [`Button`](web/src/components/ui/Button.jsx).
 
 - `.btn-base`: `border-radius: 0.9rem`, `font-weight: 600`, 44px minimum tap target, spring hover lift (`translateY(-1px)` + soft shadow).
-- **`primary` = `.btn-primary-cta`**: animated violet gradient (`#5b21b6 → #6d28d9 → #9333ea → #7c3aed`, `300%` size, `primary-gradient-shift 2.2s linear infinite`, faster on hover, off when `:disabled`), inset top highlight and violet drop shadow. The primary CTA is never a flat fill.
+- **`primary` = `.btn-primary-cta`**: animated orange gradient (`#9a3412 → #ea580c → #f97316 → #c2410c`, `300%` size, `primary-gradient-shift 2.2s linear infinite`, faster on hover, off when `:disabled`), inset top highlight and violet drop shadow. The primary CTA is never a flat fill.
 - **`ghost` = `.btn-quiet`**: `--surface-bg` fill, `--premium-border`, `--premium-shadow`; hover → `base-300`.
 - **`danger`**: `bg-error text-error-content`.
 - Selected/active states (tabs, sidebar item, step chips) use a flat `bg-[var(--brand)] text-white` — they are state indicators, not CTAs.
@@ -129,7 +129,7 @@ All buttons go through [`Button`](web/src/components/ui/Button.jsx).
 
 ## 6. Inputs / forms
 
-`.field-base` (used by `Input`, `Textarea`, `SelectSheet`): `--premium-border` border, `--overlay-bg` fill, and an indigo focus ring — border `rgba(55,48,163,0.45)` + `0 0 0 3px rgba(55,48,163,0.12)` in light, lavender equivalents in dark. Never the browser default ring.
+`.field-base` (used by `Input`, `Textarea`, `SelectSheet`): `--premium-border` border, `--overlay-bg` fill, and an orange focus ring — border `rgba(194,65,12,0.45)` + `0 0 0 3px rgba(194,65,12,0.12)` in light, peach equivalents in dark. Never the browser default ring.
 
 Global `:focus-visible { outline: 2px solid var(--premium-ring); outline-offset: 2px; }`.
 
@@ -172,7 +172,7 @@ Keyframes and classes are defined in `index.css`.
 | `.animate-orb-float-1/2/3` | Slow background orbs | 18s / 23s (−4s) / 28s (−8s) |
 | `.animate-shimmer` | Skeleton loading sweep | 1.8s loop |
 | `.animate-blobsq-morph` | Morphing blob shape | 3s loop |
-| `.app-surface-header` | Animated violet header accent (`PageHeader`) | 8s loop |
+| `.app-surface-header` | Animated orange header accent (`PageHeader`) | 8s loop |
 
 Other keyframes available: `blueprint-pulse`, `loader-orb-pulse`, `primary-gradient-shift`, `sheet-up`.
 
@@ -190,7 +190,7 @@ Thin slate scrollbars everywhere: `scrollbar-width: thin`, 10px WebKit bars, pil
 
 ## 10. Page header
 
-[`PageHeader`](web/src/components/ui/PageHeader.jsx): a `.surface` card whose background is `.app-surface-header` — a white → 10% violet → white gradient (`220%` size) drifting over 8s. It carries a 4px primary stripe on the left, a brand-soft icon badge, an uppercase eyebrow pill, a bold `h1` and an actions slot.
+[`PageHeader`](web/src/components/ui/PageHeader.jsx): a `.surface` card whose background is `.app-surface-header` — a white → 10% orange → white gradient (`220%` size) drifting over 8s. It carries a 4px primary stripe on the left, a brand-soft icon badge, an uppercase eyebrow pill, a bold `h1` and an actions slot.
 
 ---
 
@@ -216,7 +216,7 @@ Keep every new looping animation in this list. Minimum tap target is 44px; text 
 2. **Primary = `#6D28D9` light / `#8B5CF6` dark.** No other brand color.
 3. **All buttons** use `border-radius: 0.9rem`, `font-weight: 600`, spring hover lift.
 4. **Primary CTA** = animated gradient, never a flat fill.
-5. **Inputs** focus with the indigo ring, not the browser default.
+5. **Inputs** focus with the orange ring, not the browser default.
 6. **Cards** = `.surface` / `.surface-inset` / `.surface-overlay` — never ad-hoc shadows.
 7. **Entry animations** = `fade-in-up`, staggered in 60ms steps for lists.
 8. **Modals** scale + rise; **drawers** slide from the edge.

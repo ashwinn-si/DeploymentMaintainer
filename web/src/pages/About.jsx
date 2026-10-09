@@ -403,7 +403,7 @@ function OpenSource() {
         </SectionHeader>
         <Reveal>
           <div className="surface overflow-hidden rounded-3xl">
-            <div className="h-1.5 bg-gradient-to-r from-[#5b21b6] via-[#6d28d9] to-[#4f46e5]" />
+            <div className="h-1.5 bg-gradient-to-r from-[#9a3412] via-[#ea580c] to-[#c2410c]" />
             <div className="space-y-6 p-6 sm:p-8">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -552,7 +552,7 @@ function Footer() {
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 font-heading text-lg text-white">
               <Logo className="h-9 w-auto" />
-              <span className="font-bold">Deploy <span className="font-light text-[#a78bfa]">Maintainer</span></span>
+              <span className="font-bold">Deploy <span className="font-light text-[#fb923c]">Maintainer</span></span>
             </div>
             <p className="mt-3 max-w-sm text-sm text-white/60">A self-hosted deployment dashboard for your own EC2 instances.</p>
           </div>

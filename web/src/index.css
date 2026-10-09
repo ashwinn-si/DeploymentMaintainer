@@ -6,16 +6,16 @@
   logs: false;
 }
 
-/* Light theme (DaisyUI) — white-first, violet primary */
+/* Light theme (DaisyUI) — white-first, orange primary */
 @plugin "daisyui/theme" {
   name: 'light';
   default: true;
   color-scheme: light;
-  --color-primary: #6d28d9;
+  --color-primary: #ea580c;
   --color-primary-content: #ffffff;
-  --color-secondary: #1e1b4b;
+  --color-secondary: #7c2d12;
   --color-secondary-content: #ffffff;
-  --color-accent: #6366f1;
+  --color-accent: #f97316;
   --color-accent-content: #ffffff;
   --color-neutral: #0f172a;
   --color-neutral-content: #f8fafc;
@@ -38,11 +38,11 @@
   name: 'dark';
   prefersdark: true;
   color-scheme: dark;
-  --color-primary: #8b5cf6;
+  --color-primary: #fb923c;
   --color-primary-content: #ffffff;
-  --color-secondary: #6366f1;
+  --color-secondary: #c2410c;
   --color-secondary-content: #ffffff;
-  --color-accent: #a5b4fc;
+  --color-accent: #fdba74;
   --color-accent-content: #0f172a;
   --color-neutral: #1e293b;
   --color-neutral-content: #f8fafc;
@@ -64,8 +64,8 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --premium-ring: rgba(55, 48, 163, 0.3);
-  --premium-border: rgba(109, 40, 217, 0.2);
+  --premium-ring: rgba(194, 65, 12, 0.3);
+  --premium-border: rgba(234, 88, 12, 0.2);
   --premium-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04);
   --surface-bg: #ffffff;
   --surface-inset-bg: #f8fafc;
@@ -73,7 +73,7 @@
 
   --page-bg:
     radial-gradient(circle at 8% 0%, rgba(30, 27, 75, 0.08), transparent 38%),
-    radial-gradient(circle at 96% 0%, rgba(55, 48, 163, 0.08), transparent 34%),
+    radial-gradient(circle at 96% 0%, rgba(194, 65, 12, 0.08), transparent 34%),
     linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #f1f5f9 100%);
 
   /* Text */
@@ -89,20 +89,20 @@
   --data-teal: #14b8a6;
 
   /* Brand */
-  --brand: #6d28d9;
-  --brand-soft: rgba(109, 40, 217, 0.1);
+  --brand: #ea580c;
+  --brand-soft: rgba(234, 88, 12, 0.1);
 }
 
 :root[data-theme='dark'] {
-  --premium-ring: rgba(165, 180, 252, 0.45);
-  --premium-border: rgba(139, 92, 246, 0.28);
+  --premium-ring: rgba(253, 186, 116, 0.45);
+  --premium-border: rgba(251, 146, 60, 0.28);
   --premium-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.3);
   --surface-bg: #1e293b;
   --surface-inset-bg: #0f172a;
   --overlay-bg: rgba(30, 41, 59, 0.92);
 
   --page-bg:
-    radial-gradient(circle at 8% 0%, rgba(139, 92, 246, 0.2), transparent 38%),
+    radial-gradient(circle at 8% 0%, rgba(251, 146, 60, 0.2), transparent 38%),
     radial-gradient(circle at 96% 0%, rgba(56, 189, 248, 0.12), transparent 34%),
     linear-gradient(180deg, #020617 0%, #0f172a 50%, #1e293b 100%);
 
@@ -116,8 +116,8 @@
   --data-purple: #a78bfa;
   --data-teal: #2dd4bf;
 
-  --brand: #8b5cf6;
-  --brand-soft: rgba(139, 92, 246, 0.2);
+  --brand: #fb923c;
+  --brand-soft: rgba(251, 146, 60, 0.2);
 }
 
 @theme {
@@ -248,7 +248,7 @@ h6,
   .btn-primary-cta {
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.26);
-    background-image: linear-gradient(120deg, #5b21b6 0%, #6d28d9 35%, #9333ea 70%, #7c3aed 100%);
+    background-image: linear-gradient(120deg, #9a3412 0%, #ea580c 35%, #f97316 70%, #c2410c 100%);
     background-size: 300% 300%;
     animation: primary-gradient-shift 2.2s linear infinite;
     box-shadow:
@@ -288,25 +288,25 @@ h6,
   }
   .field-base:focus,
   .field-base:focus-within {
-    border-color: rgba(55, 48, 163, 0.45);
-    box-shadow: 0 0 0 3px rgba(55, 48, 163, 0.12);
+    border-color: rgba(194, 65, 12, 0.45);
+    box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
   }
   :root[data-theme='dark'] .field-base:focus,
   :root[data-theme='dark'] .field-base:focus-within {
-    border-color: rgba(165, 180, 252, 0.55);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22);
+    border-color: rgba(253, 186, 116, 0.55);
+    box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.22);
   }
 }
 
 /* ---------------------------------- Page header accent ---------------------------------- */
 
 .app-surface-header {
-  background-image: linear-gradient(110deg, var(--surface-bg) 0%, rgba(109, 40, 217, 0.1) 52%, var(--surface-bg) 100%);
+  background-image: linear-gradient(110deg, var(--surface-bg) 0%, rgba(234, 88, 12, 0.1) 52%, var(--surface-bg) 100%);
   background-size: 220% 220%;
   animation: primary-gradient-shift 8s ease-in-out infinite;
 }
 :root[data-theme='dark'] .app-surface-header {
-  background-image: linear-gradient(110deg, var(--surface-bg) 0%, rgba(139, 92, 246, 0.2) 52%, var(--surface-bg) 100%);
+  background-image: linear-gradient(110deg, var(--surface-bg) 0%, rgba(251, 146, 60, 0.2) 52%, var(--surface-bg) 100%);
 }
 
 /* ---------------------------------- Scrollbars ---------------------------------- */
@@ -651,7 +651,7 @@ input:-webkit-autofill:focus {
   animation: orb-float 28s ease-in-out -8s infinite;
 }
 .animate-shimmer {
-  background-image: linear-gradient(90deg, transparent, rgba(109, 40, 217, 0.12), transparent);
+  background-image: linear-gradient(90deg, transparent, rgba(234, 88, 12, 0.12), transparent);
   background-size: 800px 100%;
   animation: shimmer 1.8s linear infinite;
 }
@@ -706,13 +706,13 @@ input:-webkit-autofill:focus {
 }
 
 .text-gradient {
-  background-image: linear-gradient(135deg, #6d28d9, #4f46e5);
+  background-image: linear-gradient(135deg, #ea580c, #c2410c);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 :root[data-theme='dark'] .text-gradient {
-  background-image: linear-gradient(135deg, #a78bfa, #818cf8);
+  background-image: linear-gradient(135deg, #fb923c, #fdba74);
 }
 
 .label-eyebrow {
