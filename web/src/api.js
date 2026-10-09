@@ -119,8 +119,10 @@ export function serverApi(serverId) {
     repos: {
       list: (q, refresh) => get(`/repos${toQuery({ q, refresh: refresh ? 1 : undefined })}`),
       branches: (owner, repo) => get(`/repos/${owner}/${repo}/branches`),
-      nodeVersion: (owner, repo, ref) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref })}`),
-      detectProject: (owner, repo, ref) => get(`/repos/${owner}/${repo}/detect-project${toQuery({ ref })}`),
+      // `root` is the app's root directory inside the repo; toQuery omits it when empty.
+      nodeVersion: (owner, repo, ref, root) => get(`/repos/${owner}/${repo}/node-version${toQuery({ ref, root })}`),
+      detectProject: (owner, repo, ref, root) => get(`/repos/${owner}/${repo}/detect-project${toQuery({ ref, root })}`),
+      tree: (owner, repo, branch, path) => get(`/repos/${owner}/${repo}/tree${toQuery({ branch, path })}`),
     },
     apps: {
       list: () => get('/apps'),

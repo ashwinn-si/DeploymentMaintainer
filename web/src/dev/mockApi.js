@@ -141,6 +141,16 @@ const REPOS = [
     htmlUrl: 'https://github.com/acme/broken-svc',
   },
   {
+    fullName: 'acme/shop',
+    name: 'shop',
+    owner: 'acme',
+    private: true,
+    defaultBranch: 'main',
+    pushedAt: '2026-09-27T10:00:00.000Z',
+    description: 'Monorepo: storefront, API and shared packages',
+    htmlUrl: 'https://github.com/acme/shop',
+  },
+  {
     fullName: 'acme/marketing-site',
     name: 'marketing-site',
     owner: 'acme',
@@ -157,7 +167,49 @@ const BRANCHES = {
   'acme/worker': ['main', 'staging'],
   'acme/broken-svc': ['main'],
   'acme/marketing-site': ['main', 'redesign'],
+  'acme/shop': ['main', 'dev'],
 };
+
+// A small fake monorepo for the root-directory picker: path -> sub-folders (same on every branch).
+const MONOREPO_TREE = {
+  '': [
+    { name: 'apps', hasPackageJson: false, hasIndexHtml: false },
+    { name: 'docs', hasPackageJson: false, hasIndexHtml: true },
+    { name: 'packages', hasPackageJson: false, hasIndexHtml: false },
+  ],
+  apps: [
+    { name: 'api', hasPackageJson: true, hasIndexHtml: false },
+    { name: 'web', hasPackageJson: true, hasIndexHtml: true },
+  ],
+  packages: [
+    { name: 'ui', hasPackageJson: true, hasIndexHtml: false },
+    { name: 'utils', hasPackageJson: true, hasIndexHtml: false },
+  ],
+  docs: [],
+  'apps/api': [{ name: 'src', hasPackageJson: false, hasIndexHtml: false }],
+  'apps/web': [
+    { name: 'public', hasPackageJson: false, hasIndexHtml: false },
+    { name: 'src', hasPackageJson: false, hasIndexHtml: false },
+  ],
+  'apps/api/src': [],
+  'apps/web/public': [],
+  'apps/web/src': [],
+  'packages/ui': [{ name: 'src', hasPackageJson: false, hasIndexHtml: false }],
+  'packages/utils': [],
+  'packages/ui/src': [],
+};
+
+function listMockDirectories(full, path) {
+  const normalized = (path || '').replace(/^\/+|\/+$/g, '');
+  // Other repos are single-project: they only have a few generic top-level folders.
+  const tree = full === 'acme/shop' ? MONOREPO_TREE : { '': [{ name: 'src', hasPackageJson: false, hasIndexHtml: false }], src: [] };
+  const children = tree[normalized];
+  if (!children) throw new MockHttpError(404, `Folder '${normalized}' not found`);
+  return {
+    path: normalized,
+    directories: children.map((d) => ({ ...d, path: normalized ? `${normalized}/${d.name}` : d.name })),
+  };
+}
 
 const NODE_VERSION_HINTS = {
   'acme/api': { version: '20.11.1', source: '.nvmrc' },
@@ -180,12 +232,13 @@ function nextDeployNumber(appId) {
   return n;
 }
 
-function makeApp({ id, name, repoFullName, branch, port, nodeVersion, nginxPath, status, healthy, envExtra = [] }) {
+function makeApp({ id, name, repoFullName, branch, rootDir = '', port, nodeVersion, nginxPath, status, healthy, envExtra = [] }) {
   return {
     id,
     name,
     repoFullName,
     branch,
+    rootDir,
     port,
     nodeVersion,
     path: nginxPath ?? null,
@@ -344,7 +397,19 @@ function seedFullFixtures() {
     status: 'not_deployed',
     healthy: false,
   });
-  apps = [apiMain, apiDev, worker, broken, fresh];
+  const shopWeb = makeApp({
+    id: 'app_shop_web',
+    name: 'shop-web',
+    repoFullName: 'acme/shop',
+    branch: 'main',
+    rootDir: 'apps/web',
+    port: 4006,
+    nodeVersion: '20',
+    nginxPath: '/shop-web',
+    status: 'online',
+    healthy: true,
+  });
+  apps = [apiMain, apiDev, worker, broken, fresh, shopWeb];
 
   makeDeployment({ app: apiMain, status: 'success', mode: 'update', ageMinutes: 300 });
   makeDeployment({ app: apiMain, status: 'success', mode: 'update', ageMinutes: 42 });
@@ -611,6 +676,12 @@ function matchRepoNodeVersion(pathname) {
   return { owner: m[1], repo: m[2] };
 }
 
+function matchRepoTree(pathname) {
+  const m = pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/tree$/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2] };
+}
+
 function toAppSummary(app) {
   const { env, steps, diskBytes, ...summary } = app;
   void env;
@@ -665,6 +736,7 @@ function buildExportFile(body) {
       name: app.name,
       repoFullName: app.repoFullName,
       branch: app.branch,
+      rootDir: app.rootDir ?? '',
       port: app.port,
       nodeVersion: app.nodeVersion,
       steps: app.steps,
@@ -688,6 +760,7 @@ function previewImportRows(body) {
       name: entry.name,
       repoFullName: entry.repoFullName,
       branch: entry.branch,
+      rootDir: entry.rootDir ?? '',
       port: entry.port,
       conflict,
       suggestedName: nameTaken ? `${entry.name}-import` : entry.name,
@@ -720,6 +793,7 @@ function applyImport(body) {
       name: finalName,
       repoFullName: entry.repoFullName,
       branch: entry.branch,
+      rootDir: entry.rootDir ?? '',
       port,
       nodeVersion: entry.nodeVersion,
       nginxPath: `/${finalName}`,
@@ -767,6 +841,11 @@ function agentRoute(pathname, method, body, query) {
     return { branches: BRANCHES[full] ?? ['main'] };
   }
 
+  const treeMatch = matchRepoTree(pathname);
+  if (treeMatch && method === 'GET') {
+    return listMockDirectories(`${treeMatch.owner}/${treeMatch.repo}`, query.get('path'));
+  }
+
   const nodeVerMatch = matchRepoNodeVersion(pathname);
   if (nodeVerMatch && method === 'GET') {
     const full = `${nodeVerMatch.owner}/${nodeVerMatch.repo}`;
@@ -795,6 +874,7 @@ function agentRoute(pathname, method, body, query) {
       name: body.name,
       repoFullName: body.repoFullName,
       branch: body.branch,
+      rootDir: body.rootDir ?? '',
       port,
       nodeVersion: body.nodeVersion || '20',
       nginxPath: `/${body.name}`,
@@ -846,6 +926,7 @@ function agentRoute(pathname, method, body, query) {
       name: body.name,
       repoFullName: source.repoFullName,
       branch: body.branch ?? source.branch,
+      rootDir: body.rootDir ?? source.rootDir ?? '',
       port,
       nodeVersion: body.nodeVersion || source.nodeVersion,
       nginxPath: `/${body.name}`,
