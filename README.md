@@ -6,6 +6,25 @@ click with live logs, health checks, one-click rollback, and Nginx path-based ro
 own port). The same repo can be deployed many times as independent apps, each with its own branch, port,
 env and steps. One dashboard manages any number of servers.
 
+## Demo
+
+<p align="center">
+  <a href="docs/demo/deployment-maintainer-demo.mp4">
+    <img src="docs/demo/poster.jpg" alt="Deployment Maintainer demo video: click to watch" width="760">
+  </a>
+</p>
+<p align="center"><b><a href="docs/demo/deployment-maintainer-demo.mp4">▶ Watch the demo</a></b> · 2 min 28 s · 1080p, voiceover and captions</p>
+
+What the walkthrough covers:
+
+1. **How it fits together**: one control plane, one small agent per server, PM2 and Nginx on each box.
+2. **Servers**: every server and its live CPU, RAM and disk in one place.
+3. **New app**: pick a GitHub repo and branch, choose a monorepo sub-folder, set env vars, review the pipeline.
+4. **Deploying**: live step-by-step logs, staged deploys, automatic rollback on a failed health check.
+5. **Day 2**: the Commits tab (what is live, what is not), one-click rollback, analytics, resources.
+
+> The recording uses the dashboard's built-in mock data, not a live EC2 server.
+
 ## Architecture
 
 A **control plane** (the dashboard) manages one or more **agents**, one per server. The browser only ever
