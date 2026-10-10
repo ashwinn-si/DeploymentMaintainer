@@ -147,7 +147,7 @@ async function analyticsTick(config) {
         if (err.code === 'ENOENT' || err.code === 'ENOTDIR') {
           warnings.delete(app.name);
         } else if (err.code === 'EACCES' || err.code === 'EPERM') {
-          warnings.set(app.name, `Cannot read ${file}: permission denied. Give the agent user read access (see DEPLOYMENT.md 3.10b).`);
+          warnings.set(app.name, `Cannot read ${file}: permission denied. Give the agent user read access (see DEPLOYMENT.md 4.11).`);
         } else {
           warnings.set(app.name, `Cannot read ${file}: ${err.message}`);
         }

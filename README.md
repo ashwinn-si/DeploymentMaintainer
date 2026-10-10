@@ -93,9 +93,9 @@ style.md   UI design system
 
 ## Production deployment
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)**: AWS setup (key pair, EC2, security group, Elastic IP, DNS), the
-GitHub token, the agent install on each server (fnm, PM2, MongoDB, Nginx, sudoers, certbot), the control
-plane on server 1, adding more servers, and deploying your first app.
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** to run your own copy: fork the repo, host the dashboard on Vercel
+(auto-deploys on push), then set up the backend on AWS (key pair, EC2, security group, Elastic IP, DNS, GitHub
+token, the agent on each server, the control plane on server 1), add more servers, and deploy your first app.
 
 ## Scripts (repo root)
 
@@ -125,5 +125,5 @@ plane on server 1, adding more servers, and deploying your first app.
 - **Secrets**: app env is encrypted in MongoDB but written in plaintext (mode 600) to each app's `.env`, its `ecosystem.config.cjs`, and pm2's dump. Log redaction is best-effort: values shorter than 4 chars and common values like `true` or `production` aren't masked. Custom step commands run arbitrary code by design.
 - **`ENCRYPTION_KEY` rotation** makes stored data unreadable: on an agent it hides app env (export config first, per server); on the control plane it hides stored server secrets (you would re-add the servers).
 - **Staged deploys** run the app a second time briefly (a smoke test on a spare port with the real env), so code that fires jobs or webhooks on boot can run twice; turn **Staged deploys** off per app (Overview) or disable the health-check step to skip it. A folder swap keeps absolute paths, but anything that baked the staging path into build output would carry it. Cancelling after the swap does not swap back.
-- **Analytics** counts come from Nginx access logs: they include bots and 404s and have no latency. It needs the one-time log directory setup in DEPLOYMENT.md 3.10b.
+- **Analytics** counts come from Nginx access logs: they include bots and 404s and have no latency. It needs the one-time log directory setup in DEPLOYMENT.md 4.11.
 - **Rollbacks** use the app's current env and steps, not the ones from the target deployment.

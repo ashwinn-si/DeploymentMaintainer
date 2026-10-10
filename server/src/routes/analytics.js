@@ -111,7 +111,7 @@ export function createAnalyticsRouter(config) {
     if (!(await isAccessLogDirReady(config))) {
       throw new HttpError(
         409,
-        `The access log directory ${config.ACCESS_LOG_DIR} does not exist. Create it on the server first (see DEPLOYMENT.md 3.10b), then try again.`,
+        `The access log directory ${config.ACCESS_LOG_DIR} does not exist. Create it on the server first (see DEPLOYMENT.md 4.11), then try again.`,
       );
     }
 
