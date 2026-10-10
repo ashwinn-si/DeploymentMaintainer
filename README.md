@@ -9,11 +9,11 @@ env and steps. One dashboard manages any number of servers.
 ## Demo
 
 <p align="center">
-  <a href="docs/demo/deployment-maintainer-demo.mp4">
+  <a href="deployment-maintainer-demo.mp4">
     <img src="docs/demo/poster.jpg" alt="Deployment Maintainer demo video: click to watch" width="760">
   </a>
 </p>
-<p align="center"><b><a href="docs/demo/deployment-maintainer-demo.mp4">▶ Watch the demo</a></b> · 2 min 28 s · 1080p, voiceover and captions</p>
+<p align="center"><b><a href="deployment-maintainer-demo.mp4">▶ Watch the demo</a></b> · 2 min 28 s · 1080p, voiceover and captions</p>
 
 What the walkthrough covers:
 
