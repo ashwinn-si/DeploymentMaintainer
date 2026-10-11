@@ -19,14 +19,14 @@ function formatDuration(step) {
 
 export function StepTimeline({ steps = [], activeStepId = 'all', onSelect, className = '' }) {
   return (
-    <ol className={['custom-scrollbar max-h-[520px] overflow-y-auto pr-1 space-y-1', className].join(' ')}>
+    <ol className={['custom-scrollbar max-h-[520px] overflow-y-auto pr-1', className].join(' ')}>
       {steps.map((step, idx) => {
         const Icon = ICON[step.status];
         const isLast = idx === steps.length - 1;
         const selected = activeStepId === step.id;
         return (
-          <li key={step.id} className="relative flex gap-3 pb-1">
-            {!isLast ? <span className="absolute left-[15px] top-8 h-[calc(100%-1.75rem)] w-px bg-black/[0.06] dark:bg-white/10" /> : null}
+          <li key={step.id} className="relative">
+            {!isLast ? <span className="absolute -bottom-1.5 left-[22px] top-[38px] w-px bg-black/10 dark:bg-white/15" /> : null}
             <button
               type="button"
               onClick={() => onSelect?.(step.id)}
