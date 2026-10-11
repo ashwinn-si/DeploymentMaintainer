@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Download, ArrowDownToLine, Pause } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { downloadFile } from '../lib/download.js';
+import { isTableLine, stripAnsi } from '../lib/ansi.js';
 
 const STREAM_CLASS = {
   stderr: 'text-rose-500',
@@ -50,7 +51,7 @@ export function LogViewer({
   };
 
   const handleCopy = async () => {
-    const text = filtered.map((e) => e.text).join('\n');
+    const text = filtered.map((e) => stripAnsi(e.text)).join('\n');
     try {
       await navigator.clipboard.writeText(text);
       toast.success('Log copied');
@@ -136,7 +137,7 @@ export function LogViewer({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="custom-scrollbar h-[520px] min-h-[380px] max-h-[65vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-4 font-mono text-[12px] leading-relaxed dark:bg-black/40"
+        className="custom-scrollbar h-[520px] min-h-[380px] max-h-[65vh] overflow-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-4 font-mono text-[12px] leading-relaxed dark:bg-black/40"
       >
         {hiddenCount > 0 ? (
           <p className="mb-2 text-[11px] text-[var(--text-muted)]">Showing last {MAX_RENDERED.toLocaleString()} of {filtered.length.toLocaleString()} lines</p>
@@ -144,11 +145,20 @@ export function LogViewer({
         {visible.length === 0 ? (
           <p className="text-[var(--text-muted)]">No log output yet.</p>
         ) : (
-          visible.map((entry) => (
-            <div key={entry.i} className={['whitespace-pre-wrap break-all', STREAM_CLASS[entry.stream] ?? 'text-[var(--text-secondary)]'].join(' ')}>
-              {entry.text}
-            </div>
-          ))
+          visible.map((entry) => {
+            const text = stripAnsi(entry.text);
+            return (
+              <div
+                key={entry.i}
+                className={[
+                  isTableLine(text) ? 'whitespace-pre w-max min-w-full' : 'whitespace-pre-wrap break-all',
+                  STREAM_CLASS[entry.stream] ?? 'text-[var(--text-secondary)]',
+                ].join(' ')}
+              >
+                {text}
+              </div>
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>

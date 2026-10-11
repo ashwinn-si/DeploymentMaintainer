@@ -46,7 +46,9 @@ export function createDeployLog(deployment, options = {}) {
   activeLogs.set(registryKey, { getUnflushed: () => buffer.slice() });
 
   function redact(text) {
-    let out = text;
+    // Drop terminal color/cursor escapes (pm2 tables etc.); they are noise in stored logs and downloads.
+    // eslint-disable-next-line no-control-regex
+    let out = text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
     for (const secret of secretValues) {
       out = out.split(secret).join('••••');
     }

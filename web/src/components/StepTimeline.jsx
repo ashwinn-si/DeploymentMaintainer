@@ -56,7 +56,7 @@ export function StepTimeline({ steps = [], activeStepId = 'all', onSelect, class
                 >
                   {step.label ?? step.type}
                 </span>
-                <span className="text-xs text-[var(--text-muted)]">{formatDuration(step)}</span>
+                <span className="block text-xs tabular-nums text-[var(--text-muted)]">{formatDuration(step)}</span>
               </span>
             </button>
           </li>

@@ -47,7 +47,9 @@ export function useDeploymentStream(serverId, id) {
   }, [flushPending]);
 
   const applyStep = useCallback((update) => {
-    setSteps((prev) => prev.map((s) => (s.id === update.id ? { ...s, ...update } : s)));
+    // 'success'/'failed' events carry startedAt: null; don't let that wipe the start time set by the 'running' event.
+    const defined = Object.fromEntries(Object.entries(update).filter(([, v]) => v != null));
+    setSteps((prev) => prev.map((s) => (s.id === update.id ? { ...s, ...defined } : s)));
   }, []);
 
   const applyStatus = useCallback((payload) => {
