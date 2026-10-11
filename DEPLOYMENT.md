@@ -572,7 +572,7 @@ Apps live on a specific server, so first open the server in the dashboard (pick 
 
 **Same repo, another branch:** create another app (e.g. `my-api-dev` on `dev`) with its own env, or use **Duplicate** on the app page.
 
-**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull, rebuild, restart the PM2 process) or **Fresh** (re-clone from scratch and start a new process). By default both are *staged*: the new version is built and smoke-tested in `<app>.staging` while the live one keeps serving, and only swapped in if that passes; if it fails after the swap, the previous version is restored automatically (Overview → Staged deploys turns this off).
+**Later deploys:** the **Deploy** button → choose a branch → **Update** (pull, rebuild, restart the PM2 process) or **Fresh** (re-clone from scratch and start a new process). By default both are *staged*: the new version is built and smoke-tested in `<app>.staging` while the live one keeps serving, and only swapped in if that passes; if it fails after the swap, the previous version is restored automatically (Overview → Staged deploys turns this off). The step-by-step flow, with diagrams, is in [docs/staged-deploys.md](docs/staged-deploys.md).
 
 **Monorepo?** In New App, **Root directory** lets you deploy a sub-folder (e.g. `apps/web`) of a repo; leave it at `/` for the whole repo. **Commits** on the app page shows the commits around the deployed one; **Analytics** (server menu) shows traffic per app (needs 4.11).
 

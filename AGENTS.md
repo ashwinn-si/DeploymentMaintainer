@@ -1,7 +1,7 @@
 # AGENTS.md
 
 Rules for anyone (people or AI agents) changing this repo. Product overview: `README.md`. Server setup and day-2
-operations: `DEPLOYMENT.md`. API shapes: `docs/api-contract.md`. UI design system: `style.md`.
+operations: `DEPLOYMENT.md`. API shapes: `docs/api-contract.md`. Staged-deploy flow diagrams: `docs/staged-deploys.md` (update it if the deploy/swap/restore logic changes). UI design system: `style.md`.
 
 ## Repo map
 
