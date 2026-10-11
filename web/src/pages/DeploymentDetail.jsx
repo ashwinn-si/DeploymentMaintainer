@@ -179,15 +179,20 @@ export function DeploymentDetail() {
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Duration</p>
-          <p>{formatDuration(deployment.durationMs)}</p>
+          <p>
+            {formatDuration(
+              deployment.durationMs ??
+                (deployment.finishedAt ? new Date(deployment.finishedAt).getTime() - new Date(deployment.createdAt).getTime() : null)
+            )}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
-        <GlassCard variant="light">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <GlassCard variant="light" className="min-w-0">
           <StepTimeline steps={steps} activeStepId={stepFilter} onSelect={(v) => setStepFilter((prev) => (prev === v ? 'all' : v))} />
         </GlassCard>
-        <GlassCard variant="mid">
+        <GlassCard variant="mid" className="min-w-0">
           <LogViewer
             entries={entries}
             steps={steps}

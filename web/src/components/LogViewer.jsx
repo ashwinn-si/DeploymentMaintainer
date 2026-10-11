@@ -69,7 +69,7 @@ export function LogViewer({
   };
 
   return (
-    <div className={['flex flex-col gap-2', className].join(' ')}>
+    <div className={['flex min-w-0 flex-col gap-2', className].join(' ')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         {steps.length ? (
           <div className="flex flex-wrap gap-1.5">
