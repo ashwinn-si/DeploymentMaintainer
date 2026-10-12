@@ -40,3 +40,6 @@ server.md
 
 # Pre-migration collection backups (contain app config)
 server/backups/
+
+# Demo video tooling and renders (the published video lives in docs/demo/)
+demo-video/
