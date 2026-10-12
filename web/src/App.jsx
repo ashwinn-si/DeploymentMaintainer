@@ -17,7 +17,7 @@ import { NotFound } from './pages/NotFound.jsx';
 // Route-split everything past the home pages: keeps the initial bundle under
 // Vite's 500KB chunk warning and means a first paint doesn't pay for the
 // steps editor, log viewer, rings/sparklines, etc. until they're visited.
-const Account = lazyWithReload(() => import('./pages/Account.jsx').then((m) => ({ default: m.Account })));
+const Settings = lazyWithReload(() => import('./pages/Settings.jsx').then((m) => ({ default: m.Settings })));
 const NewApp = lazyWithReload(() => import('./pages/NewApp.jsx').then((m) => ({ default: m.NewApp })));
 const AppDetail = lazyWithReload(() => import('./pages/AppDetail.jsx').then((m) => ({ default: m.AppDetail })));
 const Deployments = lazyWithReload(() => import('./pages/Deployments.jsx').then((m) => ({ default: m.Deployments })));
@@ -71,7 +71,7 @@ export default function App() {
             path="/settings"
             element={
               <Lazy>
-                <Account />
+                <Settings />
               </Lazy>
             }
           />

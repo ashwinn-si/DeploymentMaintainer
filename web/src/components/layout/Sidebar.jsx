@@ -8,19 +8,14 @@ import {
   Plug,
   Server,
   Settings,
-  LogOut,
   Layers,
-  UserCog,
   PanelLeftClose,
   PanelLeftOpen,
-  Info,
   BarChart3,
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { useOptionalServer } from '../../context/ServerContext.jsx';
 import { useServers } from '../../context/ServersContext.jsx';
 import { SelectSheet } from '../ui/SelectSheet.jsx';
-import { ThemeToggle } from './ThemeToggle.jsx';
 
 // Grouped by what the user is doing, each with a one-line explanation so the names are self-evident.
 const SERVER_NAV_GROUPS = [
@@ -45,8 +40,7 @@ const SERVER_NAV_GROUPS = [
 
 const ACCOUNT_NAV = [
   { path: '/dashboard', label: 'All servers', desc: 'Switch or add servers', icon: Layers, end: true },
-  { path: '/settings', label: 'Account', desc: 'Your login and password', icon: UserCog },
-  { path: '/about', label: 'About', desc: 'The project, GitHub, developer', icon: Info },
+  { path: '/settings', label: 'Settings', desc: 'Theme, password, log out', icon: Settings },
 ];
 
 const ALL_SERVERS = '__all__';
@@ -155,7 +149,6 @@ function ServerSwitcher({ onNavigate, collapsed }) {
 }
 
 export function SidebarContent({ deploying = false, onNavigate, collapsed = false, onToggleCollapse }) {
-  const { user, logout } = useAuth();
   const ctx = useOptionalServer();
 
   return (
@@ -209,39 +202,6 @@ export function SidebarContent({ deploying = false, onNavigate, collapsed = fals
         ))}
       </div>
 
-      <div className="mt-4 space-y-3">
-        {!collapsed ? (
-          <>
-            <div className="surface-inset flex items-center justify-between rounded-2xl border border-[var(--premium-border)] px-4 py-3 shadow-xs dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-              <span className="text-sm font-medium text-[var(--text-secondary)]">Theme</span>
-              <ThemeToggle />
-            </div>
-            <div className="surface-inset space-y-2 rounded-2xl border border-[var(--premium-border)] p-4 shadow-xs dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-              <p className="truncate text-sm font-medium text-[var(--text-primary)]">{user?.email}</p>
-              <button
-                type="button"
-                onClick={logout}
-                className="flex min-h-[38px] w-full items-center gap-2 rounded-xl px-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:bg-rose-500/10 hover:text-rose-500"
-              >
-                <LogOut className="h-4 w-4" />
-                Log out
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={logout}
-              title={`Log out (${user?.email})`}
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--text-muted)] transition-colors hover:bg-rose-500/10 hover:text-rose-500"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
