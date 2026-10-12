@@ -765,6 +765,27 @@ function matchRepoTree(pathname) {
   return { owner: m[1], repo: m[2] };
 }
 
+function matchRepoDetect(pathname) {
+  const m = pathname.match(/^\/api\/repos\/([^/]+)\/([^/]+)\/detect-project$/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2] };
+}
+
+// Same shape as the agent's classifyProject(), guessed from the repo name and the chosen root directory.
+function mockDetectProject(full, root) {
+  const dir = (root ?? '').toLowerCase();
+  if (full === 'acme/marketing-site' || dir.endsWith('docs')) {
+    return { type: 'static-html', framework: null, outputDir: '.', buildCommand: null, baseSupport: null, reasons: ['index.html and no build or start script'] };
+  }
+  if (dir.endsWith('web')) {
+    return { type: 'frontend', framework: { id: 'vite', label: 'Vite' }, outputDir: 'dist', buildCommand: 'npm run build', baseSupport: 'auto', reasons: ['Vite builds to static files'] };
+  }
+  if (full === 'acme/shop' && !dir) {
+    return { type: 'unknown', framework: null, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['no package.json or index.html at the repository root'] };
+  }
+  return { type: 'node-server', framework: { id: 'express', label: 'Express' }, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['express is a server framework'] };
+}
+
 function toAppSummary(app) {
   const { env, steps, diskBytes, ...summary } = app;
   void env;
@@ -927,6 +948,11 @@ function agentRoute(pathname, method, body, query) {
   const treeMatch = matchRepoTree(pathname);
   if (treeMatch && method === 'GET') {
     return listMockDirectories(`${treeMatch.owner}/${treeMatch.repo}`, query.get('path'));
+  }
+
+  const detectMatch = matchRepoDetect(pathname);
+  if (detectMatch && method === 'GET') {
+    return mockDetectProject(`${detectMatch.owner}/${detectMatch.repo}`, query.get('root'));
   }
 
   const nodeVerMatch = matchRepoNodeVersion(pathname);
