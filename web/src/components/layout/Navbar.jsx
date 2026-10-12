@@ -20,22 +20,23 @@ export function Navbar({ deploying = false }) {
 
   return (
     <>
-      <header className="surface-overlay sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--premium-border)] px-4 py-2.5 shadow-sm backdrop-blur-2xl lg:hidden">
+      <header className="surface-overlay sticky top-0 z-30 flex items-center gap-2.5 border-b border-[var(--premium-border)] px-4 py-2.5 shadow-sm backdrop-blur-2xl lg:hidden">
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] shadow-xs transition-colors hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
+          className="flex min-h-[38px] min-w-[38px] shrink-0 items-center justify-center rounded-xl surface-inset border border-[var(--premium-border)] shadow-xs transition-colors hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
         >
           <Menu className="h-4 w-4 text-[var(--text-muted)]" />
         </button>
-        <div className="flex items-center gap-2 font-heading text-base">
-          <Logo className="h-7 w-auto" />
-          <span className="text-[var(--text-primary)]">Deploy</span>
-          <span className="font-light text-[var(--brand)]">Maintainer</span>
+        <div className="flex min-w-0 items-center gap-1.5 font-heading text-sm min-[400px]:gap-2 min-[400px]:text-base">
+          <Logo className="h-7 w-auto shrink-0" />
+          <span className="truncate text-[var(--text-primary)]">
+            Deploy <span className="font-light text-[var(--brand)]">Maintainer</span>
+          </span>
         </div>
         {ctx ? (
-          <span className="ml-auto min-w-0 max-w-[40%] truncate rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand)]">
+          <span className="ml-auto min-w-0 max-w-[32%] shrink-0 truncate rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-xs font-medium text-[var(--brand)]">
             {ctx.server.name}
           </span>
         ) : null}
