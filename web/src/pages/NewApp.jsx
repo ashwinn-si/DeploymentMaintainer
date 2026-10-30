@@ -44,15 +44,17 @@ function Section({ step, title, description, children }) {
 
 const PRESETS = [
   { value: 'node', icon: Server, title: 'Node server', text: 'Runs under PM2 on its own port; Nginx proxies to it.' },
+  { value: 'typescript', icon: Server, title: 'TypeScript server', text: 'Compiled on deploy (npm run build), then run under PM2 on its own port.' },
   { value: 'frontend', icon: Package, title: 'Frontend app', text: 'Vite, React, Vue, Astro...: built on deploy, then served as static files. No process.' },
   { value: 'html', icon: FileCode2, title: 'Static HTML', text: 'HTML/CSS/JS served as-is by Nginx. No build, no process, no port.' },
 ];
 
 function detectedPreset(detected) {
+  if (detected?.type === 'node-server' && detected.language === 'typescript') return 'typescript';
   return { 'node-server': 'node', frontend: 'frontend', 'static-html': 'html' }[detected?.type] ?? null;
 }
 
-const DETECTED_TITLES = { 'node-server': 'Node.js server', frontend: 'Frontend app', 'static-html': 'Static HTML site' };
+const DETECTED_TITLES = { 'node-server': 'Node.js server', typescript: 'TypeScript server', frontend: 'Frontend app', 'static-html': 'Static HTML site' };
 
 function DetectionBanner({ detected, status, preset }) {
   if (status === 'loading') {
@@ -85,7 +87,7 @@ function DetectionBanner({ detected, status, preset }) {
     <div className="space-y-1 rounded-2xl bg-[var(--brand-soft)] px-4 py-3 text-xs text-[var(--text-secondary)]">
       <p className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
         <Sparkles className="h-4 w-4 text-[var(--brand)]" />
-        Detected: {DETECTED_TITLES[detected.type]}
+        Detected: {DETECTED_TITLES[detectedPreset(detected) === 'typescript' ? 'typescript' : detected.type]}
         {framework}
       </p>
       {detected.reasons?.map((reason) => <p key={reason}>{reason}</p>)}
@@ -129,7 +131,7 @@ export function NewApp() {
   const [formError, setFormError] = useState(null);
   const [submitting, setSubmitting] = useState(null);
   const defaultsRequested = useRef(false);
-  const kind = preset === 'node' ? 'node' : 'static';
+  const kind = preset === 'node' || preset === 'typescript' ? 'node' : 'static';
 
   useEffect(() => {
     if (!nameTouched && repoFullName && branch) {
@@ -144,7 +146,7 @@ export function NewApp() {
     if (!slug) return;
     const timer = setTimeout(() => {
       api.apps
-        .defaults(slug, kind, preset === 'frontend' ? 'frontend' : undefined)
+        .defaults(slug, kind, ['frontend', 'typescript'].includes(preset) ? preset : undefined)
         .then((data) => {
           if (!portTouched && data.port) setPort(String(data.port));
           if (!stepsTouched && data.steps) setSteps(data.steps);
@@ -167,7 +169,7 @@ export function NewApp() {
     setPreset(next);
     setStepsTouched(false);
     setSteps([]);
-    if (next !== 'node') setPort('');
+    if (next !== 'node' && next !== 'typescript') setPort('');
     setPortTouched(false);
   };
 

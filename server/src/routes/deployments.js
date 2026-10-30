@@ -7,6 +7,7 @@ import { HttpError } from '../lib/httpError.js';
 import { serializeDeploymentSummary, serializeDeploymentDetail, serializeLogEntry } from '../lib/serializers.js';
 import { cancelDeployment, rollbackTo } from '../services/deployer.js';
 import { deployEvents, getUnflushedEntries } from '../services/deployLog.js';
+import { queryString, queryObjectId, queryDate, queryLimit } from '../lib/query.js';
 
 const HEARTBEAT_MS = 15000;
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'cancelled']);
@@ -197,12 +198,15 @@ export function createDeploymentsRouter(config) {
 
   router.get('/', async (req, res) => {
     const query = {};
-    if (req.query.app) query.appId = req.query.app;
-    if (req.query.status) query.status = req.query.status;
-    if (req.query.branch) query.branch = req.query.branch;
-    if (req.query.mode) query.mode = req.query.mode;
-    if (req.query.before) query.createdAt = { $lt: new Date(String(req.query.before)) };
-    const limit = Math.min(Number(req.query.limit) > 0 ? Number(req.query.limit) : 50, 200);
+    const appId = queryObjectId(req.query.app, 'app');
+    if (appId) query.appId = appId;
+    for (const field of ['status', 'branch', 'mode']) {
+      const value = queryString(req.query[field], field);
+      if (value) query[field] = value;
+    }
+    const before = queryDate(req.query.before, 'before');
+    if (before) query.createdAt = { $lt: before };
+    const limit = queryLimit(req.query.limit, { fallback: 50, max: 200 });
 
     const deployments = await Deployment.find(query).sort({ createdAt: -1 }).limit(limit).lean();
     const byId = await appNamesFor(deployments);

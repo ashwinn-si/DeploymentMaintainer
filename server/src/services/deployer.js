@@ -571,6 +571,7 @@ export async function startDeployment(appId, config, opts = {}) {
       { $inc: { deploySeq: 1 }, branch: branchUsed, status: 'deploying' },
       { returnDocument: 'after' },
     );
+    if (!updatedApp) throw new HttpError(404, 'App not found');
     const number = updatedApp.deploySeq;
 
     const stepMetas = updatedApp.steps.map((s, i) => ({
@@ -582,20 +583,27 @@ export async function startDeployment(appId, config, opts = {}) {
       endedAt: null,
     }));
 
-    const deployment = await Deployment.create({
-      appId: updatedApp._id,
-      number,
-      branch: branchUsed,
-      commitSha: null,
-      previousSha: updatedApp.currentCommitSha,
-      nodeVersion: updatedApp.nodeVersion,
-      mode,
-      rollbackOf,
-      autoRollbackOf,
-      status: 'running',
-      steps: stepMetas,
-      entries: [],
-    });
+    let deployment;
+    try {
+      deployment = await Deployment.create({
+        appId: updatedApp._id,
+        number,
+        branch: branchUsed,
+        commitSha: null,
+        previousSha: updatedApp.currentCommitSha,
+        nodeVersion: updatedApp.nodeVersion,
+        mode,
+        rollbackOf,
+        autoRollbackOf,
+        status: 'running',
+        steps: stepMetas,
+        entries: [],
+      });
+    } catch (err) {
+      // The app was already flagged 'deploying'; with no deployment to finish it, nothing would ever clear that.
+      await App.updateOne({ _id: updatedApp._id }, { status: previousAppStatus }).catch(() => {});
+      throw err;
+    }
 
     const controller = new AbortController();
     runningByApp.set(appIdStr, String(deployment._id));

@@ -27,6 +27,7 @@ import * as pm2Service from '../services/pm2.js';
 import * as system from '../services/system.js';
 import { getCommitsBehind, getCommitWindow, getLatestCommits } from '../services/github.js';
 import { startDeployment, getActiveDeploymentId } from '../services/deployer.js';
+import { queryDate, queryLimit } from '../lib/query.js';
 
 const envEntrySchema = z.object({ key: z.string(), value: z.string() });
 const stepInputSchema = z.object({
@@ -161,6 +162,10 @@ function assertNodeApp(app, action) {
   if (app.kind === 'static') {
     throw new HttpError(409, `Static apps have no process to ${action}; redeploy to republish`);
   }
+  // A running deploy owns the process and the app status; changing either here would be overwritten or break it.
+  if (getActiveDeploymentId(app._id)) {
+    throw new HttpError(409, `Cannot ${action} while a deployment is running`);
+  }
 }
 
 async function findAppOr404(id) {
@@ -206,7 +211,7 @@ export function createAppsRouter(config) {
     const name = typeof req.query.name === 'string' && req.query.name.length > 0 ? req.query.name : 'my-app';
     const kind = req.query.kind === 'static' ? 'static' : 'node';
     const port = kind === 'static' ? null : await allocatePort(config);
-    const preset = req.query.preset === 'frontend' ? 'frontend' : 'html';
+    const preset = ['frontend', 'typescript'].includes(req.query.preset) ? req.query.preset : 'html';
     res.json({ kind, steps: defaultSteps(name, kind, preset), port, nodeVersion: config.DEFAULT_NODE_VERSION });
   });
 
@@ -441,7 +446,7 @@ export function createAppsRouter(config) {
 
   router.get('/:id/logs', async (req, res) => {
     const app = await findAppOr404(req.params.id);
-    const lines = Number(req.query.lines) > 0 ? Number(req.query.lines) : 200;
+    const lines = queryLimit(req.query.lines, { fallback: 200, max: 5000 });
     if (app.kind === 'static') {
       const text = '(static site: no runtime process, so no runtime logs)';
       return res.json({ text, out: text, err: '' });
@@ -458,9 +463,10 @@ export function createAppsRouter(config) {
 
   router.get('/:id/deployments', async (req, res) => {
     const app = await findAppOr404(req.params.id);
-    const limit = Math.min(Number(req.query.limit) > 0 ? Number(req.query.limit) : 50, 200);
+    const limit = queryLimit(req.query.limit, { fallback: 50, max: 200 });
     const query = { appId: app._id };
-    if (req.query.before) query.createdAt = { $lt: new Date(String(req.query.before)) };
+    const before = queryDate(req.query.before, 'before');
+    if (before) query.createdAt = { $lt: before };
     const deployments = await Deployment.find(query).sort({ createdAt: -1 }).limit(limit).lean();
     res.json({ deployments: deployments.map((d) => serializeDeploymentSummary(d, { appName: app.name })) });
   });

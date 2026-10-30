@@ -783,6 +783,9 @@ function mockDetectProject(full, root) {
   if (full === 'acme/shop' && !dir) {
     return { type: 'unknown', framework: null, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['no package.json or index.html at the repository root'] };
   }
+  if (dir.endsWith('api-ts')) {
+    return { type: 'node-server', language: 'typescript', framework: { id: 'express', label: 'Express' }, outputDir: null, buildCommand: 'npm run build', baseSupport: null, reasons: ['express is a server framework', 'TypeScript: it is compiled with the build step before it starts'] };
+  }
   return { type: 'node-server', framework: { id: 'express', label: 'Express' }, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['express is a server framework'] };
 }
 

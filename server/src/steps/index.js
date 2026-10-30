@@ -71,6 +71,7 @@ const STEP_CONFIG_SCHEMAS = {
 };
 
 // preset (static only): 'html' = files as-is; 'frontend' = install + build (Vite, CRA, Astro...) then publish.
+// preset (node only): 'typescript' = compile with the build step before pm2 starts the output.
 export function defaultSteps(name, kind = 'node', preset = 'html') {
   if (kind === 'static') {
     const build = preset === 'frontend';
@@ -94,7 +95,7 @@ export function defaultSteps(name, kind = 'node', preset = 'html') {
     { type: 'nodeSetup', enabled: true, config: {} },
     { type: 'writeEnv', enabled: true, config: { filename: '.env' } },
     { type: 'install', enabled: true, config: {} },
-    { type: 'build', enabled: false, config: { command: 'npm run build' } },
+    { type: 'build', enabled: preset === 'typescript', config: { command: 'npm run build' } },
     { type: 'pm2', enabled: true, config: { command: 'npm start' } },
     {
       type: 'healthCheck',

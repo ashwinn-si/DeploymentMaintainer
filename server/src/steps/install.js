@@ -17,12 +17,16 @@ export async function run(ctx) {
   const hasLockfile = fs.existsSync(path.join(dir, 'package-lock.json'));
   const command = configured || (hasLockfile ? 'npm ci' : 'npm install');
 
+  // NODE_ENV=production makes npm skip devDependencies, but a build step (tsc, vite...) needs them.
+  const buildEnabled = app.steps?.some((s) => s.type === 'build' && s.enabled);
+  const devEnv = buildEnabled ? { NPM_CONFIG_PRODUCTION: 'false', NPM_CONFIG_INCLUDE: 'dev' } : {};
+
   log.cmd(command, stepId);
   const [bin, ...args] = tokenizeCommand(command);
   const [cmd, argv] = withNode(app.nodeVersion, bin, args);
   const result = await shellRun(cmd, argv, {
     cwd: dir,
-    env: { ...process.env, ...env, ...portEnv(app) },
+    env: { ...process.env, ...env, ...portEnv(app), ...devEnv },
     onLine: log.onLine(stepId),
     signal,
   });

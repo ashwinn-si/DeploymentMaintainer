@@ -126,10 +126,10 @@ Paths below are relative to `/api` on the agent.
 - `GET /repos?q=&refresh=1` → `{ repos: [{ fullName, name, owner, private, defaultBranch, pushedAt, description, htmlUrl }] }`
 - `GET /repos/:owner/:repo/branches` → `{ branches: string[] }` (default first)
 - `GET /repos/:owner/:repo/node-version?ref=&root=` → `{ version: string|null, source }` (`root` optional: read `.nvmrc` / `package.json` inside that sub-folder instead of the repo root)
-- `GET /repos/:owner/:repo/detect-project?ref=&root=` → project classification (`classifyProject` result); `root` optional, same meaning
+- `GET /repos/:owner/:repo/detect-project?ref=&root=` → project classification (`classifyProject` result; TypeScript servers report `type: 'node-server'`, `language: 'typescript'` and `buildCommand: 'npm run build'`); `root` optional, same meaning
 - `GET /repos/:owner/:repo/tree?branch=&path=` → `{ path: string /*normalised, '' = repo root*/, directories: [{ name, path /*from repo root*/, hasPackageJson, hasIndexHtml }] }` (directories only, sorted by name; only the first 30 get the two flags, the rest report false; cached ~60s; 400 on an invalid `path`, 404 when the folder does not exist on that branch)
 - `GET /apps` → `{ apps: AppSummary[] }`
-- `GET /apps/defaults?name=` → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
+- `GET /apps/defaults?name=&kind=&preset=` (`preset`: `frontend` for static apps, `typescript` for node apps = build step enabled) → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
 - `POST /apps` body `{ name, repoFullName, branch, rootDir?: string /*default ''*/, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
 - `GET /apps/:id` → `{ app: AppDetail }`
 - `PATCH /apps/:id` body any of `{ branch, rootDir, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable; a changed `rootDir` applies from the next deploy)

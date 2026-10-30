@@ -265,6 +265,43 @@ test('POST /apps/:id/restart and /stop update App.status', async () => {
   }
 });
 
+test('list endpoints reject malformed query values with 400 instead of crashing', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, { port: config.APP_PORT_START + 91 }));
+    const app = createRes.body.app;
+
+    assert.equal((await agent.get(`/api/apps/${app.id}/deployments?before=not-a-date`)).status, 400);
+    assert.equal((await agent.get('/api/deployments?before=not-a-date')).status, 400);
+    assert.equal((await agent.get('/api/deployments?app=nope')).status, 400);
+    assert.equal((await agent.get('/api/deployments?status=a&status=b')).status, 400);
+    assert.equal((await agent.get(`/api/deployments?app=${app.id}`)).status, 200);
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
+test('restart and stop are refused while a deployment is running', async () => {
+  const server = await setupTestServer();
+  try {
+    const { agent, fixture, config } = server;
+    const createRes = await agent.post('/api/apps').send(createAppBody(fixture, { port: config.APP_PORT_START + 92 }));
+    const app = createRes.body.app;
+    const { startDeployment } = await import('../src/services/deployer.js');
+    await startDeployment(app.id, config, { mode: 'update' });
+
+    assert.equal((await agent.post(`/api/apps/${app.id}/restart`)).status, 409);
+    assert.equal((await agent.post(`/api/apps/${app.id}/stop`)).status, 409);
+    await agent.post(`/api/deployments/${(await Deployment.findOne({ appId: app.id }))._id}/cancel`);
+    await new Promise((resolve) => { setTimeout(resolve, 500); });
+  } finally {
+    await server.cleanup();
+    await clearTestDB();
+  }
+});
+
 test('GET /apps/:id/logs tolerates whatever pm2 returns', async () => {
   const server = await setupTestServer();
   try {

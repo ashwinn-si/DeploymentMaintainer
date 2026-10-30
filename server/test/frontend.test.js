@@ -50,6 +50,25 @@ test('classifyProject: generic build-only and start-only packages', () => {
   assert.equal(classifyProject({ pkg: pkg({}), hasIndexHtml: true }).type, 'static-html');
 });
 
+test('classifyProject: TypeScript servers are node servers that need a build', () => {
+  const express = classifyProject({ pkg: pkg({ dependencies: { express: '4' }, devDependencies: { typescript: '5' }, scripts: { build: 'tsc', start: 'node dist/index.js' } }) });
+  assert.equal(express.type, 'node-server');
+  assert.equal(express.language, 'typescript');
+  assert.equal(express.buildCommand, 'npm run build');
+
+  const nest = classifyProject({ pkg: pkg({ dependencies: { '@nestjs/core': '10' }, scripts: { build: 'nest build', start: 'node dist/main' } }), hasTsconfig: true });
+  assert.equal(nest.language, 'typescript');
+
+  const bare = classifyProject({ pkg: pkg({ devDependencies: { typescript: '5' }, scripts: { build: 'tsc', start: 'node dist/index.js' } }) });
+  assert.equal(bare.type, 'node-server');
+
+  const js = classifyProject({ pkg: pkg({ dependencies: { express: '4' }, scripts: { start: 'node server.js' } }) });
+  assert.equal(js.language, undefined);
+
+  const vite = classifyProject({ pkg: pkg({ devDependencies: { vite: '5', typescript: '5' }, scripts: { build: 'tsc && vite build' } }) });
+  assert.equal(vite.type, 'frontend', 'a TypeScript frontend is still a frontend');
+});
+
 test('planStaticBuild adds --base for Vite and Astro, PUBLIC_URL for CRA', () => {
   const vite = planStaticBuild({ command: 'npm run build', pkg: { devDependencies: { vite: '5' } }, routePath: '/site' });
   assert.equal(vite.command, 'npm run build -- --base=/site/');

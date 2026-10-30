@@ -37,7 +37,9 @@ function frameworkSummary(fw) {
 }
 
 // Decides how an unknown repo should be deployed. Pure: callers fetch package.json / index.html.
-export function classifyProject({ pkg = null, hasIndexHtml = false } = {}) {
+// `hasTsconfig`: a tsconfig.json sits next to package.json. TypeScript servers are still 'node-server', but carry
+// language 'typescript' and a build command, because the compiled output is what runs.
+export function classifyProject({ pkg = null, hasIndexHtml = false, hasTsconfig = false } = {}) {
   if (!pkg) {
     return hasIndexHtml
       ? { type: 'static-html', framework: null, outputDir: '.', buildCommand: null, baseSupport: null, reasons: ['index.html and no package.json'] }
@@ -49,22 +51,28 @@ export function classifyProject({ pkg = null, hasIndexHtml = false } = {}) {
   const fw = detectFramework(pkg);
   const ssr = SSR_DEPS.find((s) => s.dep in deps);
   const server = SERVER_DEPS.find((d) => d in deps);
+  const isTs = hasTsconfig || 'typescript' in deps || 'ts-node' in deps || 'tsx' in deps;
+  const tsServer = (extra) => ({
+    ...extra,
+    ...(isTs ? { language: 'typescript', buildCommand: scripts.build ? DEFAULT_BUILD_COMMAND : null } : {}),
+  });
 
   if (ssr) {
-    return {
+    return tsServer({
       type: 'node-server',
       framework: { id: ssr.dep, label: ssr.label },
       outputDir: null,
       buildCommand: scripts.build ? DEFAULT_BUILD_COMMAND : null,
       baseSupport: null,
       reasons: [`${ssr.label} renders on the server, so it needs a running process`],
-    };
+    });
   }
 
   if (server && (!fw || scripts.start)) {
     const reasons = [`${server} is a server framework`];
     if (fw) reasons.push(`it also has a ${fw.label} build; pick "Frontend app" if the server only serves the built files`);
-    return { type: 'node-server', framework: frameworkSummary(fw), outputDir: null, buildCommand: null, baseSupport: null, reasons };
+    if (isTs) reasons.push('TypeScript: it is compiled with the build step before it starts');
+    return tsServer({ type: 'node-server', framework: frameworkSummary(fw), outputDir: null, buildCommand: null, baseSupport: null, reasons });
   }
 
   if (fw) {
@@ -77,6 +85,11 @@ export function classifyProject({ pkg = null, hasIndexHtml = false } = {}) {
       reasons: [`${fw.label} builds to static files`],
       ...(fw.manualBase ? { baseHint: fw.manualBase } : {}),
     };
+  }
+
+  // A TypeScript package with a start script is a backend even when it has no known server framework.
+  if (isTs && scripts.start && !fw) {
+    return tsServer({ type: 'node-server', framework: null, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['TypeScript project with a start script'] });
   }
 
   if (scripts.build && !scripts.start) {
@@ -92,7 +105,7 @@ export function classifyProject({ pkg = null, hasIndexHtml = false } = {}) {
   }
 
   if (scripts.start || pkg.main) {
-    return { type: 'node-server', framework: null, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['has a start script'] };
+    return tsServer({ type: 'node-server', framework: null, outputDir: null, buildCommand: null, baseSupport: null, reasons: ['has a start script'] });
   }
 
   if (hasIndexHtml) {

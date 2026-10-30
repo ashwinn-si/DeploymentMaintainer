@@ -242,9 +242,10 @@ export async function detectProjectType(config, owner, repo, ref, rootDir = '') 
   const validRef = validateRef(ref);
   const validRoot = validateRootDir(rootDir);
 
-  const [pkgText, indexHtml] = await Promise.all([
+  const [pkgText, indexHtml, tsconfig] = await Promise.all([
     fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'package.json'), validRef),
     fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'index.html'), validRef),
+    fetchRawFile(token, validOwner, validRepo, inRoot(validRoot, 'tsconfig.json'), validRef),
   ]);
 
   let pkg = null;
@@ -255,7 +256,7 @@ export async function detectProjectType(config, owner, repo, ref, rootDir = '') 
       pkg = null; // malformed package.json: classify from what else we know
     }
   }
-  return classifyProject({ pkg, hasIndexHtml: indexHtml !== null });
+  return classifyProject({ pkg, hasIndexHtml: indexHtml !== null, hasTsconfig: tsconfig !== null });
 }
 
 const MAX_FLAG_LOOKUPS = 30;
