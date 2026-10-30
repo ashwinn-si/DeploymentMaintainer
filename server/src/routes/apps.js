@@ -194,6 +194,18 @@ async function annotateWithDeployments(app, commits) {
   return commits.map((c) => ({ ...c, deployment: byCommit.get(c.sha) ?? null }));
 }
 
+// The app already exists by the time its first deploy starts, so a refused start must not turn the whole
+// request into an error (a retry would hit "name already exists"); report it next to the created app instead.
+async function maybeStartDeploy(app, deploy, config) {
+  if (!deploy) return { deployment: null };
+  try {
+    const dep = await startDeployment(String(app._id), config, { mode: 'update' });
+    return { deployment: serializeDeploymentSummary(dep, { appName: app.name }) };
+  } catch (err) {
+    return { deployment: null, deployError: err.message };
+  }
+}
+
 export function createAppsRouter(config) {
   const router = Router();
   router.use(requireAuth(config));
@@ -242,13 +254,8 @@ export function createAppsRouter(config) {
       steps,
     });
 
-    let deployment = null;
-    if (body.deploy) {
-      const dep = await startDeployment(String(app._id), config, { mode: 'update' });
-      deployment = serializeDeploymentSummary(dep, { appName: app.name });
-    }
-
-    res.status(201).json({ app: await buildAppDetail(app, config), deployment });
+    const { deployment, deployError } = await maybeStartDeploy(app, body.deploy, config);
+    res.status(201).json({ app: await buildAppDetail(app, config), deployment, ...(deployError ? { deployError } : {}) });
   });
 
   router.get('/:id', async (req, res) => {
@@ -372,13 +379,8 @@ export function createAppsRouter(config) {
       steps,
     });
 
-    let deployment = null;
-    if (body.deploy) {
-      const dep = await startDeployment(String(app._id), config, { mode: 'update' });
-      deployment = serializeDeploymentSummary(dep, { appName: app.name });
-    }
-
-    res.status(201).json({ app: await buildAppDetail(app, config), deployment });
+    const { deployment, deployError } = await maybeStartDeploy(app, body.deploy, config);
+    res.status(201).json({ app: await buildAppDetail(app, config), deployment, ...(deployError ? { deployError } : {}) });
   });
 
   router.post('/:id/deploy', async (req, res) => {

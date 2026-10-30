@@ -29,12 +29,16 @@ export function requestOnce(port, requestPath) {
 export function sleep(ms, signal) {
   return new Promise((resolve) => {
     if (ms <= 0) return resolve();
-    const timer = setTimeout(resolve, ms);
-    timer.unref?.();
-    signal?.addEventListener('abort', () => {
+    const onAbort = () => {
       clearTimeout(timer);
       resolve();
-    }, { once: true });
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    timer.unref?.();
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 

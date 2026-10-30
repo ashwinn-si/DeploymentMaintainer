@@ -130,11 +130,11 @@ Paths below are relative to `/api` on the agent.
 - `GET /repos/:owner/:repo/tree?branch=&path=` → `{ path: string /*normalised, '' = repo root*/, directories: [{ name, path /*from repo root*/, hasPackageJson, hasIndexHtml }] }` (directories only, sorted by name; only the first 30 get the two flags, the rest report false; cached ~60s; 400 on an invalid `path`, 404 when the folder does not exist on that branch)
 - `GET /apps` → `{ apps: AppSummary[] }`
 - `GET /apps/defaults?name=&kind=&preset=` (`preset`: `frontend` for static apps, `typescript` for node apps = build step enabled) → `{ steps, port /*next free*/, nodeVersion /*server default*/ }`
-- `POST /apps` body `{ name, repoFullName, branch, rootDir?: string /*default ''*/, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null }`
+- `POST /apps` body `{ name, repoFullName, branch, rootDir?: string /*default ''*/, port?, nodeVersion, env: [{key,value}], steps, deploy?: boolean }` → `{ app: AppDetail, deployment: DeploymentSummary|null, deployError?: string }` (`deployError` is set when `deploy` was true but the first deploy could not start; the app is still created)
 - `GET /apps/:id` → `{ app: AppDetail }`
 - `PATCH /apps/:id` body any of `{ branch, rootDir, port, nodeVersion, env, steps, stagedDeploys }` → `{ app: AppDetail }` (name immutable; a changed `rootDir` applies from the next deploy)
 - `DELETE /apps/:id` body `{ confirmName }` → `{ ok: true }`
-- `POST /apps/:id/duplicate` body `{ name, branch, rootDir? /*default: the source app's*/, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null }`
+- `POST /apps/:id/duplicate` body `{ name, branch, rootDir? /*default: the source app's*/, port?, nodeVersion?, copyEnv: boolean, deploy?: boolean }` → `{ app, deployment|null, deployError?: string }`
 - `POST /apps/:id/deploy` body `{ branch?, mode: 'update'|'fresh', force?: boolean /* ignore failures of install/build/custom/healthCheck steps */ }` → `{ deployment: DeploymentSummary }` (409 if one is running)
   **Staged pipeline** (apps with `stagedDeploys !== false`, the default; `PATCH /apps/:id { stagedDeploys: false }` deploys in place as before):
   1. *Preflight*: needs free disk >= live folder x 1.2 + 500 MB, otherwise the deployment fails with `Not enough disk space for a staged deploy: need ~X, have Y free`, every step `skipped`, and nothing (folder, process, app status) is touched. Stale `<name>.staging` / `<name>.previous` folders are cleared.
@@ -168,7 +168,7 @@ Paths below are relative to `/api` on the agent.
 - `GET /settings/info` → `{ github: { login, scopes, rateLimitRemaining } | { error }, appsDir, nginxEnabled, domainHint: null, serverId, hostname }`
 - `POST /config/export` body `{ appIds?: string[], passphrase }` → JSON file download (`application/json`, attachment). File `version: 2`: each app also carries `rootDir` and `stagedDeploys`; version 1 files (without them) still import, defaulting to `''` and `true`
 - `POST /config/import/preview` body `{ file: object, passphrase }` → `{ rows: [{ name, repoFullName, branch, rootDir, port, conflict: null|'name'|'port', suggestedName }] }`
-- `POST /config/import` body `{ file, passphrase, rows: [{ name /*original*/, action: 'skip'|'create', newName? }], deploy?: boolean }` → `{ created: AppSummary[], deployments: DeploymentSummary[] }`
+- `POST /config/import` body `{ file, passphrase, rows: [{ name /*original*/, action: 'skip'|'create', newName? }], deploy?: boolean }` → `{ created: AppSummary[], deployments: DeploymentSummary[], deployErrors?: [{ app, message }] }` (all-or-nothing: if creating any app fails, none are kept)
 - `GET /analytics?range=1h|24h|7d|30d&apps=<id,id,...>` (`range` default `24h`; `apps` default all apps; a malformed id is a 400) → request counts per app, counted from Nginx access logs and stored per server (hourly buckets, kept 90 days):
   ```
   {

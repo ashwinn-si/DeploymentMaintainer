@@ -226,6 +226,7 @@ test('DELETE /apps/:id requires a matching confirmName, calls pm2 delete, remove
 
     fs.mkdirSync(path.join(appsDir, app.name), { recursive: true });
     fs.writeFileSync(path.join(appsDir, app.name, 'marker.txt'), 'x');
+    fs.mkdirSync(path.join(appsDir, `${app.name}.failed`), { recursive: true });
 
     const badConfirm = await agent.delete(`/api/apps/${app.id}`).send({ confirmName: 'wrong-name' });
     assert.equal(badConfirm.status, 400);
@@ -236,6 +237,7 @@ test('DELETE /apps/:id requires a matching confirmName, calls pm2 delete, remove
 
     assert.ok(shims.readCalls().some((c) => c.startsWith('pm2 delete')));
     assert.ok(!fs.existsSync(path.join(appsDir, app.name)));
+    assert.ok(!fs.existsSync(path.join(appsDir, `${app.name}.failed`)), 'leftover .failed folder is removed too');
 
     const getAfter = await agent.get(`/api/apps/${app.id}`);
     assert.equal(getAfter.status, 404);

@@ -65,6 +65,7 @@ export async function safeRemoveAppDir(config, name) {
   await fsp.rm(target, { recursive: true, force: true });
   await fsp.rm(resolveInsideAppsDir(config, `${name}.staging`), { recursive: true, force: true });
   await fsp.rm(resolveInsideAppsDir(config, `${name}.previous`), { recursive: true, force: true });
+  await fsp.rm(resolveInsideAppsDir(config, `${name}.failed`), { recursive: true, force: true });
 }
 
 export async function getHeadSha(dir) {

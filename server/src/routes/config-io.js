@@ -294,24 +294,31 @@ export function createConfigIoRouter(config) {
     const specs = await validateImportRows(body.file, body.rows, decryptedEnvByName, config);
 
     const created = [];
-    for (const spec of specs) {
-      const app = await App.create({
-        name: spec.finalName,
-        repoFullName: spec.repoFullName,
-        branch: spec.branch,
-        rootDir: spec.rootDir,
-        stagedDeploys: spec.stagedDeploys,
-        kind: spec.kind,
-        port: spec.port,
-        nodeVersion: spec.nodeVersion,
-        envEncrypted: encryptJSON(config, spec.env),
-        steps: spec.steps,
-        status: 'not_deployed',
-      });
-      created.push(app);
+    try {
+      for (const spec of specs) {
+        const app = await App.create({
+          name: spec.finalName,
+          repoFullName: spec.repoFullName,
+          branch: spec.branch,
+          rootDir: spec.rootDir,
+          stagedDeploys: spec.stagedDeploys,
+          kind: spec.kind,
+          port: spec.port,
+          nodeVersion: spec.nodeVersion,
+          envEncrypted: encryptJSON(config, spec.env),
+          steps: spec.steps,
+          status: 'not_deployed',
+        });
+        created.push(app);
+      }
+    } catch (err) {
+      // All-or-nothing: an import that fails halfway must not leave some of its apps behind.
+      await App.deleteMany({ _id: { $in: created.map((a) => a._id) } });
+      throw err;
     }
 
     const deployments = [];
+    const deployErrors = [];
     if (body.deploy) {
       for (const app of created) {
         try {
@@ -319,6 +326,7 @@ export function createConfigIoRouter(config) {
           deployments.push(serializeDeploymentSummary(dep, { appName: app.name }));
         } catch (err) {
           console.error(`config-io: failed to start deployment for ${app.name}: ${err.message}`);
+          deployErrors.push({ app: app.name, message: err.message });
         }
       }
     }
@@ -326,6 +334,7 @@ export function createConfigIoRouter(config) {
     res.json({
       created: created.map((app) => serializeAppSummary(app, { activeDeploymentId: getActiveDeploymentId(app._id) })),
       deployments,
+      ...(deployErrors.length > 0 ? { deployErrors } : {}),
     });
   });
 
