@@ -11,9 +11,11 @@ export function label() {
 export async function run(ctx) {
   const { app, config, log, signal, state, stepId, branch, sha, fresh } = ctx;
   const targetBranch = branch ?? app.branch;
-  // The repo is always cloned whole. The deployer pre-sets state.repoDir to the staging dir for staged deploys;
+  // Only the app's root directory is checked out (sparse). The deployer pre-sets state.repoDir to the staging dir for staged deploys;
   // state.appDir (set below) is where the work happens: the repo folder plus the app's root directory.
   const dir = state.repoDir ?? path.join(config.APPS_DIR, app.name);
+
+  const rootDir = app.rootDir || '';
 
   log.cmd(`git sync ${app.repoFullName}@${targetBranch}${sha ? ` -> ${sha}` : ''}`, stepId);
   const resolvedSha = await syncRepo({
@@ -22,13 +24,13 @@ export async function run(ctx) {
     branch: targetBranch,
     sha,
     fresh: Boolean(fresh),
+    rootDir,
     seedFrom: state.seedFrom,
     config,
     onLine: log.onLine(stepId),
     signal,
   });
 
-  const rootDir = app.rootDir || '';
   const workDir = path.join(dir, rootDir);
   if (rootDir) {
     const notFound = new Error(`Root directory '${rootDir}' not found in ${app.repoFullName}@${resolvedSha.slice(0, 7)}`);

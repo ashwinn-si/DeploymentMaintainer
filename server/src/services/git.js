@@ -76,7 +76,19 @@ export async function getHeadSha(dir) {
   return result.stdout.trim();
 }
 
-export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom, config, onLine, signal }) {
+// Monorepo apps only need their own folder: a blob-less clone plus cone-mode sparse checkout means the other
+// folders' files are never downloaded or written. Switching rootDir later re-points the checkout; an empty
+// rootDir turns sparse checkout off again.
+async function applySparseCheckout(dir, rootDir, opts) {
+  if (rootDir) {
+    await git(dir, ['sparse-checkout', 'set', '--cone', '--', rootDir], opts);
+    return;
+  }
+  const enabled = await run('git', ['config', '--get', 'core.sparseCheckout'], { cwd: dir });
+  if (enabled.stdout.trim() === 'true') await git(dir, ['sparse-checkout', 'disable'], opts);
+}
+
+export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom, rootDir = '', config, onLine, signal }) {
   const validBranch = validateRef(branch);
   const validSha = sha ? validateCommitSha(sha) : null;
   const remoteUrl = buildRemoteUrl(config, repoFullName);
@@ -97,7 +109,8 @@ export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom
       : [];
     await git(
       path.dirname(dir),
-      [...auth, 'clone', ...seedArgs, '--branch', validBranch, '--single-branch', '--', remoteUrl, dir],
+      [...auth, 'clone', ...seedArgs, ...(rootDir ? ['--filter=blob:none', '--no-checkout'] : []),
+        '--branch', validBranch, '--single-branch', '--', remoteUrl, dir],
       { onLine, signal },
     );
   } else {
@@ -106,6 +119,8 @@ export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom
     await git(dir, [...auth, 'fetch', 'origin', refspec], { onLine, signal });
     await git(dir, ['checkout', '-B', validBranch, `origin/${validBranch}`, '--'], { onLine, signal });
   }
+
+  await applySparseCheckout(dir, rootDir, { onLine, signal });
 
   const resetTarget = validSha ?? `origin/${validBranch}`;
   await git(dir, ['reset', '--hard', resetTarget, '--'], { onLine, signal });

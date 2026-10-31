@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 // Where an app's install/build/env/pm2/publish run: its repo folder plus the optional root directory.
-// The repo itself is always cloned whole into APPS_DIR/<name>. Apps without a rootDir field use the repo root.
+// The repo is cloned into APPS_DIR/<name> with only rootDir checked out (sparse). Apps without a rootDir field use the repo root.
 export function appWorkDir(config, app) {
   return path.join(config.APPS_DIR, app.name, app.rootDir || '');
 }
