@@ -11,12 +11,7 @@ import { ActivityPanel } from '../components/ActivityPanel.jsx';
 import { ServerHealthCard } from '../components/ServerHealthCard.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
-import { formatRelativeTime } from '../lib/format.js';
-
-function publicUrl(serverUrl, path) {
-  if (!path) return null;
-  return `${String(serverUrl ?? '').replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
-}
+import { formatRelativeTime, publicUrl } from '../lib/format.js';
 
 function AppCard({ app, onDeploy }) {
   const { server, serverPath } = useServer();
@@ -35,7 +30,7 @@ function AppCard({ app, onDeploy }) {
 
       <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <h3 className="truncate text-base font-bold text-[var(--text-primary)]">{app.name}</h3>
+          <h3 className="break-words text-base font-bold text-[var(--text-primary)]">{app.name}</h3>
           <p className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
             {isSite ? <Globe className="h-3.5 w-3.5 shrink-0" /> : <Server className="h-3.5 w-3.5 shrink-0" />}
             {typeLabel} · {detail}
@@ -50,17 +45,17 @@ function AppCard({ app, onDeploy }) {
       </div>
 
       <dl className="pointer-events-none relative z-10 space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+        <div className="flex flex-wrap items-center gap-2 text-[var(--text-secondary)]">
           <Github className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
-          <span className="truncate">{app.repoFullName}</span>
+          <span className="min-w-0 break-all">{app.repoFullName}</span>
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--brand-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)]">
             <GitBranch className="h-3 w-3" />
             {app.branch}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-          <Link2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate font-mono">{fullUrl ?? 'localhost only'}</span>
+        <div className="flex items-start gap-2 text-xs text-[var(--text-muted)]">
+          <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-all font-mono">{fullUrl ?? 'localhost only'}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
           <Clock className="h-3.5 w-3.5 shrink-0" />

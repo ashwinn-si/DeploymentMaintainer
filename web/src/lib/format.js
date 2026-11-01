@@ -54,3 +54,9 @@ export function shortSha(sha) {
 export function githubCommitUrl(repoFullName, sha) {
   return repoFullName && sha ? `https://github.com/${repoFullName}/commit/${sha}` : null;
 }
+
+// Public URL of an app: the server's address plus the app's nginx path. Null for localhost-only apps.
+export function publicUrl(serverUrl, path) {
+  if (!path) return null;
+  return `${String(serverUrl ?? '').replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+}

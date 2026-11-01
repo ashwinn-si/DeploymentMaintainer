@@ -19,7 +19,7 @@ import { DeploymentRow } from '../components/DeploymentRow.jsx';
 import { CommitHistory } from '../components/CommitHistory.jsx';
 import { ApiError } from '../api.js';
 import { useServer } from '../context/ServerContext.jsx';
-import { formatBytes, formatDuration, formatRelativeTime, shortSha, githubCommitUrl } from '../lib/format.js';
+import { formatBytes, formatDuration, formatRelativeTime, shortSha, githubCommitUrl, publicUrl } from '../lib/format.js';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -43,7 +43,7 @@ function Field({ label, children }) {
 
 function OverviewTab({ app, serverUrl, onEditRootDir, editingRootDir, onToggleStaged, togglingStaged }) {
   const commitUrl = githubCommitUrl(app.repoFullName, app.currentCommitSha);
-  const fullUrl = app.path && serverUrl ? `${serverUrl.replace(/\/+$/, '')}${app.path}` : null;
+  const fullUrl = publicUrl(serverUrl, app.path);
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Field label="Repository">
