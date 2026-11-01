@@ -79,13 +79,14 @@ export async function getHeadSha(dir) {
 // Monorepo apps only need their own folder: a blob-less clone plus cone-mode sparse checkout means the other
 // folders' files are never downloaded or written. Switching rootDir later re-points the checkout; an empty
 // rootDir turns sparse checkout off again.
-async function applySparseCheckout(dir, rootDir, opts) {
+// In a blob-less clone these commands lazily fetch blobs from the promisor remote, so they need the auth header too.
+async function applySparseCheckout(dir, rootDir, auth, opts) {
   if (rootDir) {
-    await git(dir, ['sparse-checkout', 'set', '--cone', '--', rootDir], opts);
+    await git(dir, [...auth, 'sparse-checkout', 'set', '--cone', '--', rootDir], opts);
     return;
   }
   const enabled = await run('git', ['config', '--get', 'core.sparseCheckout'], { cwd: dir });
-  if (enabled.stdout.trim() === 'true') await git(dir, ['sparse-checkout', 'disable'], opts);
+  if (enabled.stdout.trim() === 'true') await git(dir, [...auth, 'sparse-checkout', 'disable'], opts);
 }
 
 export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom, rootDir = '', config, onLine, signal }) {
@@ -120,10 +121,10 @@ export async function syncRepo({ dir, repoFullName, branch, sha, fresh, seedFrom
     await git(dir, ['checkout', '-B', validBranch, `origin/${validBranch}`, '--'], { onLine, signal });
   }
 
-  await applySparseCheckout(dir, rootDir, { onLine, signal });
+  await applySparseCheckout(dir, rootDir, auth, { onLine, signal });
 
   const resetTarget = validSha ?? `origin/${validBranch}`;
-  await git(dir, ['reset', '--hard', resetTarget, '--'], { onLine, signal });
+  await git(dir, [...auth, 'reset', '--hard', resetTarget, '--'], { onLine, signal });
 
   return getHeadSha(dir);
 }
