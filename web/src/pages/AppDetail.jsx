@@ -41,8 +41,9 @@ function Field({ label, children }) {
   );
 }
 
-function OverviewTab({ app, onEditRootDir, editingRootDir, onToggleStaged, togglingStaged }) {
+function OverviewTab({ app, serverUrl, onEditRootDir, editingRootDir, onToggleStaged, togglingStaged }) {
   const commitUrl = githubCommitUrl(app.repoFullName, app.currentCommitSha);
+  const fullUrl = app.path && serverUrl ? `${serverUrl.replace(/\/+$/, '')}${app.path}` : null;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Field label="Repository">
@@ -91,6 +92,16 @@ function OverviewTab({ app, onEditRootDir, editingRootDir, onToggleStaged, toggl
       </Field>
       <Field label="Type">{app.kind === 'static' ? 'Static site' : 'Node server'}</Field>
       <Field label="Path">{app.path ?? 'localhost only'}</Field>
+      <Field label="Full URL">
+        {fullUrl ? (
+          <a href={fullUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 break-all font-mono text-[var(--brand)] hover:underline">
+            {fullUrl}
+            <ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ) : (
+          '—'
+        )}
+      </Field>
       {app.kind === 'static' ? null : (
         <>
           <Field label="Port">{app.port}</Field>
@@ -149,7 +160,7 @@ function UpdateBanner({ app, updates, onDeploy }) {
 export function AppDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { api, serverPath } = useServer();
+  const { api, serverPath, server } = useServer();
   const [searchParams, setSearchParams] = useSearchParams();
   const [app, setApp] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -346,7 +357,7 @@ export function AppDetail() {
       <Tabs tabs={app.kind === 'static' ? STATIC_TABS : TABS} value={tab} onChange={setTab} />
 
       <GlassCard variant="mid">
-        {tab === 'overview' ? <OverviewTab app={app} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} onToggleStaged={handleToggleStaged} togglingStaged={busy === 'staged'} /> : null}
+        {tab === 'overview' ? <OverviewTab app={app} serverUrl={server?.url} onEditRootDir={() => setRootDirOpen(true)} editingRootDir={busy === 'rootDir'} onToggleStaged={handleToggleStaged} togglingStaged={busy === 'staged'} /> : null}
         {tab === 'environment' ? (
           <div className="space-y-4">
             <EnvEditorSaveable initial={app.env} onSave={handleSaveEnv} busy={busy === 'env'} />
