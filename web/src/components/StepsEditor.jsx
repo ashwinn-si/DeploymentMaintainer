@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GripVertical, ChevronUp, ChevronDown, Plus, Trash2, Info, HeartPulse, Copy, Check } from 'lucide-react';
+import { GripVertical, ChevronUp, ChevronDown, Plus, Trash2, Info, HeartPulse, Copy, Check, Download } from 'lucide-react';
 import { Toggle } from './ui/Toggle.jsx';
 import { Input } from './ui/Input.jsx';
 import { Button } from './ui/Button.jsx';
@@ -115,6 +115,18 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node', por
   const beforeAndCustom = ordered.filter(({ step }) => priority(step.type, kind) <= ORDER_BEFORE.length);
   const after = ordered.filter(({ step }) => priority(step.type, kind) > ORDER_BEFORE.length);
 
+  const exportJson = () => {
+    const payload = { kind, steps: ordered.map(({ step }) => ({ type: step.type, enabled: step.enabled, config: step.config })) };
+    const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = 'pipeline-steps.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
   return (
     <div className="space-y-3">
       {beforeAndCustom.map(({ step, index }) => {
@@ -202,10 +214,16 @@ export function StepsEditor({ value: rawValue = [], onChange, kind = 'node', por
         <span>Custom step commands run directly (shell:false) — pipes, <code>&amp;&amp;</code> and other shell operators aren't supported. Use one command per step.</span>
       </div>
 
-      <Button type="button" variant="ghost" size="sm" onClick={addCustom}>
-        <Plus className="h-4 w-4" />
-        Add custom step
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={addCustom}>
+          <Plus className="h-4 w-4" />
+          Add custom step
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={exportJson}>
+          <Download className="h-4 w-4" />
+          Export JSON
+        </Button>
+      </div>
 
       {after.map(({ step, index }) => {
         if (step.type === 'pm2') {
