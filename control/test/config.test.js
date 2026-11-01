@@ -49,7 +49,7 @@ test('loadConfig reports every missing/invalid required var', () => {
 test('seed-style require enforces ADMIN_* only when asked', () => {
   const { ADMIN_EMAIL, ADMIN_PASSWORD, ...rest } = VALID;
   assert.doesNotThrow(() => withEnv(rest, () => loadConfig()));
-  assert.throws(() => withEnv({ ...rest, ADMIN_EMAIL, ADMIN_PASSWORD: 'short' }, () => loadConfig({ require: ['ADMIN_EMAIL', 'ADMIN_PASSWORD'] })), /ADMIN_PASSWORD/);
+  assert.throws(() => withEnv({ ...rest, ADMIN_EMAIL, ADMIN_PASSWORD: 'abc' }, () => loadConfig({ require: ['ADMIN_EMAIL', 'ADMIN_PASSWORD'] })), /ADMIN_PASSWORD/);
 });
 
 test('ALLOW_INSECURE_SERVER_URLS parses booleans', () => {

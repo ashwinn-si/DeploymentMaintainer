@@ -460,7 +460,7 @@ Set these values:
 | `JWT_SECRET` | first generated value (32+ characters) |
 | `ENCRYPTION_KEY` | second generated value (exactly 64 hex chars). Not the same key as in `server/.env`. |
 | `ADMIN_EMAIL` | the email you'll log in with |
-| `ADMIN_PASSWORD` | a strong password, 12+ characters |
+| `ADMIN_PASSWORD` | your admin password (minimum 4 characters) |
 | `NODE_ENV` | `production` |
 | `CORS_ORIGINS` | **`https://YOUR_DASHBOARD_DOMAIN`**, the Vercel dashboard (e.g. `https://deploy.yourdomain.com`). Exact origin: `https://`, no path, no trailing slash. Comma-separate several. Without it the browser blocks every call from the dashboard. |
 | `ALLOW_INSECURE_SERVER_URLS` | `false` (leave as is; server URLs must be `https://`) |

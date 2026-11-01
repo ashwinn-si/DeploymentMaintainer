@@ -56,7 +56,7 @@ const fieldSchemas = {
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be exactly 64 hex characters'),
   ADMIN_EMAIL: z.string().email('ADMIN_EMAIL must be a valid email address'),
-  ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD must be at least 12 characters long'),
+  ADMIN_PASSWORD: z.string().min(4, 'ADMIN_PASSWORD must be at least 4 characters long'),
   NODE_ENV: z.string().min(1).default('development'),
   ALLOW_INSECURE_SERVER_URLS: boolFromEnv(false),
   CORS_ORIGINS: corsOrigins,
