@@ -19,7 +19,7 @@ function formatDuration(step) {
 
 export function StepTimeline({ steps = [], activeStepId = 'all', onSelect, className = '' }) {
   return (
-    <ol className={['custom-scrollbar max-h-[520px] overflow-y-auto pr-1', className].join(' ')}>
+    <ol className={['pr-1', className].join(' ')}>
       {steps.map((step, idx) => {
         const Icon = ICON[step.status];
         const isLast = idx === steps.length - 1;

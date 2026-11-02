@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { AppWindow, Rocket, RotateCw, Square, Copy, Trash2, ExternalLink, RefreshCw, ArrowUpCircle } from 'lucide-react';
+import { AppWindow, Rocket, RotateCw, Square, Copy, Check, Trash2, ExternalLink, RefreshCw, ArrowUpCircle } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader.jsx';
 import { GlassCard } from '../components/ui/GlassCard.jsx';
 import { Button } from '../components/ui/Button.jsx';
@@ -38,6 +38,34 @@ function Field({ label, children }) {
       <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">{label}</p>
       <div className="text-sm text-[var(--text-primary)]">{children}</div>
     </div>
+  );
+}
+
+// Runtime logs arrive oldest-first; show the tail (newest line) at the top.
+function newestFirst(text) {
+  return text ? text.replace(/\n+$/, '').split('\n').reverse().join('\n') : '';
+}
+
+function CopyButton({ text, label }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Could not copy');
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={label}
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--text-muted)] ui-transition hover:text-[var(--text-primary)]"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 
@@ -94,10 +122,13 @@ function OverviewTab({ app, serverUrl, onEditRootDir, editingRootDir, onToggleSt
       <Field label="Path">{app.path ?? 'localhost only'}</Field>
       <Field label="Full URL">
         {fullUrl ? (
-          <a href={fullUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 break-all font-mono text-[var(--brand)] hover:underline">
-            {fullUrl}
-            <ExternalLink className="h-3 w-3 shrink-0" />
-          </a>
+          <span className="flex items-start gap-1">
+            <a href={fullUrl} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 break-all font-mono text-[var(--brand)] hover:underline">
+              {fullUrl}
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+            <CopyButton text={fullUrl} label="Copy URL" />
+          </span>
         ) : (
           '—'
         )}
@@ -400,8 +431,8 @@ export function AppDetail() {
                 Refresh
               </Button>
             </div>
-            <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-black/40">
-              {runtimeLogs[logStream] || (logStream === 'err' ? 'No errors logged.' : 'No output yet.')}
+            <pre className="custom-scrollbar max-h-[60vh] overflow-y-auto whitespace-pre-wrap break-all rounded-2xl border border-[var(--premium-border)] bg-black/[0.03] p-3 font-mono text-[12px] leading-relaxed text-[var(--text-secondary)] dark:bg-black/40">
+              {newestFirst(runtimeLogs[logStream]) || (logStream === 'err' ? 'No errors logged.' : 'No output yet.')}
             </pre>
           </div>
         ) : null}
